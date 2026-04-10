@@ -1,0 +1,20 @@
+# Data files (too large for git)
+data/household_power_consumption.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Models (binary, tracked via Git LFS or stored externally)
+models/*.pt
+models/*.pkl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
