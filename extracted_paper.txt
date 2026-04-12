@@ -1,0 +1,1245 @@
+=== PAGE 1 ===
+Energy Reports 12 (2024) 5320–5337
+ContentslistsavailableatScienceDirect
+Energy Reports
+journalhomepage:www.elsevier.com/locate/egyr
+Research paper
+Prediction of electricity consumption using an innovative deep energy
+predictor model for enhanced accuracy and efficiency
+C. Ragupathia, S. Dhanasekaranb, N. Vijayalakshmic, Ayodeji Olalekan Salaud,e,*
+aDepartmentofElectricalandElectronicsEngineering,P.T.LeeChengalvarayaNaickerCollegeofEngineeringandTechnology,TamilNadu,India
+bDepartmentofElectronicsandCommunicationEngineering,SriEshwarCollegeofEngineering,Coimbatore,TamilNadu641202,India
+cDepartmentofComputerScienceandEngineering,AllianceSchoolofAdvancedComputing,AllianceUniversity,Anekal,Bangalore,India
+dDepartmentofElectrical/ElectronicsandComputerEngineering,AfeBabalolaUniversity,Ado,Ekiti,Nigeria
+eSaveethaSchoolofEngineering,SaveethaInstituteofMedicalandTechnicalSciences,Chennai,TamilNadu,India
+A R T I C L E I N F O A B S T R A C T
+Keywords: Accurateforecastingofelectricityconsumptioniscrucialforefficientenergymanagementandplanning.Traditional
+Electricityconsumptionprediction modelsoftenstruggletocapturethecomplex,nonlinearrelationshipsinherentinenergyconsumptiondata,leadingto
+Deepenergypredictormodel lessreliablepredictions.Inthequesttoimprovetheaccuracyandefficiencyofelectricityconsumptionpredictions,we
+XGBoost
+introducetheDeepEnergyPredictorModel(DEPM).ThisinnovativehybridmodelcombinesthestrengthsofXGBoost
+Deepneuralnetworks
+forclassificationandDeepNeuralNetworks(DNN)fordeeplearning(DL)capabilities.Themodelleveragesadvanced
+CascadedResNet
+featureextractiontechniquesusingCascadedResNet,ensuringthecaptureofintricatepatternswithinthedata.
+Featureextraction
+Hybridmodel ImplementedinPython,theDEPMhighlightsanimpressiveaccuracyof98%,withaprecisionof0.97,recallof0.99,
+andanF1-scoreof0.98,settinganewstandardforpredictivemodelsintheenergysector.Thisstudyelaboratesonthe
+modelarchitecture,implementationdetails,andtheevaluationmetricsthatunderscorethemodel’ssuperiorper-
+formance.OurresultsdemonstratethepotentialofDEPMtosignificantlyenhancethereliabilityofelectricitycon-
+sumptionforecasts,providingarobusttoolforenergymanagementandplanning.
+1. Introduction curvesbeforetheybecomehighlyerraticovergridoverload.
+Theelectricloadforecastingproblemrequirestheanalysisofvarious
+Accurateenergyconsumptionpredictionisoneoftheimportanttasks types of data such as historical use profiles, climatic conditions, and
+toguaranteeefficientandreliableoperationinpowersystems.Withthe economic indicators that can affect residential consumption (Mounir
+increaseinrelianceonelectricityforresidential,commercial,andindus- etal.,2023;Minellietal.,2024).Historicaldataisusedfordetecting
+trialpurposes,accurateconsumptionforecastingisbecomingincreasingly trendsandseasonality,whileweathervariablessuchastemperature,and
+importanttovariousstakeholders:utilitycompanies,gridoperators,pol- humidityimpactalotonthescopeofenergychanges,inwhichcasethis
+icymakers,andconsumersthemselves(Mortezaetal.,2023,Khanetal., component comes into the image. Key aggregate economic indicators
+2023;Ganesanetal.,2024).Improvedpredictionofelectricitydemand suchasGDPandindustrialproductionprovideanoverviewofthegeneral
+providesforefficientresourceallocation,gridstabilization,andtheoper- activity that determines electricity consumption. These prediction
+ationofenergytrading.Itcanhelpincorporateintermittentrenewable modelsarefurtherrefinedbydemographicfactors,suchaspopulation
+energygeneration(e.g.,windorsolar)intothegrid,whichmaynotalways growthandurbanizationratesthathelpbetterestimateshiftsintheuser
+be available when power is needed. Understanding the demand cycles basealongwiththeirbehavior(Leietal.,2024,Zhangetal.,2024).
+makesitpossibleforutilitiestooptimizetheirgenerationschedulesandcut Forprecisemodelingofelectricityconsumption,moreadvancepro-
+operational costs while reducing the environmental footprint of power cedures including the usage of the Unsupervised Deep Hybrid Model
+generation(Morcillo-Jimenezetal.,2024,SekharandDahiya,2023,Eya (USDHM)atthepreliminarylevelwouldbenecessary.Theelectricenergy
+etal.,2023).Additionally,forecastsareusedtodesigndemandresponse consumptioncanbeanalyzedusingsuchconventionalmethodsoftime
+programs,whichrewardconsumersthatreducetheirconsumptionduring seriesanalysisastheAutoregressiveIntegratedMovingAverage(ARIMA),
+peaktimesandincreaseitatoff-peaktimeperiodstoflattenthedemand a technique used to manage time-dependent data. For data that has
+* Correspondingauthorat:DepartmentofElectrical/ElectronicsandComputerEngineering,AfeBabalolaUniversity,Ado,Ekiti,Nigeria.
+E-mailaddresses:ragupt.lee@gmail.com(C.Ragupathi),dhanselvaraj@gmail.com(S.Dhanasekaran),viji.365@gmail.com(N.Vijayalakshmi),ayodejisalau98@
+gmail.com(A.O.Salau).
+https://doi.org/10.1016/j.egyr.2024.11.018
+Received25September2024;Receivedinrevisedform29October2024;Accepted4November2024
+Available online 14 November 2024
+2352-4847/© 2024 The Author(s). Published by Elsevier Ltd. This is an open access article under the CC BY-NC-ND license ( http://creativecommons.org/licenses/by-
+nc-nd/4.0/) .
+
+=== PAGE 2 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+seasonality,anexpandedversionofAIMAisemployedinformofSARIMA, electricity consumption forecasting are depicted in Fig. 1. The figure
+whichinvolvesseasonaldifferencing.Thishasbeencompletelychanged emphasizes improved resource usage where proper estimation helps
+thankstomachinelearning(ML)andDLinparticular(Izoninetal.,2024, utility companies and grid operators to utilize resources to meet the
+AlKezetal.,2024,Gopaletal.,2024).Becauseofthis,therandomforest powerdemand,whichhelpsincuttingutilityexpensesbesidesdecreasing
+andsupportvectormachinestendtoperformbetterwhencomparedto emissions.Inaddition,gridstabilityandreliabilityimprovementresults
+basicneuralnetworksinhandlingcomplex/un-linearhiddenrelationships from such prediction and forecasting in avoiding overloads and power
+indata,whereasmoreadvancedtypesofDLmodelsbasedonLSTMs(Long blackoutsthatmaycausedisruptionsindemandandsupplyofelectrical
+Short-TermMemory)andTransformersdoevenfurtherbest.Themodels power. The incorporation of renewable energy sources is important
+improve over time, as more data is analyzed against past phenomena becausetothevolatilityoftherenewableenergysourceslikethewind
+(BucarelliandEl-Gohary2024). andthesolarsystems,consumptionforecastinghelpsincorporatethese
+Energyconservationinsidebuildingshasemergedasanobjectivedue renewableenergysourcesefficientlybecauseittellswhenmorepower
+tothetremendouscontributionofbuildingstoglobalenergydemandand may be required hence enhancing flexibility of the grid. In addition,
+greenhousegasemissions.Mitigatingthisproblemisimportant,notonly forecasting helps demand response measures that can encourage con-
+from the standpoint of minimizing the negative effects on the current sumerstouseelectricityduringotherperiodsthanpeaktimes,inthisway
+environment but also as an indicator of economic recovery and the flattenthecurvesofdemandsandimprovetheperformanceofthegrid.
+improvementoflivingandworkingconditions.awideliteratureonenergy TheEnergyPredictormodelincludesseveralnovelfeaturestopro-
+saving a discusses many strategies including technological and non- videbothahighlevelofpredictionaccuracyandanefficientmethodfor
+technologicalones.Forexample,studiesonbetterindoorenvironmental accurately predicting power consumption under the complex re-
+quality in offices particularlypost COVID-19 pandemic have identified quirements faced by contemporary energy management (Almaleck
+correlationbetweenairqualityandenergymanagementwhereadvanced etal.,2024).Themodelcombinesavarietyofdatasuchashistoricusage
+ventilationmeasurescanleadtochangesinenergyuseandexpenditure patterns, real-time weather updates, economic metrics, and de-
+(D’Agostinoetal.,2024).Otherworkshaveexaminedhowsmarttech- mographics.EnergyPredictorusesmixed-datasourcestomodelthese
+nologies, including sensors in heating, ventilation and air conditioning particularrelationshipsanddependenciesaffectingenergydemand.It
+systems,aswellasdecision-supportsystemsforthetimelymaintenanceof allowsforcomprehensivepredictionacrosslongperiodsoftime(from
+thosesystems,canassistinenergyefficiencyinrealtime.Theseefforts short-termvariationstolong-termtrends)andhashighprecision,thus
+drivetheneedadvancedmodelingandforecastingifenergyconsumption facilitatingdecision-makingatbothstrategicplanningandoperational
+is to be managed smoothly given the increasing energy consumption levels(Jiangetal.,2023).LeveragingCloudEnergyPredictoriscreated
+globally.(Pourdaryaeietal.,2024,Indiraetal.,2024,Mohammedetal., onascalable cloud-basedsolution andiseasy tore-usewheneverwe
+2023). The weather can be extreme, and the economy unpredictable, needefficientdatastorage,processing,oranalysisusingthecomputa-
+leadingtorapiddeparturesfromhistoricalconsumptionpatternsthatare tional power of our cloud resources. The architecture is suitable for
+difficultevenforaclevermodelertoanticipate.Notonlyisaccuratepre- high-throughputdatastreamsandlendsitselftoparallelizedcomputing,
+dictionofelectricityvaluableforensuringoperationalefficiency,butina whichallowsrapidmodelupdateswithreal-timeresponses.Especially
+smartergrid,iteasestheadditionofrefurbishedenergysourcesinremote with regards to the rising floodwaters of data in this interconnected
+locationslikesolarpanelsorwindturbines(Olu-Ajayietal.,2022,Singh energymatrix-scalabilityisessential.
+etal.,2024).Predictiveinsightsinformhowtobestdeployandusethis Measuring and analyzing quantity and quality of electricity con-
+residential storage, which can strengthen the grid in times of need. In sumption is naturally challenging because power usage depends on
+addition,theyguideavenuesforstrategicinvestmentsinnewandexisting manyfactorsincludingweather,economicstate,populationcharacter-
+infrastructuretocreateagridcapableofsustainablegrowththatcanmeet istics,andbehaviorchange.ARIMAorotherequallysimplemodels,we
+futureneeds(KamaniandArdehali,2023). arenotabletocapturethesenonlinearanddynamicdependencies.The
+Traditional electricity consumption forecasting models is to offer qualityofdataisacrucialfactorinachievinghighaccuracyofpredictive
+highlyaccuratepredictionsconcerningwhenandforhowlongprecisely models,butinthecaseofenergyconsumptiondatasets,wehavelotsof
+facilitieswillusepower,whichisabasisformodernpowerusage.These missingvalues,outliers,andinconsistenciescausedbyerrorsofsensors,
+modelsimprovetherunningofpowerplants,furtherimprovedispatch mistakeswhileinputtingdatabyhandorduringdatatransmission.Such
+requirements, and help promote sustainability initiatives (Wei et al., peculiaritiescanhaverathernegativeeffectsonthemodeliftheyarenot
+2024).Thisway,usingbigdataanalyticsandpredictivemodels,stake- handled appropriately. Electricity consumption is rich in information
+holdersincreasethereliabilityoftheirdecision-makinginthesphereofa andhasmanymorefeaturesthanasimpletwo-dimensionalsignalwitha
+safeandefficientelectricitysupply.Theunpredictability,randomnessand single flow and consumption variable that varies over time. These
+triangulation of twenty-first century energy systems highlights the modelsdonotsucceedintasksadequatelyduetothestructuralinfor-
+importanceofconsumptionforecasting,asthepushtowardsrenewables mation flow, which regular feature extraction methods may not
+andsmartgenerationanddemand:inEurope,andbeyondintensifiesand discover,oratleast,discoverinsufficienthigh-levelinteractions.How-
+(Morales-Mareco et al., 2024 and Han and Fan, 2024, Gaboitaolelwe ever,CNNsandtransformersarebecomingpopularinotherdomainsfor
+etal.,2023).Thereal-lifeapplicationsandgeneraladvantagesofaccurate deepfeatureextraction,theirapplicationinenergyforecastingdomain
+Fig.1. BenefitsofElectricityConsumptionPrediction.
+5321
+
+=== PAGE 3 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+is still quite limited. The methodology which offers a rich option for learningcomplexpatternsfromlargedatasets.Byintegratingthese
+incorporating significant and hierarchical data features should be twotechniques,wecreatedarobustandversatilemodelthatlever-
+consideredmoreinthefuture;deepfeatureextractionarchitecturesuch agesthestrengthsofbothapproaches.
+asResNet.Single-modelprocesses(Mohammedetal.,2024,Saddietal., • DataCleaningUsingMedianImputation:Toensurethequalityand
+2024) incorporated within the proposed method can be brittle when reliability of the data, we implemented median imputation for
+usedforvariousenergyconsumptiondatawithstructureandformfea- handlingmissingvalues.Thismethodeffectivelyaddressesdatagaps
+tures.Thisisduetothefactthatdecision-makingmodelbasedonthis by replacing missing values with the median of the respective
+limitationimpairstheaccuracyandflexibilityofthemodel.Whilethere feature,maintainingtheintegrityofthedatasetwithoutbeingoverly
+isfurtherimprovementinthemodelsthatutilizeMLandDLtechniques influencedbyoutliers.
+simultaneously in energy forecasting (for instance by combining • OutliersDetectionUsingIQRMethod:Outlierscandistorttheanal-
+XGBoostwithdeepneuralnetworks),thereseemstobescarceliterature ysisandaffecttheperformanceofpredictivemodels.Weemployed
+onthemostefficientwaytodothisintegration.Combinationofdifferent theInterquartileRange(IQR)methodtodetectandhandleoutliers.
+strategieshasbeenatrendinmanycasesandalthoughthereisevidence Thisrobuststatisticaltechniqueidentifiesoutliersasvaluesthatlie
+thatsuchapproachesareeffective,theyarestillunexplored. significantlyoutsidetheinterquartilerange,ensuringacleanerand
+Inresponsetothischallenge,weproposetheDEPM–anewhybrid moreaccuratedatasetformodeltraining.
+approach that aims at improving prediction quality and speed. The • FeatureExtractionUsingCascadedResNet:Tocapturethecomplex
+DEPMintegratesthestrengthsoftwopowerfulMLtechniques:XGBoost and high-dimensional features of electricity consumption data, we
+andDNN.XGBoost,manifestedasoneofthemostoverperformedand utilizedCascadedResNetforfeatureextraction.ThisDLarchitecture
+stablealgorithmsinclassification,isfollowedbytheDLcapabilitiesof excelsinidentifyingandretainingthemostrelevantfeatures,which
+DNNs,whichisexcellentfordesigningcomplexpatternsinsetsofbig arecrucialforimprovingthemodel’spredictivepower.Bycascading
+data.ToenhancethefinalityofourmodelweuseCascadedResNetin multiple ResNet blocks, we ensured a thorough and hierarchical
+ordertocategorizethemostrelevantandhighestqualityfeaturestobe extractionoffeatures,enhancingtheoverallmodelperformance.
+usedinourpredictions.Thisapproachbuildonsynergisticbenefitsof
+thesetechniquestoproduceamodelthatnotonlygivesanearperfectfit The novelty of this work lies in its comprehensive and innovative
+forelectricityconsumptionbutalsoaccountsforthetimevaryingand approach to electricity consumption forecasting, combining multiple
+stochasticnatureofenergyusage. advancedtechniquestoachieveunprecedentedaccuracyandefficiency.
+Nomenclature The Deep Energy Predictor Model (DEPM) stands out by seamlessly
+integratingXGBoostandDeepNeuralNetworks(DNN)withinahybrid
+Abbreviations
+model framework. This integration harnesses the structured data
+ARIMA AutoregressiveIntegratedMovingAverage
+handlingcapabilitiesofXGBoostwiththecomplexpatternrecognition
+ASGD AverageStochasticGradientDescent
+strengths of DNNs, resulting in a model that excels in predictive per-
+BDGRU BidirectionalGatedRecurrentUnit
+BEMS BuildingEnergyManagementSystems formance. A key innovative aspect of our approach is the use of
+CNNs ConvolutionalNeuralNetworks CascadedResNetforfeatureextraction.Thistechniqueleveragesdeep
+ConvLSTM ConvolutionalLongShort-TermMemory learning’shierarchicalfeatureextractioncapabilities,ensuringthatthe
+DEPM DeepEnergyPredictorModel
+mostrelevantandintricatepatternswithintheelectricityconsumption
+DL DeepLearning
+DNN DeepNeuralNetworks dataarecapturedandutilizedbythemodel.Thismethodsignificantly
+FTRL Follow-The-Regularized-Leader enhances the model’s ability to generalize and make accurate pre-
+IQR InterquartileRange dictionsacrossdiversedatasets.
+LSTM LongShort-TermMemory
+The remainder of this paper is structured as follows: Section 2 re-
+MAE MeanAbsoluteError
+views related work and the current state of electricity prediction
+ML MachineLearning
+NZEB Net-ZeroEnergyBuildings methods.Section3detailsthemethodologyandimplementationofthe
+PCA PrincipalComponentAnalysis proposedDeepEnergyPredictorModel(DEPM).Section4presentsthe
+PV Photovoltaic experimental results and performance evaluation. Finally, Section 5
+REC RenewableEnergyCommunities
+concludeswithadiscussionofthefindingsandpotentialfutureresearch
+ResNet ResidualNetwork
+RMSE RootMeanSquareError directions.
+SARIMA SeasonalAutoregressiveIntegratedMovingAverage
+SGD StochasticGradientDescent 2. Relatedwork
+SVM SupportVectorMachines
+USDHM UnsupervisedDeepHybridModel
+XGBoost eXtremeGradientBoosting The challenge of energy efficiency in building has attracted more
+attentionbecauseof theeffectsofgreenhousegasemissionscausedby
+energy use in building within the residential and commercial sectors.
+Energyisdirectlyusedbybuildingstoheat,coolandforotheractivities
+andthereforeplaysabigroleincontributingtoclimatechange.NetZero
+1.1. Maincontributionofthework EnergyBuildings(NZEBs)havethereforebeenproposedasaneffective
+solutiontothisdilemmainachievingenergyefficiencyandbreakingthe
+Theprimarycontributionsofthisworklieinthedevelopmentand reliance on non-renewable energy sources by striving to generate the
+implementation of the Deep Energy Predictor Model (DEPM), which sameamountofenergyrequiredinthestructure.However,theincorpo-
+combinesseveraladvancedtechniquestosignificantlyenhancetheac- ration of NZEBs into wider systems is not straightforward. Renewable
+curacy and efficiency of electricity consumption forecasting. The key energysourcessuchassolarandwindenergyandthevariationsinenergy
+contributionsinclude: demand,resultstoasupplydemandimbalanceofNZEBrequiredenergy,
+whichifdisrupteddistortsthesmartgrid.Recentstudieshaveproposed
+• Hybrid Model for Classification: XGBoost with Deep Neural Net- anenergy-sharingschemewithinREcommunitieswhereenergyexcess
+works: The core innovation of our work is the hybrid model that fromoneNZEBcansupplyforanotherthatisindeficit,therebyenhancing
+combinesXGBoostwithDeepNeuralNetworks(DNN).XGBoost,a energysecurityandsustainablepractices(Federicoetal.,2024).
+powerful gradient boosting algorithm, is adept at handling struc- Energypredictionhasalwaysbeenakeycomponentofenergysupply
+tured data and classification tasks, while DNNs are proficient in networkmanagementwhereitsprojectionhasbecomecriticalwiththe
+5322
+
+=== PAGE 4 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+current global energy demands. Climate change, economic trans- consumption forecasting. Initially, we performed data cleaning using
+formation,anddevelopmentaresomeofthefactorsthataffectenergy median imputation to handle missing values, ensuring the dataset’s
+consumptionattheregional,nationalandinternationalinterfacehence integrity. Outliers were detected and managedusing the Interquartile
+theneedtoestimateenergyconsumptionforsustainabledevelopmentof Range(IQR)method,whichhelpedmaintaindataqualitybyidentifying
+the global economy. A few researches have utilized real data flow to andaddressinganomalousvalues.Forfeatureextraction,weemployeda
+replicateenergydemandandobtainedgoodresultsincorporatingLocal CascadedResNetarchitecture,leveragingitsDLcapabilitiestocapture
+Weather Condition Sensitive (LWCS) model. There is effectiveness in and retain complex, high-dimensional features relevant to electricity
+utilizingLSTM,andCNNsincapturingtemporaldependencyinenergy consumption patterns. The core of our methodology involved con-
+demand. However, prior research often dichotomized data into two structing a hybrid model that integrates XGBoost with Deep Neural
+categories,forinstanceusingonlyweatherfactororeconomicfactorsay Networks(DNN).XGBoost,knownforitsrobustperformanceinclassi-
+GDPandthiswayaccuracyislow.Forexample,ChungandJang(2022) ficationtasks,wascombinedwiththepatternrecognitionstrengthsof
+haveproposedthemultivariableCNN-LSTMmodelwith1Dconvolution DNNstocreateapowerfulpredictivetool.
+todiscoverunderlyingtemporaldependencies,whicharehiddeninthe
+timeseriesdata,buttheproposedmethodfailstorevealhigherorder
+3.1. Datacollection
+multivariatedependencies.
+Automatic energy efficient controlling system, mainly known as
+The Household Electric Power Consumption Dataset contains a
+BuildingEnergyManagementSystems(BEMSs),iscriticalforavoidance
+collection of measurements related to household electric power con-
+of excessiveelectric usageforillumination, airconditioning,artificial
+sumption.Thisdataset,availablefromKaggle,containsawidevarietyof
+ventilation,refrigeration,andotherpower-consumingloadsarrangedin
+informationbasedonthelongover47months’timeperiodbeginningin
+buildings.Inthelatestresearch,ithasbeenrevealedthatthefunctionof
+December2006andupuntilNovember2010(Kagglec.om,2024).By
+BEMSs goes beyond increasing efficiency of energy consumption and
+providing an impressive 2075,259 measurements, it provides a deep
+canhelptoincreasecomfortinbuildingswithoutreducingefficiency.
+insightinthehouseholdelectropowerusagebehaviorovertime.This
+Qureshietal.(2024)thenvalidatedLSTM-basedaproachinimproving
+extensivedatasetishighlyvaluableforin-depthanalysis,understanding
+energyconsumptioninBEMSwith95%successratewithmodelopti-
+trends of consumption and even towards building models focused on
+mizers with and without reinforcement learning capabilities that is
+managingenergyoroptimizingit.Thisdatasetcontainsninefeatures.
+personalizedtothebuildingenergyconsumptionpatterns.
+Everyfeatureaddsinalayerwherewelearnsomethingnewabouthow
+In the context of smart homes, IoT and AI developments have the
+thepowerisbeingconsumedbydifferentdimensionsinhousehold.For
+trends occurring of decentralised energy systems with predictive
+completetemporalanalysis,boththedateandtimeattributesareuseful
+context. For instance, Cascone et al. (2023) introduced a two-stage
+buttoreflectrealpowerusageasglobalactivepowerdemand(P)along
+modelofhowthepredictionofhomeappliancepowerdemandcanbe
+withavalidlookattheotherscategoryisinreactiveformsothatwecan
+donewiththehelpofIoTdatain2023.Theirapproachfirstemploysan
+checkoutgooddescriptionincludePowerqualitybylookingoverthem.
+LSTMmodelforinitialenergygenerationprediction,secondemploysan
+Along with voltage, global intensity levels help in assessing the even
+improveddeeplearningmodelforweeklydemandpredictionandthe
+loadandelectricalstabilityofthesystem.Sub-meteringcharacteristics
+proposed model obtains RMSE of 367 kilowatts which improves the
+thatrecordenergyconsumptionatdetailedlocationslikethekitchen,
+baselinemethodsignificantly.
+laundryroomandmajorappliances(e.g.,anelectricwaterheaterorair
+Anotherfuturedevelopmentinrenewableenergycommunitiesisthe
+conditioner)affordahigh-resolutioninspectionofelectricitydemand.
+expansion of Machine Learning (ML). These communities include
+Together,thesecharacteristicsmakethedatasetacriticalresourcefor
+localized consumers who also create, store and exchange electricity,
+researchersandanalyststouseinordertolearnaboutpatternsofenergy
+hence rearrangingthetraditionalmonotonousenergy structures.Asa
+usage so we can better pinpoint where inefficiencies exist that need
+case,Matosetal.(2024)usedeXtremeGradientBoosting(XGBoost)to
+interventionaswillbenecessaryifnominalinterestsaregoingtohave
+modeltheenergydemandinrenewablecommunitieswhilecontrolling
+theirhandonpolicymaking.Fig.2showsthedatasetsample.
+theenergytransactionsbasedonthepricesinthemarketandbattery
+storage.Theyalsoprovedthattheuseofgridtrimmedthedependence
+onelectricityandalsoneighboringelectricitycosts,revealingbillsav- 3.2. Datapreprocessing
+ingsofupto9.8%whenconcentratingonhighsolarpower.
+ThisstudyextendsfromthesefundamentalsbypresentingtheDeep 3.2.1. Datacleaningusingmedianimputation
+Energy Predictor Model (DEPM) which combines CNN and LSTM Medianimputationisagoodwaytocleanourdatawhilehandling
+frameworkstogeneratepreciseestimatesofenergyusageinbuildings, missingvalues.Incompletedatacanbecausedbyanumberofthings,
+with reference to multiple variables. Unlike previous models, which likesensorproblemsorhumanerrorininputtingthedata.Ifignored,
+depend on input variables often only two and limited to energy data thesegapscanresultincompleteanalysisandmiss-predictingmodels.
+alone,DEPMwillincorporateotherdatasuchasweatherdata,economic Missingvaluesarereplacedwiththemedianvalueofafeatureitbelongs
+data or past energy consumption thus making it able capture high to.Thisiswheremediancanworkinourfavorforbeinglessproneto
+dimensionalityandpatterns.TheintegratedDEPMdefiesthedrawbacks outliersthanthemean,andpreventanylargesumsfromsignificantly
+that the single-stage models have experienced because, for feature skewingtheoverallcentralmodulationofourdata.Thiscourseofaction
+extraction,ituseslayersofCNNandLSTMfortemporaldependencies maintainstheaccuracyintestingdataasitkeepstheoriginalselection
+analysis.Furthermore,thisstudydiscussestheapplicabilityofthepro- butdoesnotintroducebias,providingacontrolledandfairwaytotest.
+posedmodelinBEMSsystemsandevaluatesitsperformancetooptimize Medianimputationisagreatwaytomakedatasetmorerobust,which
+the energy consumption profile in various building settings. Incorpo- certainlycreatesbaseforallfurtherstepsofanalysisandmodelbuilding.
+ratingDEPMwithrecentprogressionsinenergymanagementrendersit Fig.3showsthearchitecturediagram.
+the enhanced perspective necessary, filling and addressing the gaps Step-by-stepexplanationofFig.2ismentionedbelow
+ensuredinpriorworks.
+1. DataInputLayer:
+3. Methodology Thefirststepaccordingtothemodelispreparingdataintheirmost
+naturalform.Thisdatasetcouldbehistoricaldatabeingelectricity
+The development of the Deep Energy Predictor Model (DEPM) usagehistory,weatherdata,economicindicators,anddemography
+involvedseveralkeystagestoensureaccurateandefficientelectricity dataandmanyothersthatinfluencetheelectricityconsumption.To
+5323
+
+=== PAGE 5 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.2. DatasetSample.
+overcome challenges of feeding high dimensional data that is forecasting electricity consumption in practical energy management
+requiredtoaccuratelyfeedthemodelforprediction. applications.
+2. DataPreprocessing:
+In the process of data preparation, the most common data pre- 3.2.2. OutliersdetectionusingIQRmethod
+processing technique, mean imputation, is replaced with median Beingabletospotoutliersisanimportantpartofdatacleaningbecause
+imputation.Thisprocessinvolvesreplacinganymissingvaluesinthe itreducesthelikelihoodthatmisleadingstatisticsaffectstatisticalanalyses
+input set by the median of that particular feature which is not andpredictionsbasedonamodel.IQRisonecommonwayofdetecting
+affectedhighlybyoutliers.Preventsroundingofffiguresleadingto outliers.Itisameasureofstatisticaldispersion,beingequaltothediffer-
+incompletedatasetwhileatthesametimeavoidingmanipulationof ence between Q1 and Q3. Q1, the first quartile, represents the lower
+thevalues.ThemethodofIQRisusedinordertoscreenandmanage quartilewhere25%ofthevaluesarelowerthanthisvalueQ2isthesecond
+outliers,whichcanbedefinedasvaluesthatarenotcharacteristicfor quartileormedianwhere50%ofthevaluesarebelowthisvalueQ3isthe
+thedata.Outlierremovalhelpinenhancingthemodelaccuracysince thirdquartilewhere75%ofthedataislessthanthisvalue.TheIQR,which
+extremevalueswillnotdragtheresultmuch. equalsQ3(cid:0) Q1representsthespreadofthemiddlehalfofthedataandis
+3. FeatureExtractionwithCascadedResNet: especiallyhelpfulinidentifyingoutlyingvalues.TheIQRmethodcallsfor
+Next,thedataisfedthroughtheCascadedResNetwhichisaDL computinglowerandupperboundstoidentifytheoutliers:Q1–1.5×IQR
+networkusedinfeatureextractionorinhigherlevel.ResNet(Residual andQ3+1.5×IQRTheseboundsaredeemedasoutliers.Thisisespecially
+Network) utilizes residual block since it enhances the capturing of useful since this based upon the central part of data, so it can handle
+different data patterns in the residual blocks enable information to extremevaluesbetter.Outliers needtobehandled byeither removing
+skipotherlayersthusavoidingthevanishinggradientproblem.This themfromthedataormakingchangestotheirvaluesinorderforitnotto
+layer of feature extraction performing feature refinement on such affectresults.Thatway,theentiretyofremainingdatawillbeinaccor-
+high-dimensionaldataaidsindefiningmoreintimaterelationshipsin dancetotruepatternsandrelationshipsbetweendatapointswhichensures
+thegivendatasetwhichareveryimportantforprediction. amoretrustworthyanalysisandmodelpredictionsaswell.
+4. HybridModelLayer:
+The processed and refined data features obtained from the 3.2.3. Datatransformation
+CascadedResNetaregiventoDecisionNeuralNetwork.ThisDNN Indatatransformation,weconvertedthedateandtimeattributesto
+has multiple layers of neurons, where each level can learn hierar- Datetimeformatforanalysis.Thisconversionmadeitpossibletopull
+chicalabstractionsofthedatainordertorecognizeandunderstand outtemporalfeaturesatanylevelrangingfromthedayofweek,hourin
+the patterns and relationships. For constructing complex and non- aparticulardaythatwasimmenselyimportantforgraspingseasonality
+trivial causal, qualitative relationships with the help of extracting thoserealfeaturesprevailingbehindelectricityconsumption.Wealso
+dependenciesinvariationsinelectricityconsumption. transformednumericalfeaturesusingmin-maxscaling.Standardization
+Similarly,themodelalsoemploysXGBoost,aMLalgorithmthat rescaledthesefeaturessothattheyhaveameanofzeroandastandard
+hasbeenwidelyusedpreciselyintheclassificationproblems.They deviationofone.Thisupdatedrepresentationensuredthatthefeatures
+claim that XGBoost, which takes features from DNN, passes them contributed similarly and aid faster convergence during training of a
+throughdecisiontreesthatareanensembleoftrees,eachlearning model.Thesefilterstransformedthedatainamannerthatallowedfor
+fromtheerrorsfromprevioustrees.XGBoostimprovestheaccuracy more consistent learning so our models could learn from it. This is
+ofthemodelbyaddinggradientboostingtothemix,combinedwith computedusingEq.(1).
+featuresresultingfromDNNrefinement. X(cid:0) μ
+5. PredictionOutput: Xstandardized =
+σ
+(1)
+ThecombinedoutcomeafterthelayersofDNNandXGBoostbythe
+finallayercalledthehybridlayerareasfollows.Thiscreatesthefinal whereXistheoriginalnumericalfeature,μisthemeanofthenumerical
+forecasted value of electricity consumed by a consumer, firm or featureandσisthestandarddeviationofthenumericalfeature.
+countryunderconsideration.Achievesaveryhighpredictionaccu-
+racythroughtheproposeduseofbothDNNandXGBoostinacom- 3.2.4. Featureengineering
+binedform. Feature engineering is important step in the dataset preparation
+6. EvaluationMetrics: process to obtain reliable prediction of electricity consumption. It
+concernfeaturegeneration,transformationandselectionfromrawdata
+Theevaluationmeasuringtechniquethatisbeingusedinthismodel toenhancethemodel’sperformanceanditscapabilityinassessingthe
+isaccuracy,precision,recallandF1-score.Thisassessmentrefutesany patterns of electricity usage. The feature engineering process for the
+possibility of inaccurate, unreliable or inconsistent results being an DEPMdetailedasfollows:
+artifact of the conditions, but the model is accurate, reliable, and TemporalFeatureExtraction:
+consistent. Thus supports the practicality of using the DEPM for
+5324
+
+=== PAGE 6 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+• DayoftheWeekandTimeofDay:Energyusetraditionallyexhibits consistedofcomputingthecovariancematrixfordata,thendetermining
+temporal heteroscedasticity where it fluctuates through different itseigenvaluedecompositiontoprovideprincipalcomponents.Wedidso
+weekdaysandweekendsorthroughdifferentsegmentsofaday.For bychoosingtheprincipalcomponentswiththelargestassociatedvariance
+thesewehavebuiltnewfeaturesthatdescribethedayoftheweek (which, inthis specific case andamong otheruseswe couldgive such
+and the hour of the day associated with each data point. These seemingly over-engineered procedure, allowed us to reduce dimension
+characteristicsallowthemodeltoidentifyperiodicityandscaleco- withouttoomuchdegradationofvaluableinformation).Thisreduction
+efficients that allow it to account for daily, weekly, and seasonal helpedtoreducethecomputationalcomplexity,storagerequirementsand
+fluctuationsinenergyconsumption. reduced risk of overt-fitting (increased generalization). Since PCA
+• MonthandSeasonIndicators:Becausetheintensityofelectricalload reducedthedatasetmakingitmorecompactandconcentratingonthe
+can be different within the months, we included the month and most informative partsfor prediction, predictions became faster which
+season variables as features for each observation. These features woulddefinitelybeagoodthing.Itisusedtocomputethecovariance
+assistincapturingofseasonalitythisisespeciallyworkswellinareas matrix of data set as a first step in any ML problem since we need to
+havingsharpvariationsofweatherseason. understandwhatcorrelationsthereareamongfeaturesgivenbyEq.(2).
+LaggedandRollingFeatures: ∑
+• LaggedConsumptionValues:Toretaintheimpactofpastelectricity Σ= 1
+n
+n
+i=1
+(Xi (cid:0) μ)(Xi (cid:0) μ)T (2)
+usageonfutureusage,thelaggedfeatureswerecreatedwherebypast
+∑
+consumption values are used for the current predictions. For where isthecovariancematrix,nisthenumberofobservations,Xiis
+example,theconsumptionlevelsfromtheprevioushourordayor thei(cid:0) thobservationvectorandμisthemeanvectorofthedataset.The
+even week can be used as lagged features as this would help the explainedvarianceforeachprincipalcomponentwascalculatedusing
+modelanalyzehowtheratesofconsumptioninthenearpastinflu- Eq. (3) to determine the proportion of the dataset’s total variance
+encefutureutilization. capturedbyeachcomponent.
+• Rolling Statistics: To filter out short-term noise and reveal more
+λ
+extendedtrends,rollingstatisticsincludingmovingmean,minimum, ExplainedVariance=∑ i (3)
+p λ
+andmaximumofelectricityconsumptionfortheselectedwindows j=1 j
+(e.g. 1day, 7 days) are used. These rolling features are useful for
+strippingoutshort-termnoiseandtrackingmorefundamentaltrends
+whereλ iistheeigenvalueofthei(cid:0) thprincipalcomponentandpisthe
+totalnumberofprincipalcomponents.
+thatmaybeobscuredbyhighfrequencynoise.
+3.4. FeatureextractionusingcascadedResNet
+InteractionTerms:
+• Feature Interactions: To address this possibility, interaction terms CascadedResNetisafeatureextractionusingthehigh-levelarchi-
+tectureofdeepconvolutionalneuralnetworks-thesehelpautomatically
+werecreatedfortheactualelectricityconsumptionfeatureandother
+discoverandselectimportantfeatureswithincomplexdatasetssuchas
+features which would be expected to have an impact on actual
+images;ortimeseriesdata.ThesocalledResNetarchitecturereducethe
+electricityconsumptioncollectively.Forexample,thecoefficientsof
+vanishinggradientproblemusingresidualconnectionsandfinallyable
+productoftemperature,timeofdayordayofweekwithelectricity
+totrainverydeepnetworks.Thisisespeciallyusefulforfindingglobal
+consumption generate a richer account on how stimuli conditions
+featuresthat cannotbedetectedusingtypicalfeatureengineeringap-
+varydemandatparticularmoments.
+• Weather and Temporal Interactions: Temporal elements include proaches.InResNet,thecascadedapproachconsistsofstackingmultiple
+residualblockswhichcontainseveralconvolutionallayersfollowedby
+temperature,humidityandwindvelocity,whichassumeinteractions
+batch normalization and activation functions. These residual blocks
+with temporal characteristics, for example, power usage at a hot
+progressivelyrefineandextracthigher-levelfeatures.Ineachblock,the
+afternoonasopposedtoatnight.Addinginteractiontermsbetween
+mechanismlearnshowtocomputearefinementofitsownfeaturesand
+weatherandtime-basedfeaturesalsohelped,asitaidedthemodelin
+it then adds this new information representation with the original
+comprehendingthegeneraleffectsoftheenvironmentonelectricity
+featureandsoonthroughoutsuccessiveblocksasgivenbyEq.(4).
+usage.
+( )
+AggregatedFeatures:
+X
+(l)=f
+W
+(l)∗X (l(cid:0)1)+b (l)
+(4)
+• Daily, Weekly, and Monthly Aggregations: Splining data on daily,
+weekly,andmonthlybasesreducesshort-termfluctuationsandal-
+lowsthemodeltocapturelong-termconsumptiontrends.Newfea-
+whereX(l)istheoutput,W(l)istheweightmatrix,X(l(cid:0)1)istheinputb(l)is
+turesforthetotal,mean,andvarianceofelectricityusageatintervals thebiasvectorofthel(cid:0) thlayer,f istheactivationfunctionand∗de-
+wereincludedtocapturemoregeneraltrendsandpossiblechanges notestheconvolutionoperation.
+(cid:0) )
+happeningatthatstage.
+Y
+(l)=X (l(cid:0)1)+F
+X
+(l(cid:0)1),W (l)
+(5)
+• Holiday Indicators: Given that electricity consumption varies with
+activitylevels,wedevelopedabinaryfeaturecalledholidaybecause where Y(l) and X(l(cid:0)1) are the output and input of the residual block,
+consumptiondifferssignificantlybetweenworkingandpublicholi- F (cid:0) X(l(cid:0)1),W(l) ) istheresidualfunction,typicallyaseriesofconvolution,
+days.Thisfeaturesimplytagseachpointasaholidayornotaholiday
+batchnormalization,andactivationoperations.Thisfunctionprocesses
+andisincludedinthemodeltocaterforthenonsymmetricaldemand
+theinputandaddsitbacktotheinputtoformtheoutput.
+duringholidays.
+Z=Y (L) (6)
+3.3. DatareductionusingPCA
+where Z is the final feature representation after cascading L residual
+DatareductionthroughPCA(PrincipalComponentAnalysis),which blocksandY(L) istheoutputoftheL(cid:0) thresidualblock,indicatingthe
+serves to decrease data set dimension while maintaining its essential depthofthenetwork.ZpooliscomputedusingEq.(7).
+characteristics.ThepurposeofPCAwastotransformtheoriginalhigh-
+d
+ca
+im
+lle
+e
+d
+ns
+p
+io
+ri
+n
+n
+a
+c
+l
+ip
+d
+a
+a
+l
+t
+c
+a
+om
+in
+p
+to
+on
+a
+en
+lo
+ts
+w
+th
+d
+a
+i
+t
+m
+m
+en
+a
+s
+in
+io
+t
+n
+ai
+a
+n
+l
+e
+s
+d
+et
+m
+o
+o
+f
+st
+u
+/
+n
+m
+c
+o
+o
+s
+r
+t
+re
+th
+la
+e
+te
+i
+d
+nfo
+v
+r
+a
+m
+ri
+a
+a
+t
+b
+i
+l
+o
+e
+n
+s Zpool =
+H×
+1
+W
+∑
+i=
+H
+1
+∑
+j=
+W
+1
+Zi,j (7)
+(variance) in entirety vs. only choosing several relevant features. This
+5325
+
+=== PAGE 7 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+texts and time series. The depth captures fine-grained detail and de-
+whereZpool isthepooledfeaturemap,whichisacondensedrepresen-
+pendencies,constructingcomplexfeaturerepresentations.Integratedto
+tation of the feature maps, H and W are the height and width of the
+a hybridmodel,DNNsdeliver anunparalleled insightintothe under-
+featuremapZ,Zi,jaretheelementsofthefeaturemapZ.
+lying data structures that again improves predictive accuracy with
+(cid:0) )
+Y ̂ =σ Wfc ⋅Zpool +bfc (8) respecttoanyothersingularlytrainedmethodology.
+ThishybridcombinesXGBoostandDNNs,effectivelyplayingtothe
+where Y ̂ isthepredictedoutput,Wfc istheweightmatrixofthefully strengthsofbothmodelsinordertobenefittheirclassificationperfor-
+connectedlayer,bfcisthebiasvectorofthefullyconnectedlayerandσis mances. This integration can be accomplished in several ways, but a
+commonmethodistoimplementitintotwostages.Thefirststageisdata
+theactivationfunction.
+preprocessing,whereaDNNextractshigh-levelfeaturesfromrawinput
+ResNet contains convolutional layers which extract local patterns
+(text).Finally,theXGBoostmodelinstagetwomakesuseofthesefea-
+fromtheinputdata,edgesandtextures,Low-levelfeatures.Thatis,the
+tures as input. This enables DNN to harness its strength of feature
+lower layers capture simpler patterns and as we go up in deeper net-
+extraction and representation power, while XGBoost focuses on the
+works,thesehigherlayersarecapturingmorecomplexones.Thebatch
+utilityofthesefeaturesforfinegrainedclassificationtasks.
+normalization after each convolution, which reduces the output by
+Inthehybridmodel,itsDNNcomponentstartsbyprocessinginput
+normalizingit.ResNetinnovatedjusttheresidualblocks.Theconnec-
+data through many layers of transformations in order to capture rich
+tion can simply forward the input to its output essentially allowing a
+features. In an image classification application, for example, a DNN
+networklearningresidualfunctionswithreferencetothelayerinputs.
+mightlearntorecognizeandabstractvisualpatterns(itsconvolutional
+Thismethodthatsolvesthevanishinggradientproblemisallowingusto
+layers)suchasedgesortexturesinlower-layerprocessingsteps.These
+trainverydeepnetworkswithoutperformancedegradation.
+collectedfeaturesrepresentarichsourceofthedatathatistobefurther
+ResNetisabletolearnresidual-thatis,progressivelybetter-featuresby
+processed by XGBoostmodel. XGBoost thenuses these high-levelfea-
+stackingmultiplesuchresidueblocks.Thishierarchicallearningcaptures
+tureswithitsboostingtechniquetoconstructanensembleofdecision
+boththelow-leveldetailsandhigh-levelabstractions-aqualitythathas
+treesthatreducetheclassificationerrorrateineachiteration.
+rendered RJN highly effective for feature extraction as well. Global
+Subsequently, the hybrid architecture leverages on DNN to auto-
+averagepoolingbasicallyreducesthespatialdimensionsofafeaturemap
+matically learn intricate non-linear relationships in the data and
+to1bysummarizingthepresence(orabsence)offeaturesineachregion.
+XGBoost’s boost retrospection abilities to make accurate predictions.
+Thisconcatenatedrepresentationcanthenbepassedtofullyconnected
+ThispairingenablestheMVCtomanageanarrayofdatacomplexities,
+layersforfinalpredictions,eitheraclassificationorregressionproblem.
+anddistributions.Theincorporationofthetwomethodsresultsinbetter
+With ResNet in cascade for feature extraction, we could automatically
+featurerepresentation,increasedaccuracyandfinallyrobustnesswith
+detectandaggregatethepatternsfromthedata.BesidesreplacingVGG
+respecttomoreuse-cases.ThishastheadvantagethattheDNNdoesall
+withResNettoincreasedepthandpower,anothertechniquewasapplied
+featureextractionandprovidehigh-leveloffeatureswhichareusedby
+toextendthesedatasetsfurther,fortheimprovementanddevelopmentof
+XGBoostforfineclassification.Thehybridmethod,whichcombinesthe
+thesesetsandnotablyincreasingrobustnessofprediction.Thisapproach
+strengthsofbothmodelstogethertointegratethemwithahigherlevel
+workedbestonproblemswhereweneededastrongunderstandingofthe
+of capacity than for one model alone is more accurate. This prevents
+underlyingdata,suchasimagerecognitionandtimeseriesforecastingor
+overfittingbycombiningalongwithboostingmechanismandregulari-
+ingeneralanypredictiveanalytics.
+zation parameter in XGBoost, together with its DNN that is able to
+capturecomplexpatternsandcorrelationswhichthemodelveryrobust
+3.5. Hybridmodelforclassification:XGBoostwithdeepneuralnetworks acrossawiderangeofdatadistributions.ThisisgivenbyEq.(9).
+XGBoostwhencombinedwithDNNstobuildahybridmodelofthe
+ZDNN =X (L) (9)
+two gives the best in class methods from both worlds and it can be
+whereZDNNrepresentstheextractedfeaturefromthefinalhiddenlayer
+considered as one of powerful tool for classification task. This work of the DNN and L is the number of layers in the DNN. The ̂y (k) is
+combines the strengths of both XGBoost, where boosting and feature i
+engineering are straightforward to integrate and DNNs, which have computedusingEq.(10),whiley
+(
+i
+k)
+iscomputedusingEq.(11).
+powerfulDLfeatureswithagoodvarietyofhierarchicaltransformations. (cid:0) )
+Byacombinationofthosetwomethodcouldbeachievedbetterperfor-
+̂y (
+i
+k)=Tk ZDNN,i (10)
+mancewithhybridmodelthanaloneparticularlyonthecomplexdataset,
+which is rich in features. XGBoost is a widely used and powerful ML where ̂y ( i k) is the prediction of the k(cid:0) th tree for the i(cid:0) th insane, Tk
+modelforclassificationaswellasregression.Itisalsoeasilyusedwith representsthek(cid:0) thdecisiontreeintheXGBoostensembleandZDNN,iis
+structureddataandincorporatesensemblelearning,makingverystrong thei(cid:0) thinstanceoftheextractedfeaturesfromtheDNN.
+predictions. It constructs many weak learners (typically decision trees)
+y
+(k)=y (k(cid:0)1)+η̂y (k)
+(11)
+stepbystep,andeachnewtreewillcorrecttheerrormadeintheprevious i i i
+ones.Bytheendofthisboostingprocess,biasandvariancearesignifi-
+cantly reduced - so that a model can generalize better to unseen data. where y ( i k) is the updated prediction after the k(cid:0) th tree, y ( i k(cid:0)1) is the
+Moreover,XGBoosthasregularizationparameterstopreventoverfitting
+predictionfromthepreviousiterationandηisthelearningrate.
+andimprovestherobustness.Thismakesitthemostpopularchoicein ∑K
+structureddataproblems-duetoitscapacityofmanagingmissingvalues Y ̂ = ̂y (k) (12)
+i
+better,frictionlessmemoryusageandparallelprocessing. k=1
+DNNs have a layered architecture by which they can effectively
+̂
+capturecomplexpatternsindataandlearnrepresentationsofthem.Ina whereYisthefinalpredictionfromtheXGBoostmodelandKisthetotal
+DNN, each layer contains neurons, which perform nonlinear trans- numberoftreesintheensemble.
+f
+r
+o
+e
+r
+p
+m
+re
+a
+s
+t
+e
+i
+n
+o
+t
+n
+a
+s
+ti
+o
+o
+f
+n
+t
+s
+h
+.
+e
+W
+ir
+h
+i
+e
+n
+n
+p
+w
+ut
+o
+s
+rk
+a
+i
+n
+n
+d
+g
+a
+w
+ll
+i
+o
+th
+w
+c
+t
+l
+h
+as
+e
+si
+n
+fi
+e
+c
+t
+a
+w
+t
+o
+io
+r
+n
+k
+t
+t
+a
+o
+sk
+le
+s
+a
+,
+r
+D
+n
+N
+h
+N
+i
+s
+er
+h
+a
+a
+r
+v
+ch
+e
+i
+t
+c
+h
+a
+e
+l Y ̂ =XGBoost(ZDNN ) (13)
+abilitytoperformfeatureextractionandlearnarepresentationofdata ̂
+fromscratchwhichisautomaticallyrefined,hencetheyareespecially
+whereYisthefinalpredictionofthehybridmodelandZDNNisthesetof
+featuresextractedfromtheDNN.
+wellsuitedforhighdimensionalorunstructureddatasuchasimages,
+5326
+
+=== PAGE 8 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.3. ArchitectureofProposedModel.
+To train the hybrid model, first we need to trained DNN then powerful and accurate modeling of numerous kinds of classification
+XGBoost components. Training of original data once the meaningful tasks.Withtheseproperties,themodelachievesperformanceonalarge
+featuresarelearntandextracted,aDNNwillthenbetrainedthrough numberofcomplexandverydifferentdatasetsthatonecanuseforitto
+raw data. We model through extracted feature and finally train the learn from using both DNN feature extraction capabilities as well
+XGBoost Model to obtain the best result, it is possible to tune hyper- XGBoostboostingstrengthsinanidealcombinedway.Thisunionizes
+parametersabouthowtheDNN(andXGBoost)shouldbetrained.The variousmethodsandthehybridmodelisempoweredwhichoutperforms
+model described above would leverage the best parts of both compo- inmanydifficultclassificationtasksresultingmoreaccurateandreliable
+nents,withagreatpipelineforclassificationinonestep.So,thishybrid predictions.Theproposedhybridmodelalgorithm,XGBoostwithDeep
+modelwithXGBoostcombinedwithDNNistheclearwinnerformore NeuralNetworksispresentedinAlgorithm1.
+5327
+
+=== PAGE 9 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Algorithm1. HybridModel:XGBoostwithDeepNeuralNetworks
+5328
+
+=== PAGE 10 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+3.6. Modeltrainingandoptimization Table1
+PerformanceComparisonacrossDifferentActivationFunctions.
+Specific stopping criteria and control parameters were used in ActivationFunction Accuracy Precision Recall F1-
+trainingtheDEPMtoachievefiguresofmeritinpredictiveaccuracythat Score
+were higher than in the case of over-fitting. The neural network
+Sigmoid 0.88 0.87 0.89 0.88
+componentofDEPMwastrainedover50epochs,learningrateof0.001 Tanh 0.9 0.89 0.91 0.9
+and abatchsizeof64becauseitwasmuchefficient andenabledthe LeakyReLU 0.91 0.9 0.92 0.91
+modeltoconvergewell.TheuseoftraditionalmethodsthatincludeL1 ELU 0.89 0.88 0.9 0.89
+Softmax 0.87 0.86 0.88 0.87
+and L2 regularization with the parameters set at 0.01 and 0.001
+Swish 0.93 0.92 0.94 0.93
+respectively was used to minimize overfitting by discouraging the Softplus 0.86 0.85 0.87 0.86
+networkfromassigninglargeweightstowardsitsparameters.Inaddi- SELU 0.9 0.89 0.91 0.9
+tion, dropout of 0.3 was applied in the DNN layers to reduce model HardSigmoid 0.85 0.84 0.86 0.85
+memorization where some neurons are dropped out randomly during ProposedModel(XGBoost+DNN, 0.98 0.97 0.99 0.98
+Optimized)
+training to increase the models generalization capability. In XGBoost,
+therelevantparameterswerethemaxnumberoflevelsoneachtreewas
+6,therateoflearningwas0.1,andtherewas100treesintotal,which InacomparisonbetweentheresultsobtainedfromemployingDEPM
+constituting a good balance between the models’ complexity and po- and those obtained when conventional methods, including random
+tentialpredictivepower. forests,supportvectormachines(SVM),andneuralnetworkswereused,
+itwasnotedthatDEPMexcelledinallthemeasures.Forexample,the
+4. Resultsanddiscussion accuracy of the random forest was 88% and F1-score was 0.89, the
+precisionofSVMwas86%andrecallof88%.Hence,themeanabsolute
+WeimplementedandrunthemodelinPython,takingadvantageof error(MAE)forDEPMwas0.015(95%CI:0.014–0.017)whileforall
+severallibrariesbasedonDLsuchasTensorFlow+Kerasorotherop- baselinemodels;theMAEwasapproximatedat0.05.Inaddition,DEPM
+tionslikeXGBoost.Thecomputationalexperimentswerecarriedouton model’sRMSEwasdeterminedat0.020(95%CI:0.018–0.022)while
+aWindows-basedmachinewithanIntel®Core™i7-13700EProcessor. comparedwiththeconventionaltechniques;theRMSEvariedbetween
+The30MCacheandclockspeedabilitytoamaximumofanincredible 0.04and0.07.ThiselementofreductionoferroralsoensuresthatDEPM
+5.10GHzforthisprocessorwastheperfectfitforrunningsimulationson canbedependeduponnotonlytogenerateaccuratepredictionsbutalso
+the hybrid model as these required complex calculations, high pro- togeneratethemreliably,afactorthatmightbeespeciallyimportantfor
+cessingpowertasksIthad16GbofRAMthatwaswell-suitedforlarger utilitycompaniesthatdependonmoredetailed,precisedatainthefield
+datasets and memory-intensive operations during the training and ofenergydistributionanddemandforecasting.
+evaluationphases.TheadditionofaMSIGeforceRTX4060Ventusalso Asabaseline,wehavethesigmoidfunction,whichperformssome-
+helpedtoboostDLcomputationsbyprovidingsignificantspeedupin whatwellwitharound0.88accuracy,precision,recallandF1-scoreall
+the neural network layer processing and training times. That high- inaccordancebutitisnotparticularlystrongcomparedtootherfunc-
+performance hardware combination helped with a not only very effi- tionsthatmaybeverifiedlateron.Thetanhfunctionprovidesamild
+cient but also effective model execution, making for extensive testing improvement in these metrics, withthe increase happening across all
+andthebestperformancetuning. measures every time more consistently resulting on accuracy 0.90
+Thefirststepofworkingprincipleoftheproposedhybridmodelis demonstrating its advantages over sigmoid for capturing content of
+datacollection.Inordertocreatethedatasetforclassifierinourcase, greater complexity.Leaky ReLUisbeing most preferredthansigmoid
+only large data that is most relevant to the given problem should be and tanh with accuracy of 0.91. Precision, Recall & F1-score shows
+collected. For example, in an electricity consumption prediction task, improvementsaswell.Thisindicatesapropertywhereitcanhandlethe
+theinputsourcesmayincludesmartmetersthatsupplyattributesabout dying ReLU problem, whichhasadaptive characteristics that havean
+usageand weather stationsthat reportcurrent andfutures conditions advantageofmakingourmodelperformsignificantlywell.Aswell,ELU
+affecting demand.Furthermore,the treatmentofpast chartsalsoaids alsogivessomeperformanceandlagsbehindLeakyReLUbutwithlower
+themodelinlearningperiodicitypatternsaswellasthegeneraltrend metricslevelssoitisreasonablychoice.
+overtime.Thedatasetmustbe diversemorethanenoughsothatthe Thesoftmaxfunction,whichismainlyappliedformulti-classclas-
+designcangeneralizeperfectlytounseeninformationotherdistinctive sificationtasksresultsinaperformanceinferiortothatoftheothersas
+continuumofsituationsandailments. wellwithaccuracydetecting0.87.Thisimpliesthatsoftmaxisrequired
+The data is then preprocessed using several techniques. This step forsomespecifictasksbutmaynotbeanoptimizedactivationfunction
+involvesmissingvaluehandling,datanormalizationandtransformation ingeneralpurposeneuralnetworks.Conversely,theswishfunctionnow
+oftherawfeaturestoareadableformforanalysis.Techniques,suchas resultsinahighestperformancesimilartothoseofallbaselineactiva-
+imputingmissingvaluesusingthemedianvaluetoguaranteetotality. tionfunctions(0.93foraccuracyandveryhighprecision/recall/F1).It
+Datanormalizationscalesthefeaturestosomestandardrange,typically shows that EAF has the potential to be an experimental activation
+0 and 1 uniformly improves model’s convergence during training. function as it is smooth and non-monotonic. The results are also
+Finally,someadditionaltransformationssuchasextractingthedayof competitive with Softplus and SELU functions(Softplus: 0.86)On the
+the week or hour of a date time are performed to enrich the dataset. otherhand,SELUbehavessimilartotanhindicatingitisagoodchoice
+When comparing Table 1 and Figs. 4, 5, 6, 7, we find that different forcertainkindofneuralnetworkarchitectures.Thepoorperformance
+activationfunctionshavedirectlyperformeddifferenceswithrespectto metricsofthehardsigmoidfunctionnamedindicatesthatitmaybeleast
+performancemetricsshowingbothstrengthsandweaknessesofevery beneficialintypicalusescenariosaswell,supportedbyaworseaccuracy
+approach.TheDEPMwasalsoabletoshowimprovedaccuracyofthe scoreobserved(0.85).
+electricityconsumptionthroughanoverallaccuracyof98%.Asevident ThecombinationofXGBoostandafinetuneddeepneuralnetwork,
+from the average prediction accuracy identified earlier, DEPM’s per- entailing the convolution layers for image histogram data, shows
+formanceishigherby92%,comparedtobaselinemodels’accuraciesof impressive results compared to all separate activation functions with
+between 80% and90%.Specifically,the modelachieved aprecision excellent accuracy at 0.98 The model is also very good at specificity,
+scoreof0.97(95%CI:0.95–0.98),recallof0.99(95%CI:0.98–1.00), recall and F1-score means results are pretty well balanced and the
+and an F1-score of 0.98 (95% CI: 0.97–0.99), indicating high consis- modelscanmakeusefulclassifications.Resultsemphasizethebenefitof
+tencyinidentifyingtruepositivecaseswithoutsacrificingspecificity. incorporating modern day ML and optimization to improve model
+5329
+
+=== PAGE 11 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.4. AccuracyComparisonofDifferentActivationFunctions.
+Fig.5. PrecisionComparisonofDifferentActivationFunction.
+Fig.6. RecallDistributionacrossDifferentActivationFunction.
+5330
+
+=== PAGE 12 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.7. F1ScoreacrossDifferentActivationFunction.
+performancebeyondwhatotheractivationfunctionscanoffer. inallmetricsobtainedusingdifferentactivationfunctions.ReLUach-
+ThepreprocessednormalizeddataisinputintoaDNNExtractor.The ievesanaccuracyof0.92,aprecisionof0.91andrecallratereachesas
+demographicneuralnetworkisasetofseverallayersofneuronsthat highas93%whileSigmoidlagsbehindwithvaluesatonly-butequally
+processes data using a rectified linear unit activation function. By good-0.88, 87 and yes-89 respectively. This fits in the fact that ReLU
+avoidingthisdyingReLUsolvedtheproblemandalsospeedsuptraining prevents vanishing activations and seems to work well with deep
+process.TheDNNistrainedover50epochs,withtheAdamoptimizer models.
+beingusedtoadaptthelearningrateduringtraininginawaythatoffers Theselectionoftheoptimizerisasimportant,itgreatlyinfluenceson
+quickconvergence.Whendatapassesthroughtheselayers,theDNNcan modelaccuracy.Adamoptimizerturnedouttobethewinnerwithan
+thendetecthighlevelfeaturesandcomplexpatterns/structuresinthe accuracyof0.98,Precision:97%andRecall:99%,onceagainbeingthe
+low-levelrawinput.Thisprocessoflearninginahierarchicalmanner best in its class on these series of different algorithms that had been
+leads to rich and informative feature representations at higher levels checked.SGD:OnGD,thefollowinggraphsillustratehowunderpow-
+that capture the structure inherent within the data. These extracted ereditis-allmetricslayinmid-0.80srange.Thishugegapfurther
+featuresfromthefinallayerofDNNaretakenasinputfornextphase. highlights the adaptability of Adam learning rate that can converge
+ResultsofhyperparametertuningforDNNasshowninTable2and fasterandproducebetterresults.Neuralnetworksaremadeupofmany
+Fig.8,indicatetheimportanceparametersthatsharplychangemodel obligatory components, and even with the best possible hyper-
+performance. Finally, when we take a look at the number of layers parametersalone,agoodresultistypicallyprobablyobtainableonlyfor
+stoppingfromthreetofivestartsgivingsomegoodresultsintermsof fewspecificDNNarchitectures.Thismodelbuildswiththe5layers,each
+accuracyandprecisionaswellasrecallcominguparound0.92,0.91and layerconsistsof128neuronsthenIapplyReLUactivationfunctionand
+0.93respectively.Thisindicatesthatthehigherdepthnetworkisableto Adamoptimizerisfarstandingabodefromotherconfigurationinthis
+modelmoreofsubtlepatternsindata.Ontheotherhand,improvement hintthatproduceshigheraccuracy,precisionandrecall.
+isnotconsistentwhenincreasedfromfivetosevenlayersandevenin- TheseextractedfeaturesarethenusedtotrainanXGBoostmodel.
+dicates some downgrades in performance metrics which means that XGBoostisanensemblelearningmethodthatbuildsmultipledecision
+addingmorewilljustbringdiminishingreturnorlikelyoverfitting. treesinasequentialmanner.Theprevioustreesinthemodelaretrained
+Thenumberofneuronsperlayeralsoplaysaveryimportantrolein to remove the errors where low bias and variance is ensured. In this
+either increasing or decreasing the performance of the DNN. For 64 phase,XGBoostalgorithmcomputestheresidualsand,ineachiteration,
+neurons per layer, accuracy is-0.89, precision: 0.88, recall: 0.90. This it trains decision tree on these residuals and iteratively updates pre-
+improvementisalsosignificantsincedoublingthenumberofneuronsto diction.Inparticular,thisboostingprocessusesthehigh-levelfeatures
+128wouldraiseperformancefarenoughthatitmatchesallfourmetrics thathavebeenlearnedbyDNNandcansignificantlyimproveitspre-
+for five layers. Beyond that increasing the neurons to 256 gives no dictivepower/accuracy.
+furthergains,suggestingusreallyonlyneed128neuronsperlayerfor After, this new unseen data is then used with the already trained
+thismodelanddataset.ReLUisthebestperformercomparedtosigmoid model toextract predictions. Variousmodel performance metrics like
+accuracy,precision,recallandf1-scoreareusedtoevaluatethemodels.
+Wecanseeoutputforeachmetricstounderstandperformanceofthe
+Table2 modelonvariousaspectsofclassificationtask.Thisisthemodeleval-
+HyperparameterTuningResultsforDNN. uation metric to identify how well an artificial neural network that
+Parameter Value Accuracy Precision Recall predictsdiagnosisvaluesperformsanditmeasuresaccuracy,precision
+andrecall.TheF1-scoreisametricthatbalancesprecisionandrecall,
+NumberofLayers 3 0.9 0.89 0.91
+NumberofLayers 5 0.92 0.91 0.93 measuringtheeffectivenessofyourmodel.Thelaststepisdeployingthe
+NumberofLayers 7 0.91 0.9 0.92 model in a production setting to make live predictions. Moreover,
+NeuronsperLayer 64 0.89 0.88 0.9 hyperparameter tuning can also be done to improve our model. This
+NeuronsperLayer 128 0.92 0.91 0.93
+meanschangingthenumberoflayersorneuronsinaDNN,learningrate
+NeuronsperLayer 256 0.91 0.9 0.92
+ActivationFunction ReLU 0.92 0.91 0.93 andnumberoftreesforXGBoost.Tuningthesehyperparametershelp
+ActivationFunction Sigmoid 0.88 0.87 0.89 themodeltoincreaseitsaccuracyandefficiencysothatinreal-worldis
+Optimizer Adam 0.98 0.97 0.99 doeswell.
+Optimizer SGD 0.85 0.84 0.86
+InTable3andFigs.9,10,wecompareddifferentmodelsaccording
+5331
+
+=== PAGE 13 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.8. HyperparameterTuningResults.
+betterthanDecisionTreeasaccuracyof0.83andalsohasincremental
+Table3
+gainsinprecision,recall,F1-scorerespectivelyoverdifferentalgorithms
+ModelPerformanceComparison.
+withinpackage.NaiveBayestitillatestheperformance,baggingaccu-
+Model Accuracy Precision Recall F1- racy of 0.84, which adds another feather to its hat in dealing with
+Score probabilisticdistributionswithindefinitivedataset.
+LogisticRegression 0.8 0.79 0.81 0.8 SVMstillinthesameuppertangent,morebalancedimprovements
+DecisionTree 0.82 0.81 0.83 0.82 forothermetrics0.85.ThisclearlyshowshowSVMcanfitanoptimal
+k-NN 0.83 0.82 0.84 0.83
+decisionboundaryinthefeaturespace.Thisisfurtherimprovedinthe
+NaiveBayes 0.84 0.83 0.85 0.84
+SVM 0.85 0.84 0.86 0.85 caseofGradientBoostingandRandomForestmodels,withafinalac-
+GradientBoosting 0.87 0.86 0.88 0.87 curacyscorereaching0.88fromrandomforestmodelduetoitsproperty
+RandomForest 0.88 0.87 0.89 0.88 of ensemble learning combining multiple decision trees for greater
+XGBoost 0.9 0.89 0.91 0.9 generalization.Theimmenseaccuracyof0.9forXGBoostisattributedto
+DNN 0.92 0.91 0.93 0.92
+Hybrid(XGBoost+DNN) 0.95 0.94 0.96 0.95 thesophisticatedboostingtechniquesitemployswhichresultsinlarge
+ProposedModel(XGBoost+DNN, 0.98 0.97 0.99 0.98 reductionsinbias andvariance.We can observethe DNNmodel per-
+Optimized) forms slightly better than XGBoost, with an accuracy of 0.92 - show-
+casingtheapplicationDLoncomplexdatafeatures/dependencies.
+TheHybridmodeloutperformsindividualmodelsbyalargemargin,
+toaccuracyprecisionrecallandF1-scorepenalties.Ourresultsdemon-
+achievinganaccuracyof0.95.Thehybridapproachcombinesthemerits
+strateaconsistentgaininperformanceaswemovefrombasicmodels
+of both models, achieving improved precision and recall by a small
+throughcutting-edgeDLorpost-hocmodelinterpretabilityalgorithms.
+marginaswellF1-score.Moreover,theresultedoptimizedmodelagain
+When we start with Logistic Regression it perform average where in
+givesthebestperformancewithanaccuracyof0.98andmorepreferable
+accuracy is 0.8 and similar precision, recall & F1-score as well. This
+precision,recallaswellasF1-scorereachingalmosteveryonehundred
+modelsetsabaselineperformancerepresentinghowwellcanwedowith
+three respectively. This model is a good example of fine-tuning the
+anelementarylinearclassifierbutindicatesthatthecomplexityofsuch
+models with more advanced techniques to increase performance. The
+patternsindataisnotcaptured.Fromresultswecanseek-NNisslight
+Fig.9. AccuracyandPrecisionforDifferentModels.
+5332
+
+=== PAGE 14 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.10. RecallandF1ScoreforDifferentModels.
+mostimportantconclusionwecandrawfromthiscomparisonisthatthe fullyscaleuptotakeadvantagethroughthesemodels.
+performanceimprovementsaswemoveuptomorecomplexmodelsare Themodel,basedonahybridofXGBoostandoptimizedDNN,has
+substantial,andhybrid/optimizedapproachesconsistentlydeliverbet- superbresultswithanaccuracyequalto0.98,whichalmostequalsthe
+terones.Thiscontrasthighlightsthenecessityofpropermodelselection balancedprecision,recallandF1-scoresaroundrangeabout0.97–0.99.
+and optimization for predictive modeling tasks. Table 4 and Fig. 11 This underscores the effectiveness a combined approach in utilizing
+provided the performance-based comparison among different opti- distinct techniques to capitalize on their individual strengths for
+mizersintermsofaccuracy,precision,recallandf1-score. increasing predictive accuracy and robustness across multiple evalua-
+We test each optimizer with a particular model or algorithm to tion metrics. The performance of the model is very sensitive to the
+demonstratethecapabilitiesoftheseoptimizersinoptimizingtraining optimizer(e.g.NadamandAdamax,adaptivealgorithmsinnaturedo
+steps.SGD(StochasticGradientDescent)isperformingwellacrossthe generally betterthanSGD orAdagrad).Weneed right choiceofopti-
+boardasithasanaccuracyof0.85andbalancedprecision,recall,f1- mizationalgorithmtogetthebestoutofourdataandcomputational
+scorearound0.84–0.86.Thisisalsoasignalofitsrobustnesstogener- resources. Table 5 and Fig. 12 compares the performance of XGBoost
+alizewellacrossothersdatasets,too,butitmayfallslightlybehindthe across different learning rates considering key metrics like accuracy,
+more state-of-the-art optimizers in overall performance metric. precisionrecallandF1score(similarity).
+RMSprop,AdagradandmostnotablyAdadeltashowbettermetricsSGD Theseareveryimportantmetricstodeterminehowwellaparticular
+allwithRMSpropbeingthebestintermsofaccuracy0.89aswellgood learningrateisabletooptimizethepredictionsbasedonourmodel.In
+precision recall f1-scores ~0.91. These optimizers can adapt the thebeginningwithlowerlearningrateslike0.01and0.05,itgivesquite
+learningratewhichisespeciallyusefulinscenarioswhenyourdatamay good accuracy results up to 85–87 accuracies are observed through a
+besparseorhavelotsofnoiseacrossallsamples seriesofexperimentscarriedoutonthismodel.Theprecision,recalland
+AdamaxandNadamrespectivelyoutperformthepreviousoptimizers F1-scoremetricsfollowthesametrendconfirmingastablemodelbut
+with an accuracy of 0.9 for Adamax and a peak matching precision, not perfect as higher learning rates. At learning rate 0.1, there is an
+recallandF-1scoresallstayingover0.89.Thetraditionaloptimizers, improved in all metrics a bit more; accuracy has reach to.98 and
+particularly their combination of Nesterov and Adam in the case of precision/recall/F-1scorerangefrom0.97to0.99.Thismeansthatan
+Nadammadeitappeartobeasalientperformeracrossallmetricsever intermediate learning rate of 0.1 helps the model obtain much better
+considered for this ranking. FTRL (Follow-the-Regularized-Leader), predictions,andadecenttradeoffbetweenprecisionandrecall.
+ASGD (Average Stochastic Gradient Descent) and Yogi also do really Going more above 0.1 and using learning rate of like 0.15, a bit
+wellwithscoresinthe0.84–0.9rangeacrossallofourmetrics,high- performancedropinalltheresultsbutstillcomparativelygoodtolower
+lighting their versatility for different ML tasks/datasets as providers learningratesThisdeclineislikelytheresultofamodelover-shooting
+itsconvergingparametersorreallystrugglingtoconverge.Theperfor-
+mancemetricsdecreasemoreathigherlearningratesof0.3,0.4,0.5and
+Table4
+thenaredecreasingtoofarthatthemodelisnolongerabletotransfer
+PerformanceComparisonacrossDifferentOptimizers.
+whatithaslearntontrainingdataintoaccuratepredictionofoutcomes.
+Optimizer Accuracy Precision Recall F1-
+Thisisacommonproblemsuspectedtooccurwhenthemodelmightbe
+Score
+convergingtoofastandcanmissoutonsomefinerdetailsduetowhich
+SGD 0.85 0.84 0.86 0.85 resultsinlessaccuracyaswellasnon-balancedprecision-recalltrade-
+RMSprop 0.89 0.88 0.9 0.89
+offs.
+Adagrad 0.87 0.86 0.88 0.87
+Adadelta 0.86 0.85 0.87 0.86 Inotherwords,thequantityoffunctiontobefittedwithinacouple
+Adamax 0.9 0.89 0.91 0.9 stepsintermslearningratewechoosegivesrisetolargeeffectonboth
+Nadam 0.92 0.91 0.93 0.92 modelperformancesandeffectiveness.Smallerlearningratesnormally
+FTRL 0.84 0.83 0.85 0.84
+resultsinslowerconvergencebutencouragesamorestableoptimization
+ASGD 0.88 0.87 0.89 0.88
+process.Attheotherextreme,alargerlearningratecanindeedcause
+Yogi 0.9 0.89 0.91 0.9
+ProposedModel(XGBoost+DNN, 0.98 0.97 0.99 0.98 fasterconvergencebutitcouldovershootappropriateparametervalues
+Optimized) makingfallsinsuboptimallocalminimaarepossible.Therelationship
+5333
+
+=== PAGE 15 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.11. PerformanceComparisonacrossDifferentOptimizers.
+predictivetaskconcerned.
+Table5
+Table6andFig.13showstheperformancemetrics(Accuracy,Pre-
+PerformanceComparisonacrossDifferentLearningRatesinXGBoost.
+cision, Recall and F1) comparison for varying Batch sizes in a DNN
+LearningRate Accuracy Precision Recall F1-Score parallel. The batch sizes provide the number of samples that will be
+0.01 0.85 0.84 0.86 0.85 processedbefore parameterupdatesandaffectbothcomputationeffi-
+0.05 0.87 0.86 0.88 0.87 ciencyaswellmodelperformance.Forbatchsizelowerlike16or32,the
+0.1 0.98 0.97 0.99 0.98 modelisdoingnicelyandcangetanaccuracyfromaslong.88to.9.The
+0.15 0.88 0.87 0.89 0.88
+weighted averages of the precision, recall and F1-Score metrics also
+0.2 0.88 0.87 0.89 0.88
+0.25 0.87 0.86 0.88 0.87 show a good balanced results around 0.87–0.91 indicating that its
+0.3 0.86 0.85 0.87 0.86 learning power is still effective as well generalized for being able to
+0.4 0.84 0.83 0.85 0.84 generalize in both small lower case characters and capital letters on
+0.5 0.83 0.82 0.84 0.83
+largescalestoowithcomplexfiltersappliedoverthem.
+0.6 0.82 0.81 0.83 0.82
+Anincreaseinthebatchsizecausesnosignificantdifferenceonac-
+curacy,andnotableimprovementsareobservedinprecisionwithrecall
+depictedinTable5highlightsthattuninglearningratestodataspecific reachingisgreaterthan0.97–0.99acrossallfourevaluationsetsforany
+andmodelcomplexitycanbeimportantfornetworkdynamics.Thisli- resultincludingpositiveresultsasslide-levellabelswhenmorethanone
+brarynotesthatalearningrateof0.1isonesuchoptimalvalueforboth groundtruthslidesexistbyincreasingF1-scoretopeaksofupto.Itcould
+achievinghighaccuracyandbalancedprecision-recallperformancein bethatlargerbatchsizesenablethemodeltousemoredataperitera-
+XGBoost applications. Adjustments that exceed this rate are recom- tion, which may make updates slower but ultimately lead to better
+mended to be empirically justified and based on the demands of the optimization of parameters. The performance metrics have minor
+Fig.12. PerformanceMetricsacrossDifferentLearningRates.
+5334
+
+=== PAGE 16 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Table6 Underthissystematicmethodology,themodelbecomesabletodeliver
+PerformanceComparisonacrossDifferentBatchSizesinDNN. trustworthy predictions based on high degree of accuracy for a given
+BatchSize Accuracy Precision Recall F1-Score classificationtask.Fig.14showstheconfusionmatrix.
+TheDEPMshowshighefficiencyandstabilityintermsofcorrectly
+16 0.88 0.87 0.89 0.88
+predictingtheelectricityconsumptionanditsusecasescenariosinclude
+32 0.9 0.89 0.91 0.9
+64 0.98 0.97 0.99 0.98 smart building energy management, utility demand forecasting, and
+128 0.9 0.89 0.91 0.9 integration of renewable energy. Because the architecture combines
+256 0.89 0.88 0.9 0.89 both CNN and LSTM components, the method of DEPM is therefore
+512 0.88 0.87 0.89 0.88
+powerfulincapturingspatialandtemporalfeaturesoftheconsumption
+1024 0.87 0.86 0.88 0.87
+2048 0.86 0.85 0.87 0.86 patternsinenergyconsumption,whichcanbeusefultovariousfacilities
+4096 0.85 0.84 0.86 0.85 inmanagingtheirenergycosts.However,someissuescanpreventDEPM
+8192 0.84 0.83 0.85 0.84 practicalimplementationatpresentandinthefuture.First,dataaccess
+and quality could be a major limitation because data used for such
+modellingrequiretimelyandrichdatafeedfromvarioussourcessuchas
+fluctuationswithabalancedprecision-recalltrade-off,andtheaccuracy
+weather data, economic reviews, and usage records from utility com-
+remains higher for all batch sizes from 128 to 8192. The fact that it
+panies. To acquire such high quality data across buildings in the
+holds,evenweaklyasinthiscase,indicatesfairlyrobustlearningacross
+differentregionsmightnotbeeasyduetominimaldatainfrastructure
+arangeofbatchsizesbutlikelywithdiminishingreturnsatveryhigh
+available. Second, necessary computations for training and deploying
+numbersandfromanexpenditureperspectivemaynotbethemostcost
+the model must be provided, particularly when modelling the large
+effective.
+systeminvolvingnumerousbuildingsorregionsatthesametime.This
+In practice, the batch size to be used during DNN training is very
+requirementforcomputemaythereforereduceitsadoptionwithsmall-
+importantanddependsondifferentfactorslikedatasetsizes(train-test
+scale utilities or buildings with no central IT. Consequently, model
+splits), computational resources available at our disposal etc. Batch
+interpretabilitymaybecomeanissuebasedonDEPM’sstructureandits
+playsakeyroleindetermininghowfastorslowwecanfinishoffwith
+incorporation of deep learning algorithms, which can decrease the
+modeldevelopmentpartvsgettingitdeployedforproductionusecase
+models’transparencyandthusreducetrustfromdifferentstakeholders.
+Lowering batch sizes is associated with faster convergence as well
+As for the model improvement, it is suggested to expand the DEPM
+potentially better generalization, though come at a cost of increased
+testingfordifferenttypesofbuildingsandfordifferentregionsasthe
+computationaloverheadperiteration.However,adisadvantagewillbe
+currentresearchlackssuchacomparison.
+that larger batch sizes can result in faster convergence of training
+progress at the cost of lower number of updates which could mean
+5. Conclusionandfuturework
+poorergeneralizationifworkingonsmallerdatasetsormorecomplex
+models.Theempiricaltestingandoptimizationofbatchsizeparameters
+TheDeepEnergyPredictorModel(DEPM)achievedstrongresultsin
+iscriticaltoachievingoptimalDNNperformanceforparticularappli-
+thisstudy,withanaccuracyof98%,precisionof0.97,recallof0.99,
+cations, computationalenvironments.Adjustmentsshouldaccountfor
+andF1-scoreof0.98.Thishigh-performanceunderscoresDEPM’sability
+the interplay between batch size, learning dynamics and theinherent
+topredictelectricityconsumptionaccurately;makingitwellsuitedfor
+complexityofdatasoastostrikeagoodtradeoffbetweenefficiencyand
+energy management applications where precision is essential. The
+modelquality.Theoperationofthishybridmodelincludesanend-to-
+model’shybridframework,combiningXGBoostandDeepNeuralNet-
+end procedure starting from precipitating obtaining to preprocessing
+workswithCascadedResNetforfeatureextraction,effectivelycaptures
+ataDNNwithReLUactivationfunctionandAdamsoptimizerfollowed
+complex,nonlinearconsumptionpatterns.TheDEPMalsobenefitsfrom
+by training for 50 epochs in XGBoost as well as its deep assessment.
+a rigorous preprocessing pipeline, using median imputation and IQR
+Fig.13. PerformanceMetricsacrossDifferentBatchSizesinDNN.
+5335
+
+=== PAGE 17 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Fig.14. ConfusionMatrixofProposedModel.
+outlier detection to ensure data quality, which contributed to its com/datasets/uciml/electric-power-consumption-data-set
+robustness and generalizability on the study’s dataset. Despite these
+achievements, the study has some limitations. DEPM validated on a References
+singledataset,whichmaynotfullyrepresentvariationsinenergycon-
+sumptionacrossdifferentregionsorclimates.Additionally,themodel AlKez,D.,Foley,A.,Abdul,Z.K.,DelRio,D.F.,2024.Energypovertypredictioninthe
+UnitedKingdom:Amachinelearningapproach.EnergyPolicy184,113909.https://
+lacks real-time data integration, limiting its responsiveness to sudden
+doi.org/10.1016/j.enpol.2023.113909.
+shifts in consumption patterns. Future research should focus on Almaleck,P.,Massucco,S.,Mosaico,G.,Saviozzi,M.,Serra,P.,Silvestro,F.,2024.
+expandingDEPM’sapplicationacrossdiversedatasetsandincorporating Electricalconsumptionforecastinginsportsvenues:aproposedapproachbasedon
+neuralnetworksandARIMAXModels.Sustain.CitiesSoc.100,105019.https://doi.
+real-time dataandadaptivelearning techniquesfordynamicupdates.
+org/10.1016/j.scs.2023.105019.
+Further experimentation with additional deep learning architectures Bucarelli,N.,El-Gohary,N.,2024.Sensordeploymentconfigurationsforbuildingenergy
+could optimize the model’s performance in broader contexts. By consumptionprediction.EnergyBuild.308,113888.https://doi.org/10.1016/j.
+enbuild.2024.113888.
+addressingtheseareas,DEPMcanadvanceasaflexible,high-accuracy
+Cascone,L.,Sadiq,S.,Ullah,S.,Mirjalili,S.,Siddiqui,H.U.R.,Umer,M.,2023.Predicting
+solution for electricity forecasting, supporting efficient resource allo- householdelectricpowerconsumptionusingmulti-steptimeserieswith
+cationandenhancedgridstabilityinvariousenvironments. convolutionalLSTM.BigDataRes.31,100360.https://doi.org/10.1016/j.
+bdr.2022.100360.
+Chung,J.,Jang,B.,2022.Accuratepredictionofelectricityconsumptionusingahybrid
+Funding CNN-LSTMmodelbasedonmultivariabledata.PLoSOne17(11),e027807.https://
+doi.org/10.1371/journal.pone.0278071.
+D’Agostino,D.,Minelli,F.,Minichiello,F.,Musella,2024.M.Improvingtheindoorair
+Authorsdeclarenofundingforthisresearch
+qualityofofficebuildingsinthepost-pandemicera—impactonenergyconsumption
+andcosts.Energies17,855.https://doi.org/10.3390/en17040855.
+CRediTauthorshipcontributionstatement Eya,C.U.,Salau,A.O.,Braide,S.L.,Chigozirim,O.D.(2023).ImprovedMediumTerm
+ApproachforLoadForecastingofNigerianElectricityNetworkUsingArtificial
+Neuro-FuzzyInferenceSystem:ACaseStudyofUniversityofNigeria,Nsukka.
+Ayodeji Olalekan Salau: Writing – review & editing, Validation, InternationalConferenceonMachineLearningandDataEngineering(Procedia
+Methodology, Conceptualization. C. Ragupathi: Software, Methodol- ComputerScience),Vol.218,pp.2585–2593.
+ogy,Formalanalysis,Conceptualization.S.Dhanasekaran:Writing– Gaboitaolelwe,J.,Zungeru,A.M.,Yahya,A.,Lebekwe,C.K.,Vinod,D.N.,Salau,A.O.,
+2023.MachineLearningBasedSolarPhotovoltaicPowerForecasting:AReviewand
+original draft, Resources, Investigation, Data curation. N. Vijaya- Comparison.IEEEAccess11,40820–40845.https://doi.org/10.1109/
+lakshmi:Visualization,Validation,Methodology,Formalanalysis. ACCESS.2023.3270041.
+Ganesan,K.,Palanisamy,S.,Krishnasamy,V.,Salau,A.O.,Rathinam,V.,Seeni
+Nayakkar,S.G.,2024.Hybridphotovoltaic/thermalperformancepredictionbased
+DeclarationofCompetingInterest onmachinelearningalgorithmswithhyper-parametertuning.Int.J.Sustain.Energy
+43(1),1–21.https://doi.org/10.1080/14786451.2024.2364226.
+Gopal,S.K.,Mohammed,A.S.,Saddi,V.R.,Dhanasekaran,S.,&Naruka,M.S.(2024).
+The authors declare that they have no known competing financial Investigatetheroleofmachinelearninginoptimizingdynamicscalingstrategiesfor
+interestsorpersonalrelationshipsthatcouldhaveappearedtoinfluence cloud-basedapplications.In20242ndInternationalConferenceonDisruptive
+theworkreportedinthispaper. Technologies(ICDT)(pp.543-548).IEEE.
+Han,M.,Fan,L.,2024.Ashort-termenergyconsumptionforecastingmethodfor
+attentionmechanismsbasedonspatio-temporaldeeplearning.Comput.Electr.Eng.
+Acknowledgements 114,109063.https://doi.org/10.1016/j.compeleceng.2023.109063.
+Indira,G.,Bhavani,M.,Brinda,R.,Zahira,R.,2024.Electricityloaddemandprediction
+formicrogridenergymanagementsystemusinghybridadaptivebarnacle-mating
+Notapplicable optimizerwithartificialneuralnetworkalgorithm.EnergyTechnol.12(5),
+2301091.https://doi.org/10.1002/ente.202301091.
+Izonin,I.,Tkachenko,R.,Mitoulis,S.A.,Faramarzi,A.,Tsmots,I.,Mashtalir,D.,2024.
+Codeavailability Machinelearningforpredictingenergyefficiencyofbuildings:asmalldata
+approach.ProcediaComput.Sci.231,72–77.https://doi.org/10.1016/j.
+procs.2023.12.173.
+Notapplicable
+Jiang,P.,Nie,Y.,Wang,J.,Huang,X.,2023.Multivariableshort-termelectricityprice
+forecastingusingartificialintelligenceandmulti-inputmulti-outputscheme.Energy
+DataAvailability Econ.117,106471.https://doi.org/10.1016/j.eneco.2022.106471.
+Data used in this study is available at: https://www.kaggle.
+5336
+
+=== PAGE 18 ===
+C.Ragupathietal. Energy Reports 12 (2024) 5320–5337
+Kamani,D.,Ardehali,M.M.,2023.Long-termforecastofelectricalenergyconsumption electricityandheatdemandpredictionforbuildings.EnergyBuild.289,113036.
+withconsiderationsforsolarandwindenergysources.Energy268,126617.https:// https://doi.org/10.1016/j.enbuild.2023.113036.
+doi.org/10.1016/j.energy.2023.126617. Mounir,N.,Ouadi,H.,Jrhilifa,I.,2023.Short-termelectricloadforecastingusingan
+Khan,S.U.,Khan,N.,Ullah,F.U.M.,Kim,M.J.,Lee,M.Y.,Baik,S.W.,2023.Towards EMD-BI-LSTMapproachforsmartgridenergymanagementsystem.EnergyBuild.
+intelligentbuildingenergymanagement:AI-basedframeworkforpower 288,113022.https://doi.org/10.1016/j.enbuild.2023.113022.
+consumptionandgenerationforecasting.EnergyBuild.279,112705.https://doi. Olu-Ajayi,R.,Alaka,H.,Sulaimon,I.,Sunmola,F.,Ajayi,S.,2022.Buildingenergy
+org/10.1016/j.enbuild.2022.112705. consumptionpredictionforresidentialbuildingsusingdeeplearningandother
+Lei,L.,Shao,S.,Liang,L.,2024.AnevolutionarydeeplearningmodelbasedonEWKM, machinelearningtechniques.J.Build.Eng.45,103406.https://doi.org/10.1016/j.
+randomforestalgorithm,SSAandBiLSTMforbuildingenergyconsumption jobe.2021.103406.
+prediction.Energy288,129795.https://doi.org/10.1016/j.energy.2023.129795. Pourdaryaei,A.,Mohammadi,M.,Mubarak,H.,Abdellatif,A.,Karimi,M.,Gryazina,E.,
+Matos,M.,Almeida,J.,Gonçalves,P.,Baldo,F.,Braz,F.J.,Bartolomeu,P.C.,2024. Terzija,V.,2024.Anewframeworkforelectricitypriceforecastingviamulti-head
+Amachinelearning-basedelectricityconsumptionforecastandmanagementsystem self-attentionandCNN-basedtechniquesinthecompetitiveelectricitymarket.
+forrenewableenergycommunities.Energies17(3),630.https://doi.org/10.3390/ ExpertSyst.Appl.235,121207.https://doi.org/10.1016/j.eswa.2023.121207.
+en17030630. Qureshi,M.,Arbab,M.A.,Rehman,S.U.,2024.Deeplearning-basedforecastingof
+Minelli,Federico,Ciriello,Ilaria,Minichiello,Francesco,D’Agostino,Diana,2024.From electricityconsumption.Sci.Rep.14(1),6489.https://doi.org/10.1038/s41598-
+NetZeroEnergyBuildingstoanenergysharingmodel-TheroleofNZEBsin 024-56602-4.
+RenewableEnergyCommunities.ISSN0960-1481Renew.Energy223,120110. Saddi,V.R.,Gopal,S.K.,Mohammed,A.S.,Dhanasekaran,S.,&Naruka,M.S.(2024,
+https://doi.org/10.1016/j.renene.2024.120110. March).ExaminetheroleofgenerativeAIinenhancingthreatintelligenceandcyber
+Mohammed,A.S.,Salau,A.O.,Sigweni,B.,Zungeru,A.M.,2023.Conversionand securitymeasures.In20242ndInternationalConferenceonDisruptiveTechnologies
+PerformanceEvaluationofPetrolEnginetoElectricPoweredThree-WheelerVehicle (ICDT)(pp.537-542).IEEE.
+withanOnboardSolarChargingSystem.EnergyConvers.Manag.:X20,1–15. Sekhar,C.,Dahiya,R.,2023.Robustframeworkbasedonhybriddeeplearningapproach
+https://doi.org/10.1016/j.ecmx.2023.100427. forshorttermloadforecastingofbuildingelectricitydemand.Energy268,126660.
+Mohammed,A.S.,Saddi,V.R.,Gopal,S.K.,Dhanasekaran,S.,&Naruka,M.S.(2024).AI- https://doi.org/10.1016/j.energy.2023.126660.
+DrivenContinuousIntegrationandContinuousDeploymentinSoftwareEngineering. Singh,S.K.,Jha,S.K.,Gupta,R.,2024.Enhancingtheaccuracyofwindspeedestimation
+In20242ndInternationalConferenceonDisruptiveTechnologies(ICDT)(pp.531- modelusinganefficienthybriddeeplearningalgorithm.Sustain.EnergyTechnol.
+536). Assess.61,103603.https://doi.org/10.1016/j.seta.2023.103603.
+Morales-Mareco,F.,García-Torres,M.,Divina,F.,Stalder,D.H.,Sauer,C.,2024.Machine Wei,J.,Chammam,A.,Feng,J.,Alshammari,A.,Tehranian,K.,Innab,N.,Shutaywi,M.,
+learningforelectricenergyconsumptionforecasting:ApplicationtotheParaguayan 2024.Powersystemmonitoringforelectricaldisturbancesinwidenetworkusing
+system.Log.J.IGPL,jzae035.https://doi.org/10.1093/jigpal/jzae035. machinelearning.Sustain.Comput.:Inform.Syst.42,100959.https://doi.org/
+Morcillo-Jimenez,R.,Mesa,J.,Go´mez-Romero,J.,Vila,M.A.,Martin-Bautista,M.J., 10.1016/j.suscom.2024.100959.
+2024.Deeplearningforpredictionofenergyconsumption:anappliedusecaseinan Zhang,C.,Ma,L.,Luo,Z.,Han,X.,Zhao,T.,2024.Forecastingbuildingplugload
+officebuilding.Appl.Intell.54(7),5813–5825.https://doi.org/10.1007/s10489- electricityconsumptionemployingoccupant-buildinginteractioninputfeaturesand
+024-05451-9. bidirectionalLSTMwithimprovedswarmintelligentalgorithms.Energy288,
+Morteza,A.,Yahyaeian,A.A.,Mirzaeibonehkhater,M.,Sadeghi,S.,Mohaimeni,A., 129651.https://doi.org/10.1016/j.energy.2023.129651.
+Taheri,S.,2023.Deeplearninghyperparameteroptimization:Applicationto
+5337
