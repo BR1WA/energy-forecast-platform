@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEPM Dashboard — Energy Consumption Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--card:#1a1d27;--card2:#22263a;--border:#2d3148;--text:#e2e8f0;--muted:#8892b0;
+--accent:#6366f1;--accent2:#818cf8;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--blue:#3b82f6;
+--gradient:linear-gradient(135deg,#6366f1,#8b5cf6,#a78bfa)}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:var(--card);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;gap:16px}
+.header h1{font-size:20px;font-weight:700;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header .badge{background:var(--accent);color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.container{max-width:1400px;margin:0 auto;padding:24px}
+.grid{display:grid;grid-template-columns:380px 1fr;gap:24px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px}
+.card h2{font-size:15px;font-weight:600;margin-bottom:16px;color:var(--accent2)}
+.card h3{font-size:13px;font-weight:600;margin:16px 0 8px;color:var(--muted)}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+select,input[type=number]{width:100%;padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;
+color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border .2s}
+select:focus,input:focus{border-color:var(--accent)}
+.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{padding:12px 24px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;width:100%}
+.btn-primary{background:var(--gradient);color:#fff}.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--accent)}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:var(--card2);color:var(--muted);border:1px solid transparent;transition:all .2s}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.result-box{background:var(--card2);border-radius:12px;padding:24px;text-align:center;margin-top:16px;border:1px solid var(--border)}
+.result-label{font-size:48px;font-weight:700;margin:8px 0}
+.result-label.high{color:var(--red)}.result-label.low{color:var(--green)}
+.confidence{font-size:14px;color:var(--muted)}
+.stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.stat-row:last-child{border:none}.stat-value{font-weight:600;color:var(--accent2)}
+.right-panel{display:flex;flex-direction:column;gap:24px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat-card{background:var(--card2);border-radius:10px;padding:16px;text-align:center}
+.stat-card .num{font-size:24px;font-weight:700;color:var(--accent2)}.stat-card .lbl{font-size:11px;color:var(--muted);margin-top:4px}
+.chart-container{position:relative;height:300px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:10px 8px;background:var(--card2);color:var(--muted);font-weight:600;border-bottom:2px solid var(--border)}
+td{padding:8px;border-bottom:1px solid var(--border)}
+tr:hover td{background:rgba(99,102,241,.05)}
+.model-type{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.model-type.depm{background:rgba(239,68,68,.15);color:var(--red)}
+.model-type.standalone{background:rgba(16,185,129,.15);color:var(--green)}
+.hidden{display:none}
+.daily-bar{display:flex;align-items:flex-end;gap:3px;height:80px;margin-top:12px}
+.daily-bar .bar{flex:1;border-radius:3px 3px 0 0;transition:all .3s;cursor:pointer;position:relative;min-height:4px}
+.daily-bar .bar.high{background:var(--red)}.daily-bar .bar.low{background:var(--green)}
+.daily-bar .bar:hover{opacity:.7}
+.hour-labels{display:flex;gap:3px;font-size:9px;color:var(--muted);margin-top:4px}
+.hour-labels span{flex:1;text-align:center}
+.loading{opacity:.5;pointer-events:none}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>⚡ DEPM Energy Dashboard</h1>
+  <span class="badge">v1.0</span>
+  <span style="color:var(--muted);font-size:12px;margin-left:auto">Household Power Consumption Predictor</span>
+</div>
+
+<div class="container">
+<div class="grid">
+  <!-- LEFT: Controls -->
+  <div>
+    <div class="card">
+      <h2>🔮 Prediction</h2>
+      <label>Select Model</label>
+      <select id="modelSelect"></select>
+
+      <div class="tabs" style="margin-top:16px">
+        <div class="tab active" onclick="switchTab('custom')">Custom Input</div>
+        <div class="tab" onclick="switchTab('hour')">Quick Hour</div>
+        <div class="tab" onclick="switchTab('daily')">Daily Profile</div>
+      </div>
+
+      <!-- Custom Input -->
+      <div id="tab-custom">
+        <div class="input-grid">
+          <div><label>Voltage (V)</label><input type="number" id="Voltage" value="240" step="0.1"></div>
+          <div><label>Reactive Power (kW)</label><input type="number" id="Global_reactive_power" value="0.1" step="0.01"></div>
+          <div><label>Sub Meter 1 (Wh)</label><input type="number" id="Sub_metering_1" value="1" step="0.1"></div>
+          <div><label>Sub Meter 2 (Wh)</label><input type="number" id="Sub_metering_2" value="1" step="0.1"></div>
+          <div><label>Sub Meter 3 (Wh)</label><input type="number" id="Sub_metering_3" value="5" step="0.1"></div>
+          <div><label>Hour (0-23)</label><input type="number" id="Hour" value="12" min="0" max="23"></div>
+          <div><label>Day of Week (0=Mon)</label><input type="number" id="DayOfWeek" value="2" min="0" max="6"></div>
+          <div><label>Month (1-12)</label><input type="number" id="Month" value="6" min="1" max="12"></div>
+          <div><label>Weekend?</label><select id="IsWeekend"><option value="0">No</option><option value="1">Yes</option></select></div>
+          <div><label>Holiday?</label><select id="IsHoliday"><option value="0">No</option><option value="1">Yes</option></select></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="predictCustom()">Predict</button>
+      </div>
+
+      <!-- Quick Hour -->
+      <div id="tab-hour" class="hidden">
+        <label>Select Hour</label>
+        <input type="range" id="hourSlider" min="0" max="23" value="12" style="width:100%;accent-color:var(--accent);margin:8px 0"
+               oninput="document.getElementById('hourVal').textContent=this.value+':00'">
+        <div style="text-align:center;font-size:24px;font-weight:700;color:var(--accent2)" id="hourVal">12:00</div>
+        <div class="input-grid" style="margin-top:12px">
+          <div><label>Day</label><select id="hourDay"><option value="0">Mon</option><option value="1">Tue</option><option value="2" selected>Wed</option><option value="3">Thu</option><option value="4">Fri</option><option value="5">Sat</option><option value="6">Sun</option></select></div>
+          <div><label>Month</label><input type="number" id="hourMonth" value="6" min="1" max="12"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="predictHour()">Predict Hour</button>
+      </div>
+
+      <!-- Daily Profile -->
+      <div id="tab-daily" class="hidden">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Generate predictions for all 24 hours with the selected model.</p>
+        <button class="btn btn-primary" onclick="predictDaily()">Generate Daily Profile</button>
+        <div id="dailyResult" style="margin-top:16px"></div>
+      </div>
+
+      <!-- Result -->
+      <div class="result-box" id="resultBox" style="display:none">
+        <div style="font-size:12px;color:var(--muted)" id="resultModel"></div>
+        <div class="result-label" id="resultLabel">—</div>
+        <div class="confidence" id="resultConf"></div>
+        <div style="margin-top:12px">
+          <div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden">
+            <div id="resultBar" style="height:100%;border-radius:4px;transition:width .5s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+            <span>Low</span><span>High</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Stats & Charts -->
+  <div class="right-panel">
+    <div class="card">
+      <h2>📊 Model Performance Comparison</h2>
+      <div class="stats-grid" id="topStats">
+        <div class="stat-card"><div class="num" id="statModels">0</div><div class="lbl">Models</div></div>
+        <div class="stat-card"><div class="num" id="statBestAcc">—</div><div class="lbl">Best Accuracy</div></div>
+        <div class="stat-card"><div class="num" id="statBestModel">—</div><div class="lbl">Best Model</div></div>
+        <div class="stat-card"><div class="num" id="statFeatures">—</div><div class="lbl">Features</div></div>
+      </div>
+      <div class="chart-container"><canvas id="chartCompare"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>📋 Detailed Metrics</h2>
+      <div style="overflow-x:auto"><table id="metricsTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>📈 Accuracy: Standalone vs DEPM</h2>
+      <div class="chart-container"><canvas id="chartPaired"></canvas></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const API = '';
+let modelsData = [], statsData = [];
+
+async function init() {
+  const [modelsRes, statsRes] = await Promise.all([
+    fetch(API + '/api/models').then(r => r.json()),
+    fetch(API + '/api/stats').then(r => r.json())
+  ]);
+  modelsData = modelsRes.models;
+  statsData = statsRes.results;
+
+  // Populate model select
+  const sel = document.getElementById('modelSelect');
+  sel.innerHTML = '';
+  const groups = {};
+  modelsData.forEach(m => {
+    if (!groups[m.category]) groups[m.category] = [];
+    groups[m.category].push(m);
+  });
+  Object.entries(groups).forEach(([cat, models]) => {
+    const og = document.createElement('optgroup');
+    og.label = cat;
+    models.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.name; o.textContent = m.name;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+
+  document.getElementById('statModels').textContent = modelsData.length;
+  document.getElementById('statFeatures').textContent = modelsRes.features.length;
+
+  if (statsData.length) {
+    const best = statsData.reduce((a, b) => (a.Accuracy || 0) > (b.Accuracy || 0) ? a : b);
+    const idx = best['Unnamed: 0'] || best.Model || best.index || '';
+    document.getElementById('statBestAcc').textContent = ((best.Accuracy || 0) * 100).toFixed(1) + '%';
+    document.getElementById('statBestModel').textContent = idx;
+    buildChart();
+    buildTable();
+    buildPairedChart();
+  }
+}
+
+function buildChart() {
+  const labels = statsData.map(r => r['Unnamed: 0'] || r.Model || '');
+  const metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score'];
+  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444'];
+  new Chart(document.getElementById('chartCompare'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: metrics.map((m, i) => ({
+        label: m, data: statsData.map(r => r[m] || 0),
+        backgroundColor: colors[i] + '99', borderColor: colors[i], borderWidth: 1
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { min: 0.5, max: 1, ticks: { color: '#8892b0' }, grid: { color: '#2d314822' } },
+               x: { ticks: { color: '#8892b0', maxRotation: 45 }, grid: { display: false } } },
+      plugins: { legend: { labels: { color: '#e2e8f0', font: { size: 11 } } } }
+    }
+  });
+}
+
+function buildTable() {
+  const thead = document.querySelector('#metricsTable thead tr');
+  const tbody = document.querySelector('#metricsTable tbody');
+  thead.innerHTML = '<th>Model</th><th>Type</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th>';
+  tbody.innerHTML = '';
+  statsData.forEach(r => {
+    const name = r['Unnamed: 0'] || r.Model || '';
+    const type = name.startsWith('DEPM') ? 'depm' : 'standalone';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-weight:600">${name}</td>
+      <td><span class="model-type ${type}">${type.toUpperCase()}</span></td>
+      <td>${(r.Accuracy||0).toFixed(4)}</td><td>${(r.Precision||0).toFixed(4)}</td>
+      <td>${(r.Recall||0).toFixed(4)}</td><td>${(r['F1-Score']||0).toFixed(4)}</td>
+      <td>${(r.AUC||0).toFixed(4)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function buildPairedChart() {
+  const archs = ['DNN','LSTM','BiLSTM','GRU','BiGRU'];
+  const standalone = [], depm = [];
+  archs.forEach(a => {
+    const s = statsData.find(r => (r['Unnamed: 0']||r.Model||'') === a);
+    const d = statsData.find(r => (r['Unnamed: 0']||r.Model||'') === 'DEPM-'+a);
+    standalone.push(s ? s.Accuracy : 0);
+    depm.push(d ? d.Accuracy : 0);
+  });
+  new Chart(document.getElementById('chartPaired'), {
+    type: 'bar',
+    data: {
+      labels: archs,
+      datasets: [
+        { label: 'Standalone', data: standalone, backgroundColor: '#3b82f699', borderColor: '#3b82f6', borderWidth: 1 },
+        { label: 'DEPM (+ XGBoost)', data: depm, backgroundColor: '#ef444499', borderColor: '#ef4444', borderWidth: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { min: 0.5, max: 1, ticks: { color: '#8892b0' }, grid: { color: '#2d314822' } },
+               x: { ticks: { color: '#8892b0' }, grid: { display: false } } },
+      plugins: { legend: { labels: { color: '#e2e8f0' } } }
+    }
+  });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
+  document.getElementById('tab-' + tab).classList.remove('hidden');
+  event.target.classList.add('active');
+}
+
+function showResult(data) {
+  const box = document.getElementById('resultBox');
+  box.style.display = 'block';
+  document.getElementById('resultModel').textContent = data.model;
+  const lbl = document.getElementById('resultLabel');
+  lbl.textContent = data.prediction;
+  lbl.className = 'result-label ' + data.prediction.toLowerCase();
+  document.getElementById('resultConf').textContent = `Confidence: ${data.confidence}% | Probability: ${data.probability}`;
+  const bar = document.getElementById('resultBar');
+  bar.style.width = (data.probability * 100) + '%';
+  bar.style.background = data.prediction === 'High' ? 'var(--red)' : 'var(--green)';
+}
+
+async function predictCustom() {
+  const fields = ['Voltage','Global_reactive_power','Sub_metering_1','Sub_metering_2',
+                  'Sub_metering_3','Hour','DayOfWeek','Month','IsWeekend','IsHoliday'];
+  const body = { model_name: document.getElementById('modelSelect').value };
+  fields.forEach(f => {
+    const el = document.getElementById(f);
+    body[f] = el.tagName === 'SELECT' ? parseInt(el.value) : parseFloat(el.value);
+  });
+  body.Season = Math.floor(((body.Month % 12) / 3));
+  const res = await fetch(API + '/api/predict', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  }).then(r => r.json());
+  showResult(res);
+}
+
+async function predictHour() {
+  const body = {
+    model_name: document.getElementById('modelSelect').value,
+    hour: parseInt(document.getElementById('hourSlider').value),
+    day_of_week: parseInt(document.getElementById('hourDay').value),
+    month: parseInt(document.getElementById('hourMonth').value),
+    is_weekend: parseInt(document.getElementById('hourDay').value) >= 5 ? 1 : 0,
+    is_holiday: 0
+  };
+  const res = await fetch(API + '/api/predict-hour', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  }).then(r => r.json());
+  showResult(res);
+}
+
+async function predictDaily() {
+  const model = document.getElementById('modelSelect').value;
+  const res = await fetch(API + `/api/predict-all-hours?model_name=${model}`).then(r => r.json());
+  const div = document.getElementById('dailyResult');
+  if (res.profile) {
+    let html = '<div class="daily-bar">';
+    res.profile.forEach(p => {
+      const h = Math.max(10, p.probability * 100);
+      html += `<div class="bar ${p.prediction.toLowerCase()}" style="height:${h}%" title="${p.hour}:00 → ${p.prediction} (${(p.probability*100).toFixed(0)}%)"></div>`;
+    });
+    html += '</div><div class="hour-labels">';
+    for(let i=0;i<24;i++) html += `<span>${i}</span>`;
+    html += '</div>';
+    const highCount = res.profile.filter(p => p.prediction === 'High').length;
+    html += `<p style="margin-top:12px;font-size:12px;color:var(--muted)">
+      <span style="color:var(--red);font-weight:600">${highCount}</span> high hours,
+      <span style="color:var(--green);font-weight:600">${24-highCount}</span> low hours</p>`;
+    div.innerHTML = html;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
