@@ -80,6 +80,7 @@ tr:hover td{background:rgba(99,102,241,.05)}
         <div class="tab active" onclick="switchTab('custom')">Custom Input</div>
         <div class="tab" onclick="switchTab('hour')">Quick Hour</div>
         <div class="tab" onclick="switchTab('daily')">Daily Profile</div>
+        <div class="tab" onclick="switchTab('real')">Test Real Data</div>
       </div>
 
       <!-- Custom Input -->
@@ -117,6 +118,17 @@ tr:hover td{background:rgba(99,102,241,.05)}
         <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Generate predictions for all 24 hours with the selected model.</p>
         <button class="btn btn-primary" onclick="predictDaily()">Generate Daily Profile</button>
         <div id="dailyResult" style="margin-top:16px"></div>
+      </div>
+
+      <!-- Test Real Data -->
+      <div id="tab-real" class="hidden">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Load a random true sample from the actual dataset to see if the model predicts it correctly.</p>
+        <button class="btn btn-secondary" onclick="loadRealSample()">1. Load Random Real Sample</button>
+        <div id="realSampleInfo" class="hidden" style="margin-top:16px;background:var(--card2);padding:12px;border-radius:8px;border:1px solid var(--border);font-size:13px">
+          <div><span style="color:var(--muted)">Date/Time:</span> <strong id="realTime" style="color:var(--text)">—</strong></div>
+          <div style="margin-top:8px"><span style="color:var(--muted)">Actual Consumption:</span> <strong id="realActual">—</strong></div>
+        </div>
+        <button class="btn btn-primary hidden" id="btnPredictReal" style="margin-top:16px" onclick="predictReal()">2. Predict & Compare</button>
       </div>
 
       <!-- Result -->
@@ -290,6 +302,10 @@ function showResult(data) {
   const bar = document.getElementById('resultBar');
   bar.style.width = (data.probability * 100) + '%';
   bar.style.background = data.prediction === 'High' ? 'var(--red)' : 'var(--green)';
+  
+  // Clear any existing comparison badge
+  const existingBadge = document.getElementById('comparisonBadge');
+  if (existingBadge) existingBadge.remove();
 }
 
 async function predictCustom() {
@@ -340,6 +356,64 @@ async function predictDaily() {
       <span style="color:var(--red);font-weight:600">${highCount}</span> high hours,
       <span style="color:var(--green);font-weight:600">${24-highCount}</span> low hours</p>`;
     div.innerHTML = html;
+  }
+}
+
+let currentRealSample = null;
+
+async function loadRealSample() {
+  const res = await fetch(API + '/api/test-sample').then(r => r.json());
+  if (res.error) return alert(res.error);
+  currentRealSample = res;
+  
+  document.getElementById('realSampleInfo').classList.remove('hidden');
+  document.getElementById('btnPredictReal').classList.remove('hidden');
+  document.getElementById('resultBox').style.display = 'none'; // hide previous results
+  
+  document.getElementById('realTime').textContent = res.datetime;
+  
+  const act = document.getElementById('realActual');
+  act.textContent = res.actual_label;
+  act.style.color = res.actual_label === 'High' ? 'var(--red)' : 'var(--green)';
+
+  // Update custom input fields with real data
+  for (const [k, v] of Object.entries(res.features)) {
+    const el = document.getElementById(k);
+    if (el) el.value = v;
+  }
+}
+
+async function predictReal() {
+  if (!currentRealSample) return;
+  const body = { model_name: document.getElementById('modelSelect').value, ...currentRealSample.features };
+  
+  const res = await fetch(API + '/api/predict', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  }).then(r => r.json());
+  
+  showResult(res);
+  
+  // Add comparison badge
+  const box = document.getElementById('resultBox');
+  let badge = document.createElement('div');
+  badge.id = 'comparisonBadge';
+  badge.style.marginTop = '16px';
+  badge.style.padding = '10px';
+  badge.style.borderRadius = '8px';
+  badge.style.fontSize = '14px';
+  box.appendChild(badge);
+  
+  const isCorrect = res.prediction === currentRealSample.actual_label;
+  if (isCorrect) {
+    badge.style.background = 'rgba(16,185,129,0.15)';
+    badge.style.color = 'var(--green)';
+    badge.style.border = '1px solid var(--green)';
+    badge.innerHTML = `✅ <strong>Correct!</strong> Model successfully predicted ${res.prediction}.`;
+  } else {
+    badge.style.background = 'rgba(239,68,68,0.15)';
+    badge.style.color = 'var(--red)';
+    badge.style.border = '1px solid var(--red)';
+    badge.innerHTML = `❌ <strong>Incorrect!</strong> Model predicted ${res.prediction}, but actual is ${currentRealSample.actual_label}.`;
   }
 }
 

@@ -67,6 +67,13 @@ print(f"Loaded {len(loaded_models)} models: {list(loaded_models.keys())}")
 print(f"Features ({len(FEATURES)}): {FEATURES}")
 print(f"PCA components: {N_PCA}, Combined dim: {N_COMBINED}")
 
+# Load test samples
+test_samples_path = os.path.join(MODEL_DIR, '..', 'data', 'app_test_samples.csv')
+test_samples_df = pd.read_csv(test_samples_path) if os.path.exists(test_samples_path) else None
+if test_samples_df is not None:
+    print(f"Loaded {len(test_samples_df)} real test samples")
+
+
 # ── Typical hourly profiles (based on dataset statistics) ──
 HOURLY_PROFILES = {}
 for h in range(24):
@@ -246,6 +253,20 @@ def predict_all_hours(model_name: str):
         results.append({'hour': h, 'prediction': 'High' if pred else 'Low',
                         'probability': round(prob, 4)})
     return {'model': model_name, 'profile': results}
+
+
+@app.get("/api/test-sample")
+def get_test_sample():
+    """Return a random real sample from the dataset."""
+    if test_samples_df is None:
+        return {'error': 'Test samples dataset not available.'}
+    sample = test_samples_df.sample(1).iloc[0]
+    return {
+        'features': {f: float(sample[f]) if isinstance(sample[f], (np.integer, np.floating)) else sample[f] for f in FEATURES},
+        'actual_label': sample['Label_Text'],
+        'datetime': sample['Datetime']
+    }
+
 
 
 if __name__ == '__main__':
