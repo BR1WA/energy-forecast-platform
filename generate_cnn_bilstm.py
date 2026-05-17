@@ -100,7 +100,7 @@ code_window = """class TimeSeriesDataset(Dataset):
                 torch.FloatTensor(self.y[idx+self.seq_len]))
 
 SEQ_LEN = 24
-BATCH_SIZE = 128
+BATCH_SIZE = 30
 
 train_dataset = TimeSeriesDataset(X_train_scaled, y_train_scaled, SEQ_LEN)
 test_dataset = TimeSeriesDataset(X_test_scaled, y_test_scaled, SEQ_LEN)
@@ -122,29 +122,31 @@ code_model = """class CNN_BiLSTM(nn.Module):
     def __init__(self, num_features, cnn_filters=64, lstm_hidden=50):
         super(CNN_BiLSTM, self).__init__()
         
-        # CNN block: 2 Convolutional Layers
+        # CNN block: 2 Convolutional Layers (Filters=64, kernel_size=2 as per parameter count)
         self.cnn = nn.Sequential(
-            nn.Conv1d(in_channels=num_features, out_channels=cnn_filters, kernel_size=3, padding=1),
+            nn.Conv1d(in_channels=num_features, out_channels=cnn_filters, kernel_size=2, padding=1),
             nn.ReLU(),
-            nn.Conv1d(in_channels=cnn_filters, out_channels=cnn_filters*2, kernel_size=3, padding=1),
+            nn.MaxPool1d(kernel_size=2),
+            nn.Conv1d(in_channels=cnn_filters, out_channels=cnn_filters, kernel_size=2, padding=1),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2)
         )
         
-        # Bi-LSTM block: 2 Bi-LSTM Layers
+        # Bi-LSTM block: 2 Bi-LSTM Layers (128 units total -> 64 hidden per direction)
         self.lstm = nn.LSTM(
-            input_size=cnn_filters*2, 
+            input_size=cnn_filters, 
             hidden_size=lstm_hidden, 
             num_layers=2, 
             batch_first=True, 
             bidirectional=True
         )
         
-        # FC block: 2 Fully Connected Layers
+        # FC block: 2 Fully Connected Layers (128 -> 128 -> 1) with Dropout
         self.fc = nn.Sequential(
-            nn.Linear(lstm_hidden * 2, 64),
+            nn.Linear(lstm_hidden * 2, 128),
             nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Dropout(0.2),
+            nn.Linear(128, 1)
         )
         
     def forward(self, x):
@@ -152,10 +154,10 @@ code_model = """class CNN_BiLSTM(nn.Module):
         # Permute for Conv1d -> (batch, features, seq_len)
         x = x.permute(0, 2, 1)
         
-        # CNN Output: (batch, cnn_filters, seq_len//2)
+        # CNN Output: (batch, cnn_filters, new_seq_len)
         x = self.cnn(x)
         
-        # Permute for LSTM -> (batch, seq_len//2, cnn_filters)
+        # Permute for LSTM -> (batch, new_seq_len, cnn_filters)
         x = x.permute(0, 2, 1)
         
         # LSTM Output: out=(batch, seq_len//2, lstm_hidden*2), hidden=(num_layers*2, batch, lstm_hidden)
@@ -168,15 +170,16 @@ code_model = """class CNN_BiLSTM(nn.Module):
         pred = self.fc(last_out)
         return pred
 
-model = CNN_BiLSTM(num_features=X_train_scaled.shape[1]).to(device)
+model = CNN_BiLSTM(num_features=X_train_scaled.shape[1], cnn_filters=64, lstm_hidden=64).to(device)
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 print(model)"""
 
-markdown_train = """## 4. Training Loop"""
+markdown_train = """## 4. Training Loop
+As per the paper, we train for 100 epochs with a batch size of 30, using the Adam optimizer (lr=0.001)."""
 
-code_train = """EPOCHS = 15
+code_train = """EPOCHS = 100
 
 print("Training CNN-BiLSTM...")
 train_losses = []
