@@ -72,13 +72,15 @@ To give the model more context beyond raw sensor readings, we implemented robust
 
 **This is statistically impossible** — 40+ rows, all with identical pattern.
 
-**Additional red flags:**
-- No code provided ("Code availability: Not applicable")
-- Models improve in perfect 2% increments (0.80 → 0.82 → 0.84 → ...)
-- Target definition never specified
-- No train/test split details
+**Additional critical red flags:**
+1. **The 54-Sample Confusion Matrix:** The paper claims to test on a 2M+ row dataset, but their Figure 14 confusion matrix sums to exactly 54 samples (26+1+1+26). This indicates fabricated or grossly mismanaged evaluation.
+2. **Plagiarized Text (Paper-Mill signs):**
+   - Page 12: Mentions predicting *"diagnosis values"* (copy-pasted from a medical paper).
+   - Page 10: Justifies ResNet for *"image histogram data"* (copy-pasted from a computer vision paper).
+3. **Problem Framing Mismatch:** Grid operators need continuous predictions (regression). Converting this to a simple binary "High/Low" classification task is practically useless for real-world energy forecasting.
+4. **No code provided** ("Code availability: Not applicable")
 
-**Show:** Pattern analysis output from notebook
+**Show:** Pattern analysis output, screenshot of the 54-sample confusion matrix, and highlighted plagiarized text.
 
 ---
 
@@ -166,20 +168,23 @@ To give the model more context beyond raw sensor readings, we implemented robust
 
 ---
 
-## Slide 9 — Conclusions & Contributions (2 min)
+## Slide 9 — Conclusions & Future Work (2 min)
 
 ### What PFE2 Adds Over PFE1:
 
-1. **Critical Analysis** — Identified data leakage and suspicious metric patterns in the paper
-2. **Rigorous Replication** — Full reproduction of all 6 experiments (with and without leakage)
-3. **Architecture Extension** — 5 new DL variants (LSTM, BiLSTM, GRU, BiGRU) × 2 modes (standalone + DEPM)
-4. **Cross-Dataset Validation** — Tested on Steel Industry dataset (paper only used one)
-5. **Deployment** — FastAPI dashboard for real-time prediction with all models
-6. **Reproducibility** — All code open, documented, and runnable on Kaggle
+1. **Critical Analysis** — Identified data leakage, impossible metrics (54 samples), and plagiarized text in the paper.
+2. **Rigorous Replication** — Full reproduction of all 6 experiments (with and without leakage).
+3. **Architecture Extension** — 5 new DL variants (LSTM, BiLSTM, GRU, BiGRU) × 2 modes (standalone + DEPM).
+4. **Cross-Dataset Validation** — Tested on Steel Industry dataset (paper only used one).
+5. **Deployment** — FastAPI dashboard for real-time prediction with all models.
+6. **Reproducibility** — All code open, documented, and runnable on Kaggle.
 
 ### Key Takeaway:
 
-> *The DEPM paper's results are not reproducible as reported. Our rigorous replication shows the methodology works but at lower accuracy than claimed, due to data leakage that artificially inflated the original metrics.*
+> *The DEPM paper's classification results are not reproducible as reported due to data leakage and fabricated metrics. A proper approach requires framing this as a Time-Series Regression problem to forecast continuous power usage.*
+
+### Future Work:
+- Implementing Short-Term Load Forecasting (STLF) using **Regression** (LSTM / XGBoost Regressor) with strict chronological splitting and evaluating via MAE, RMSE, and MAPE.
 
 ---
 

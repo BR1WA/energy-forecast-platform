@@ -1,0 +1,424 @@
+You and your supervisor are completely right to be suspicious. I have thoroughly
+analyzed the provided paper, and it exhibits massive red flags. It appears to be
+a very poorly put-together paper, likely involving severe data manipulation,
+"paper-mill" copy-pasting, or AI-hallucinated text.
+
+The goal of predicting electricity consumption as a binary "High/Low"
+classification without even defining the thresholds is indeed practically
+useless for real-world grid management, which requires precise continuous values
+(regression).
+
+Here is a detailed breakdown of the critical flaws, data leakage problems, and
+"metric play" in the paper, followed by a list of trusted papers you can use for
+your PFE instead.
+
+🔴 1. Major Red Flags and "Lack of Truth" in the Paper
+
+A. The Confusion Matrix is mathematically impossible (Fake Data/Leakage)
+
+  - The authors claim to use the famous "Household Electric Power Consumption"
+    dataset from Kaggle/UCI, which contains 2,075,259 measurements.
+  - However, if you look at their Confusion Matrix (Figure 14, Page 17), the
+    total number of tested samples is exactly 54 (26 + 1 + 1 + 26). You cannot
+    train and evaluate a model on a dataset of 2 million rows and end up with a
+    test set of 54 samples. This strongly indicates the results are either
+    entirely fabricated or grossly mismanaged.
+
+B. Copy-Pasted Text from Unrelated Domains (Plagiarism / Hallucination)
+
+  - Medical paper copy-paste: On Page 12, the authors write: "This is the model
+    evaluation metric to identify how well an artificial neural network that
+    predicts diagnosis values performs..." Electricity forecasting has nothing
+    to do with medical diagnosis.
+  - Computer Vision copy-paste: On Page 10, they write: "entailing the
+    convolution layers for image histogram data..." Household energy consumption
+    is 1D time-series data, not 2D images. They copied text from an image
+    classification paper to justify their use of ResNet.
+
+C. Nonsensical Problem Framing & Metric Play
+
+  - Undefined Classes: They claim to perform classification (Accuracy 98%) but
+    never define what Class 0 and Class 1 are. Are they high/low? What is the
+    threshold in kilowatts? The paper never states it, rendering the
+    classification meaningless.
+  - Metric Manipulation: They heavily push classification metrics (Accuracy,
+    F1-Score). Suddenly, on Page 10, they brag about a Mean Absolute Error (MAE)
+    of 0.015 and RMSE of 0.020. Because the target variable (Global Active
+    Power) usually ranges from 0.2 to 11 kW, getting an RMSE of 0.020 is only
+    possible if they normalized the data between 0 and 1, computed the error on
+    the normalized scale, and deliberately "forgot" to scale it back to make the
+    error look magically close to zero.
+
+🟢 2. Better Alternatives for your PFE (Trusted Papers)
+
+For your PFE, you should frame this problem as a Time-Series Regression task
+(predicting exact future values: y_{t+1}, y_{t+2}, etc., in kilowatts). This is
+how actual utility companies manage power grids.
+
+Here are highly cited, mathematically sound papers that use the exact same
+dataset (UCI Household Electric Power Consumption) but achieve meaningful,
+state-of-the-art regression results. You should base your PFE on these:
+
+1. "Improving Electric Energy Consumption Prediction Using CNN and Bi-LSTM"
+
+  - Published in: Applied Sciences (MDPI), 2019 (Authors: Le et al.)
+  - Why it's better: This paper correctly treats the UCI dataset as a
+    multi-variate regression problem. It uses CNN layers to extract
+    spatial/feature correlations (like how Voltage, Sub-metering, and Global
+    Intensity interact) and Bi-LSTM to capture the forward and backward
+    time-series trends. They report actual, unscaled RMSE and MAE metrics.
+
+2. "Multi-Step Short-Term Power Consumption Forecasting with a Hybrid Deep
+Learning Strategy"
+
+  - Published in: Energies, 2018 (Authors: Kim et al.)
+  - Why it's better: This is a highly cited, standard benchmark paper for this
+    dataset. Instead of just predicting the next minute/hour, they do
+    "multi-step" forecasting (predicting the next several hours/days). They use
+    a hybrid CNN-LSTM framework and clearly explain how 1D time-series data is
+    reshaped for the CNN.
+
+3. "Predicting Household Electric Power Consumption Using Multi-step Time Series
+with Convolutional LSTM"
+
+  - Published in: Big Data Research, 2023 (Authors: L. Cascone et al.)
+  - Why it's better: The flawed paper you shared actually plagiarized references
+    from this real paper. This paper uses ConvLSTM (a type of LSTM that has
+    convolutional structures inside its memory cells) to map the continuous
+    energy sequences, achieving an actual valid RMSE of 367 watts, proving that
+    they are mapping back to the real scale.
+
+4. "Cascaded Deep Hybrid Models for Multistep Household Energy Consumption
+Forecasting"
+
+  - Why it's better: If you want to use modern "trendy" architectures like the
+    flawed paper tried to do, this 2022 paper correctly integrates Transformers
+    (Self-Attention) with Wavelet Transforms and LSTM. They use the Transformer
+    to handle long-range dependencies (e.g., seasonality, like summer vs. winter
+    consumption) continuously.
+
+💡 Recommendation for your PFE
+
+Drop the provided paper entirely. Tell your supervisor that upon deeper data
+investigation, the paper treats regression as binary classification without
+defining thresholds, has a physically impossible confusion matrix (54 samples
+out of 2 million), and contains copy-pasted text from medical papers.
+
+Instead, propose building a CNN-LSTM or a Time-Series Transformer to predict
+continuous power usage (regression) over the next 24 hours, using MAE (Mean
+Absolute Error) and MAPE (Mean Absolute Percentage Error) as your guiding
+metrics. This is much more scientifically valid and will result in a much
+stronger PFE.
+
+
+
+
+
+
+
+llm 2
+
+I'll do a thorough critical analysis of this paper, then search for more credible alternatives.Now I have enough to give you a thorough, honest breakdown. Here it is:
+
+---
+
+## 🔴 Critical Analysis: What's Wrong with This Paper
+
+### 1. The Core Problem — It's Classification, Not Prediction
+
+Your supervisor's confusion is completely valid. The paper's title says "prediction of electricity consumption" — which implies a **regression task** (forecasting actual kWh values). But every single metric reported is a classification metric: **accuracy, precision, recall, F1-score**. The confusion matrix (Fig. 14) confirms it: they reduced a rich continuous time-series into a **binary label** (Class 0 / Class 1 — likely "low" or "high" consumption above/below some threshold).
+
+This is a fundamental **mismatch between problem framing and methodology.** Telling a utility company that consumption is "high or low" is nearly useless operationally — they need actual forecasted values. Real energy forecasting papers report **MAE, RMSE, and MAPE** on actual watt-hour values.
+
+---
+
+### 2. Almost Certain Data Leakage — The 98% Is Not Credible
+
+Several preprocessing steps, if done on the **full dataset before the train/test split**, cause leakage:
+
+- **Median imputation** computed globally would inject test-set statistics into training data.
+- **Min-max / standardization scaling** computed on the full dataset leaks the test distribution into training.
+- **PCA** fitted on the full dataset leaks variance structure from the test set.
+- **Rolling statistics and lagged features** — if the time-series was **randomly shuffled** (not split chronologically), future data bleeds into the past. This is the classic mistake with time-series data.
+
+The paper **never specifies** whether the train/test split was done **chronologically** (which is mandatory for time-series) or randomly. For 2 million time-stamped minute-by-minute records, a random 80/20 split means nearly every training sample has its "future" right next to it in the test set. That alone can push a trivial binary classifier to near-100% because patterns are extremely similar between adjacent time windows.
+
+---
+
+### 3. The "98% Accuracy" Table Is Self-Contradictory
+
+In Table 2 (hyperparameter tuning), using the **Adam optimizer alone** gives accuracy 0.98, precision 0.97, recall 0.99 — identical to the "proposed model." This means the entire Cascaded ResNet + XGBoost + DNN architecture contributes essentially **zero improvement** over just choosing Adam. The optimizer is the real driver, which strongly suggests the 98% comes from data leakage rather than the model's sophistication.
+
+---
+
+### 4. The Cascaded ResNet Is Architecturally Unjustified
+
+ResNet was designed for **2D image data** (spatial convolutions). Applying it to 1D tabular/time-series household power data is not wrong in principle, but the paper provides **no justification** for why it's appropriate here, no ablation study, and no comparison against simpler feature extractors. There is no architecture diagram with actual layer sizes or kernel dimensions.
+
+---
+
+### 5. The Confusion Matrix Has Only ~54 Test Samples
+
+The confusion matrix in Fig. 14 shows roughly 26 + 1 + 1 + 26 = 54 samples. With 2,075,259 records in the dataset, this is statistically meaningless — either they evaluated on a tiny subset or the figure is illustrative rather than representative.
+
+---
+
+## ✅ Better Alternative Papers (with trustworthy results)
+
+Here's what credible work on the same dataset / same problem actually looks like:
+
+**1. Cascone et al. (2023) — Predicting household electric power consumption using ConvLSTM** *(actually cited in the paper itself)*
+> Uses the same UCI household dataset, honest RMSE of **367 kWh**, treats it as a regression/forecasting problem, uses proper time-series cross-validation. This is what real results look like.
+
+**2. Qureshi et al. (2024) — Deep learning-based forecasting of electricity consumption** *(also cited, Sci. Reports)*
+> BiLSTM outperformed other methods with MAE of 1.2896, RMSE of 2.5079, and R² of 0.9346 — these are continuous regression metrics, not classification scores. This is honest forecasting.
+
+**3. Jang et al. (2024, Wiley) — Comparative Analysis of Deep Learning for Load Forecasting**
+> The LSTM-CNN model achieved MAE of 10.3593, RMSE of 14.2632, and MAPE of 1.0951% — a high level of accuracy with interpretable error units.
+
+**4. Springer (2025) — Short-term electricity consumption forecasting with deep learning**
+> Uses LSTM, CNN, and ensemble models trained on 168 hours of historical data to predict the next 24 hours, evaluated with normalized RMSE across two geographically distinct datasets spanning 2.5 years. — This is methodologically sound: temporal split, real-unit evaluation, multi-dataset validation.
+
+---
+
+## 📌 What You Should Do for Your PFE
+
+Since your supervisor gave you this paper, here's how to reframe your work constructively:
+
+1. **Treat it as a regression problem** — predict actual global active power values (kW), not a binary class. This is what the dataset was designed for.
+2. **Use proper metrics**: RMSE, MAE, MAPE. These are meaningful and comparable to literature.
+3. **Split chronologically** — train on the first 80% of the time range, test on the last 20%. Never shuffle time-series data before splitting.
+4. **Apply preprocessing only on training data**, then transform test data using training statistics (fit scalers/imputers on train only).
+5. **Use LSTM or Transformer-based models** — these are the dominant architectures for this task and have extensive, credible benchmarks to compare against.
+
+The paper's idea of combining deep feature extraction with a gradient boosting classifier is not bad in principle — but the implementation and framing undermine any real contribution. You can do the same work honestly and produce something more rigorous and meaningful.
+
+
+llm 3
+
+Your instinct and your supervisor's confusion are **absolutely justified**. This paper has multiple serious methodological red flags, and the binary-classification framing is indeed a major downgrade that makes the work practically meaningless for real energy forecasting. Here is a detailed breakdown.
+
+---
+
+## 1. The Core Problem: A Regression Problem Disguised as Classification
+
+The title and abstract of Ragupathi et al. claim **"prediction"** and **"forecasting"** of electricity consumption. However, the paper reports **classification metrics only**: Accuracy = 98%, Precision = 0.97, Recall = 0.99, F1 = 0.98.
+
+Electricity consumption is a **continuous variable** (kW or kWh). The UCI Household Electric Power Consumption dataset they use is officially labeled as a **Regression** and **Clustering** task, not classification. Converting it into a binary "high vs. low" problem is a massive simplification that destroys the practical value of the model—grid operators need **how many megawatts** to schedule, not a binary flag.
+
+**Why this is misleading:**
+- A trivial threshold (e.g., median split) turns a hard regression problem into an easy classification problem.
+- Time-series data is highly autocorrelated; if you randomly split minute-level data, adjacent minutes look almost identical, so a model can "cheat" by memorizing local patterns.
+- You can often get >90% accuracy by simply predicting the majority class, especially since household consumption spends most of its time in a narrow "low" band with occasional spikes.
+
+---
+
+## 2. Likely Data Leakage Issues
+
+The paper exhibits several signs of **data leakage** and improper experimental design:
+
+### A. Random Train-Test Split on Time-Series
+The paper mentions 2,075,259 minute-level measurements over 47 months. If the authors used a **random split** (common in lazy ML papers) instead of a **temporal split**, the model sees future minutes that are nearly identical to past minutes. This is catastrophic leakage for time-series. The paper does **not** explicitly describe a temporal walk-forward validation, which is the bare minimum for energy forecasting.
+
+### B. Feature Extraction Leakage
+The authors use "Cascaded ResNet" for feature extraction. ResNet is an **image recognition architecture**. Applying it to 9-column tabular time-series data is bizarre and suggests they may be treating the data as 2D images or windows without proper causal masking. If the ResNet blocks see the full window including future timesteps when predicting the current timestep, that's direct leakage.
+
+### C. Median Imputation on the Full Dataset
+The paper describes "median imputation for handling missing values" and IQR outlier removal. If these preprocessing steps were computed on the **entire dataset** before splitting into train/test, the test set statistics leak into the training pipeline. Proper practice: fit imputation and scaling **only** on the training fold.
+
+### D. No Baseline Comparison
+A legitimate forecasting paper compares against:
+- Naive baseline (previous value)
+- ARIMA / SARIMA
+- Prophet
+- Standard ML regressors (Random Forest, XGBoost *Regressor*, LightGBM)
+- Deep learning regressors (LSTM, GRU)
+
+This paper compares against nothing meaningful and reports classification metrics that are trivial to achieve on autocorrelated data.
+
+---
+
+## 3. Why the Results Are "Too Good to Be True"
+
+| Metric | Reported | What It Actually Means |
+|--------|----------|------------------------|
+| Accuracy | 98% | On a likely imbalanced binary split, this is suspiciously high. A dummy classifier predicting "low" 100% of the time might already score >95%. |
+| Precision/Recall/F1 | ~0.98 | These metrics are easy to inflate when classes are derived from a continuous variable with a simple threshold. |
+
+Real, trusted electricity forecasting papers report **MAE, RMSE, MAPE** in the range of **3–15% error** for household-level data, not 98% "accuracy." Getting 98% accuracy on a derived binary task is not an achievement—it's a sign that the problem was made artificially easy.
+
+---
+
+## 4. Better Papers That Do This Properly
+
+Here are trusted alternatives that use the same (or similar) household datasets, perform **actual regression forecasting**, and report honest, interpretable metrics:
+
+### A. Proper Regression with LightGBM / Prophet
+A 2026 MDPI paper uses a full pipeline: descriptive analysis → clustering → **regression forecasting** with Prophet and LightGBM, reporting **RMSE, MAE, MAPE, WMAPE**. They test on real Pecan Street data and achieve ~3.9% WMAPE for short-term forecasts. This is what real energy forecasting looks like.
+
+### B. Rigorous Benchmarking on Multiple Regressors
+A 2025 PMC study evaluates 11 models (Extra Trees, XGBoost, LightGBM, SVR, etc.) on energy consumption using proper regression metrics: **MAE, MSE, R², RMSE, NRMSE**. Extra Trees achieved the best performance with R² = 0.959 and NRMSE = 0.020. Notice they do not report "accuracy" because that metric is irrelevant for continuous targets.
+
+### C. Classic Hybrid ARIMA-ML Approaches
+The KTH thesis "Predicting Hourly Residential Energy Consumption" uses SVR and Random Forest with **MAPE, CV, and mean bias error** on clustered household data, showing realistic errors of ~7–10% MAPE.
+
+### D. Causal Deep Learning for Forecasting
+A 2022 Springer paper uses bidirectional LSTM with causal structure, reporting **MAE, RMSE, MAPE** for country-level and building-level demand forecasting.
+
+---
+
+## 5. Why the DEPM Paper's Goal Is "Not Meaningful"
+
+You and your supervisor are right to be confused. Here is why the binary classification framing is academically weak:
+
+| Real-World Need | Binary High/Low | Actual Regression Forecast |
+|-----------------|-----------------|---------------------------|
+| **Grid dispatch** | Useless. "High" tells you nothing about how many MW to spin up. | Essential. Need exact kWh/MW values. |
+| **Demand response** | Cannot optimize tariffs without magnitude. | Needed to price incentives correctly. |
+| **Renewable integration** | Binary doesn't help balance volatile solar/wind. | Need precise net load curves. |
+| **Infrastructure planning** | "High" is not a planning quantity. | Need TWh or GWh projections. |
+| **Benchmarking** | Cannot compare against standard forecasting literature. | Directly comparable via MAPE/RMSE. |
+
+The paper's "contribution" is essentially: *"We took a regression dataset, thresholded it into two classes, threw a deep learning image classifier and XGBoost at it, and got 98% accuracy."* This is not a contribution to energy forecasting; it is a demonstration that overfitted classifiers work on trivially separable classes derived from continuous data.
+
+---
+
+## 6. Recommendations for Your PFE
+
+If your supervisor gave you this paper as a reference, I suggest you **politely pivot** to a proper forecasting formulation:
+
+1. **Reframe as Regression**: Predict actual `Global_active_power` (kW) or derived hourly/daily consumption values. Use **MAE, RMSE, MAPE** as metrics.
+2. **Respect Temporal Structure**: Use a **temporal split** (e.g., train on 2006–2009, test on 2010). Never shuffle time-series data.
+3. **Use Proper Baselines**: Compare your model against:
+   - Naive persistence (`ŷ_t = y_{t-1}`)
+   - ARIMA / SARIMA
+   - XGBoost **Regressor** or LightGBM
+   - A simple LSTM/GRU
+4. **Avoid Image Architectures on Tabular Data**: ResNet is for images. For 1D time-series, use 1D-CNN, LSTM, or even gradient-boosted trees with lag features.
+5. **Cite Trusted Work**: Reference the MDPI 2026 pipeline paper or the PMC 2025 benchmarking study to show you understand what legitimate energy forecasting looks like.
+
+**Bottom line**: The DEPM paper is an example of **metric hacking** (turning regression into classification to report inflated accuracy) and likely suffers from **data leakage** due to improper time-series handling. Your supervisor's confusion is a signal that the paper's framing is academically suspect. You can do much better by sticking to actual regression forecasting with honest validation.
+
+
+
+llm4
+You and your supervisor are absolutely right to be confused and suspicious. Your intuition is spot on: **classifying electricity consumption as simply "High" or "Low" is practically meaningless** for real-world energy management, and the metrics reported in this paper are massive red flags for data leakage and metric manipulation.
+
+This paper exhibits classic signs of "Frankenstein" modeling—stitching together buzzwords (XGBoost, DNN, ResNet, PCA) to inflate results on a trivialized task. 
+
+Here is a detailed breakdown of the paper's flaws, the data leakage/metric play, and trustworthy alternatives for your PFE.
+
+---
+
+### 1. The "Binary Classification" Absurdity (Lack of Truth)
+Electricity consumption is a **continuous variable**. Grid operators and energy management systems need to know *exactly* how much power will be consumed (e.g., 45.2 MW) so they can dispatch generation accordingly. 
+*   **Why it's meaningless:** If a model predicts "High" consumption, does that mean 50 MW or 90 MW? The difference dictates whether a grid operator starts a multi-million-dollar peaker plant or just runs a baseline generator. 
+*   **Why they did it:** Regression (predicting continuous values) is hard. Time-series regression allows for clear error metrics (like MAPE, RMSE). By converting this into a binary classification problem, the authors artificially created an "easier" task that allows them to report inflated, flashy metrics (98% Accuracy).
+
+### 2. Data Leakage & Suspicious Metric Play
+The 98% accuracy, 0.99 recall, and 0.97 precision are highly suspicious. Here is exactly how the leakage and metric play likely occurred:
+
+*   **Target Leakage (The Threshold):** To do binary classification, they had to create a label (0 for Low, 1 for High). How did they define "High"? If they calculated the median or mean of the *entire dataset* (including the test set) to set the threshold, they leaked future information into the training set.
+*   **Autocorrelation Leakage (Lagged Features):** The paper explicitly states they used "Lagged Consumption Values" and "Rolling Statistics" as features. Electricity consumption is highly autocorrelated (the consumption at 1:00 PM is almost the same as at 12:59 PM). If you use `Consumption(t-1)` to predict `High/Low(t)`, any basic model will achieve 95%+ accuracy simply because the class rarely changes from one minute/hour to the next. **This is not deep learning; this is just copying the previous timestep.**
+*   **Preprocessing Leakage (IQR & Imputation):** They state they used the IQR method to remove outliers and median imputation across the dataset. If they did this *before* splitting the data into train and test sets, they leaked statistical information from the test set into the training set. 
+*   **Data Reduction Leakage (PCA):** Applying PCA to the entire dataset before splitting is a textbook data leakage error. PCA will capture the variance of the test set and fold it into the training features.
+*   **No Temporal Splitting:** In time-series, you must split data chronologically (Train on 2006-2009, Test on 2010). If they did a random `train_test_split` (common in beginner ML mistakes), the model is trained on future data to predict the past, destroying the validity of the results.
+
+### 3. The "Frankenstein" Architecture
+The architecture (Cascaded ResNet -> PCA -> DNN -> XGBoost) is unnecessary and illogical for this data:
+*   **ResNet** is designed for spatial data (images) to capture hierarchical visual patterns. Using it for 1D tabular time-series data from a smart meter is overkill and likely just overfitting.
+*   **PCA after ResNet:** Extracting deep features with a neural network and *then* compressing them with PCA destroys the non-linear representations the network just learned.
+*   **XGBoost on DNN features:** XGBoost is powerful on raw tabular data. Passing it the hidden-layer outputs of a DNN usually performs worse than just running XGBoost on the raw data directly.
+
+---
+
+### Trustworthy Alternatives for your PFE
+For your PFE, you should pivot to **Short-Term Load Forecasting (STLF)** using **Regression**, not Classification. You need papers that predict *actual* consumption values and evaluate using **MAPE (Mean Absolute Percentage Error), RMSE (Root Mean Square Error), and MAE (Mean Absolute Error)**.
+
+Here are highly respected papers and approaches that do this correctly:
+
+#### 1. The LSTM Baseline (A must-cite for your PFE)
+**Paper:** *Short-Term Residential Load Forecasting based on LSTM Recurrent Neural Network* (Kong et al., 2017, IEEE)
+*   **Why it's trusted:** It uses the same UCI/Kaggle household dataset but treats it as a **regression** problem. It uses a simple LSTM to predict the exact power consumption. It clearly outlines how to handle temporal splitting and lagged features without leakage.
+*   **Why it's better:** It achieves realistic error rates (MAPE around 20-30% for single homes, which is standard due to human unpredictability) rather than fake 98% accuracy.
+
+#### 2. The Attention/Transformer Approach (Modern SOTA)
+**Paper:** *Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting* (Lim et al., 2021, International Journal of Forecasting)
+*   **Why it's trusted:** This is the gold standard for modern time-series forecasting. It explicitly handles static metadata (like weather) and temporal data simultaneously and outputs multi-step continuous predictions.
+*   **Why it's better:** It uses quantile regression, meaning it doesn't just predict one value; it predicts a confidence interval (e.g., "There is a 90% chance consumption is between 40kW and 50kW"). This is infinitely more useful for energy management than "High/Low".
+
+#### 3. The Hybrid ML Approach (If you want to use XGBoost/ResNet correctly)
+**Paper:** *A novel hybrid model for short-term load forecasting based on CL and XGBoost* (Look for recent papers in *Applied Energy* or *Energy* journals that combine 1D-CNN/LSTM with XGBoost properly).
+*   **How to do it right:** If you want to use XGBoost, do not put it at the end of a DNN. Train an LSTM to predict the load, and train XGBoost separately on the weather/calendar features. Then, use a simple meta-learner (like Linear Regression) to combine their predictions. This avoids the Frankenstein issue.
+
+---
+
+### Advice for Your PFE
+Go back to your supervisor and explain your findings:
+1.  **"The paper trivializes the problem:** Binary classification of load is useless for grid operators; they need exact continuous values (Regression)."
+2.  **"The metrics are likely leaked:** Using lagged features to classify 'High/Low' on highly autocorrelated data guarantees 95%+ accuracy without any real machine learning."
+3.  **"I propose we do STLF (Short-Term Load Forecasting) using Regression,"** predicting the actual kWh/MW values and evaluating using RMSE and MAPE. 
+
+If you stick to regression, use a strict chronological train/test split, and avoid applying PCA/IQR to the whole dataset at once, your PFE will be infinitely more rigorous, realistic, and valuable than the paper you were given.
+
+
+llm5
+
+Yes — this paper looks **methodologically suspicious** and, as written, it has several red flags that make the reported 98% binary-classification result hard to trust. The biggest issue is that the paper repeatedly describes an **electricity consumption forecasting** problem, but then evaluates it as a **classification** task with accuracy/precision/recall/F1, which is a mismatch in problem framing. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+
+## Main red flags
+
+- The paper says it predicts electricity consumption, which is naturally a **regression/forecasting** problem, yet the whole pipeline is framed as **classification** and even “high vs low” labeling. [sciencedirect](https://www.sciencedirect.com/science/article/pii/S2352484724007315)
+- It uses only classification metrics and does not report the most standard forecasting metrics like MAE, RMSE, MAPE, or \(R^2\) as the main evidence of success. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+- It mixes a lot of unrelated techniques — median imputation, IQR outlier handling, PCA, cascaded ResNet, DNN, XGBoost — without a clear, consistent justification for why each is needed in this dataset. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+- The paper reports extremely strong results from hyperparameter tuning, but the text reads like a **metric escalation story**: many settings are compared until one reaches 0.98, which can hide overfitting or test-set tuning if the validation protocol is weak. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+- The model description is internally inconsistent: it says XGBoost is used for classification, then says the system “forecasts electricity consumed,” and later mentions CNN/LSTM and ResNet in ways that do not cleanly match the dataset or task. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+- The use of precision/recall/F1 alone is not enough to prove a forecasting model is meaningful, especially if the target was artificially binarized into high/low categories. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+
+## Why it feels like metric play
+
+The paper’s performance tables show many configurations and repeatedly highlight the best one, but there is no strong evidence in the excerpt of a careful protocol like:
+1. train/validation/test separation by time,
+2. leakage-safe feature engineering,
+3. ablation studies,
+4. external dataset validation,
+5. baseline comparisons against proper forecasting models. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+
+That kind of setup is exactly where **data leakage** and optimistic metric inflation can happen, especially with time series and rolling features if future values accidentally influence training features. The fact that the paper uses lagged and rolling statistics, PCA, and deep feature extraction on a household power dataset makes leakage a real concern unless the split was done strictly by time before feature creation. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/141563999/c291fba0-39b5-4487-bb56-12623542bc99/Subject-main.pdf?AWSAccessKeyId=ASIA2F3EMEYEUGMHHXY3&Signature=sXOGNhJNcgWSwUrRROx2UzXVxJQ%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEN%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCeiGKgOJF2uYq3eWkUUOwUpzVHLGApUPjF%2FK6nE%2B2z3wIhAKO8SeVr13xWZPAyJqx4vVKO80EZMkdDjzHHP2hkNFU5KvwECKj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxQlT9S9wOhfdKsO3wq0ATNpwc8Wq0WT6h5cm37kH%2FlbR%2FQU4ku%2FM65ywz3yPduFFn5TshMpKkSMdSWGZQ5C8L%2BLlFYNTNsjjmRFd93WKbsvvIMHQJrI%2FPHGD3jc1Ksoe4zEzQTGptzB5GIC7iiRcrgOX%2FlDdav%2F0zWtWLQg5wZHs1h3EMwaTm4aQ6ullHyxhTB%2Fle7UAQsA9S8%2BWxW57hLTNiZ0b2zQQh1Yt9XnYBve5QkUItbjQTgHybosbxC7OU%2BMQ58iGIx1s%2FyiOucqQVYgsPkrse3cRqLqDyhWrgKBcxrcpxcGSTNkQw0X7h6S6tt%2BoDchhtlnJCPqK%2F2qkJT3ZP8HWtFEXThTHVUY%2BUBrPz4i30FIXL5sbVaANxW0DICQG1wooU1VvkPk4rrx53YGdw2oyqycwLiAPTehD1ErFhuK5Gswiz3ap5kRui04xZzNw91Ncl8r2mY6CEDey745rxwN%2F9zCtGLyxVBiT784O6RbH5%2Fa%2B0BZ%2BnIIg4Nnio1yxaDSu2stxsusSaamgnLiQBeVsdtvdvyIUqBs6dFWaTeBmC5M7YcrzCjVL6O97cSZvB6Lh7uAJATk4VpxTWAuVRebs4%2Fymb4eLT0RJbk%2BYcM9d%2Bjz9lNx8xykQQQAyeB31Lv6J0BWwKIjEiaChlhaQm0VpwQGAISlYkbi%2BxWoTiH7TPTjOiZSVba3aqhTd3nnGB9wCiT4YlaXw3R5O5JEdeVNr8R9a%2BE5qkL7u4krbUASJpwhHZy%2BLDAIk4oD4CvomLEBs3pnn67HwuClaWZoueCdE%2FtedYxOWDir8PSMICjp9AGOpcBqSqKduaQqJXdOXFLCvDe9V9z80E3%2BcuuX7j9Rwutcp5AzEL8t%2Bqm%2Bd98%2FQK1zJ2b5EmHn0lHkyILrR9Q8g8Cla2vQ8nbtTToJIfvfpYx1cu5MkZM1RJ7JHkNYycLPXKw3z%2Fg4pyHmo9GErKHl4U%2F1al6AgosEtprFss%2BOtOdq7tOv8fprh5Nn5Fll4BEbCMoN3cXlinjCg%3D%3D&Expires=1779028985)
+
+## What a trustworthy version should do
+
+A more credible version of this work would likely be one of these two directions:
+
+| Direction | Better framing | Better metrics |
+|---|---|---|
+| Forecasting electricity consumption | Predict future consumption as a number | MAE, RMSE, MAPE, \(R^2\)  [sciencedirect](https://www.sciencedirect.com/science/article/abs/pii/S0142061514007637) |
+| Classification of usage state | Predict high/low consumption or occupancy | Accuracy, F1, ROC-AUC, confusion matrix, but with a clearly defined class meaning  [vs.inf.ethz](https://vs.inf.ethz.ch/publ/papers/wilhelmk-occupa-20131.pdf) |
+
+The literature on electricity consumption is full of proper **regression forecasting** work, including comparisons of regression, neural networks, and support vector machines. There are also classification-style papers, but they usually have a clearly meaningful binary target such as occupancy detection or consumption-behavior classes. [sciencedirect](https://www.sciencedirect.com/science/article/pii/S0142061524001819)
+
+## Similar papers worth using instead
+
+If your goal is a solid PFE topic, these directions are much safer:
+
+- **Forecasting electricity consumption using regression models** rather than binary labels. A classic comparison paper contrasts regression analysis, neural networks, and LS-SVM for electricity consumption forecasting. [sciencedirect](https://www.sciencedirect.com/science/article/abs/pii/S0142061514007637)
+- **Occupancy detection from electricity consumption data**, which is a legitimate binary classification use case because the classes have a real operational meaning. [vs.inf.ethz](https://vs.inf.ethz.ch/publ/papers/wilhelmk-occupa-20131.pdf)
+- **Classification of electricity consumption behavior**, which focuses on identifying usage patterns rather than forcing a forecast into high/low classes. [sciencedirect](https://www.sciencedirect.com/science/article/pii/S0142061524001819)
+- **Multivariate forecasting with time series models** such as VAR for longer-term consumption prediction, which is much more defensible than a binary classifier for a continuous variable. [journals.aau](https://journals.aau.dk/index.php/sepm/article/view/10040)
+
+## What I would do for your PFE
+
+For your project, I would avoid copying this paper’s binary setup unless your supervisor explicitly wants a classification task. A stronger PFE would be to:
+- predict **actual consumption values**,
+- compare 3–5 baselines like linear regression, random forest, XGBoost, LSTM, and a classical time-series model,
+- use time-aware splitting,
+- report MAE, RMSE, MAPE, and \(R^2\),
+- add explainability with SHAP or feature importance.
+
+That would give you a much more meaningful contribution than simply deciding “high” or “low,” which is often too coarse to be useful in energy forecasting. [journals.aau](https://journals.aau.dk/index.php/sepm/article/view/10040)
+
+## Practical conclusion
+
+So yes, this paper has strong signs of **weak methodological credibility**: task mismatch, likely metric inflation, and a design that invites leakage if the split was not done very carefully. For a trustworthy alternative, focus on proper forecasting papers or binary papers with a real operational label like occupancy detection. [vs.inf.ethz](https://vs.inf.ethz.ch/publ/papers/wilhelmk-occupa-20131.pdf)
+
+Would you like me to extract the exact weak points from this PDF section by section and turn them into a clean critique you can send to your supervisor?
