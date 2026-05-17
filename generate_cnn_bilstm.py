@@ -8,12 +8,12 @@ markdown_intro = """# Proper STLF Regression using CNN and Bi-LSTM
 
 **Context:** Unlike the flawed DEPM paper, this implementation correctly treats the UCI dataset as a **multi-variate regression problem**. It uses CNN layers to extract spatial/feature correlations (how Voltage, Sub-meterings interact) and a Bi-LSTM to capture the forward and backward time-series trends, predicting the continuous power usage.
 
-**Key Features:**
+**Key Features of EECP-CBL:**
 1. **Target:** Predict actual continuous `Global_active_power` (kW).
 2. **Splitting:** Strict **chronological split** (Train: up to 2009, Test: 2010).
-3. **Data Windowing:** Uses a sliding window of 24 hours to predict the next hour.
-4. **Architecture:** `1D-CNN` (feature extraction) -> `Bi-LSTM` (temporal modeling) -> `Linear` (regression output).
-5. **Metrics:** Real unscaled MAE, RMSE, and MAPE."""
+3. **Data Windowing:** Uses a sliding window to predict the next steps.
+4. **Architecture:** Exactly 2 `1D-CNN` layers -> 2 `Bi-LSTM` layers -> 2 `Linear` (FC) layers.
+5. **Metrics:** Real unscaled MAE, RMSE, MSE, and MAPE."""
 
 code_imports = """import pandas as pd
 import numpy as np
@@ -112,37 +112,39 @@ x_sample, y_sample = next(iter(train_loader))
 print(f'Input shape: {x_sample.shape} -> (Batch, Seq_Len, Features)')
 print(f'Target shape: {y_sample.shape}')"""
 
-markdown_model = """## 3. CNN + Bi-LSTM Architecture
-* **1D-CNN:** Applies convolutions across the sequence to capture short-term local trends and inter-feature correlations.
-* **Bi-LSTM:** Reads the CNN-extracted features both forwards and backwards in time to capture long-term dependencies.
-* **Fully Connected:** Outputs the final continuous regression value."""
+markdown_model = """## 3. EECP-CBL Architecture
+As specified in Le et al. (2019), the EECP-CBL model contains:
+* **2 CNN Layers:** Applies convolutions across the sequence to capture short-term local trends and inter-feature correlations.
+* **2 Bi-LSTM Layers:** Reads the CNN-extracted features both forwards and backwards in time to capture long-term dependencies.
+* **2 FC Layers:** Outputs the final continuous regression value."""
 
 code_model = """class CNN_BiLSTM(nn.Module):
     def __init__(self, num_features, cnn_filters=64, lstm_hidden=50):
         super(CNN_BiLSTM, self).__init__()
         
-        # CNN block expects input: (batch, channels, seq_len)
+        # CNN block: 2 Convolutional Layers
         self.cnn = nn.Sequential(
             nn.Conv1d(in_channels=num_features, out_channels=cnn_filters, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=cnn_filters, out_channels=cnn_filters*2, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2)
         )
         
-        # Bi-LSTM block
-        # After MaxPool1d(2), seq_len becomes seq_len // 2
+        # Bi-LSTM block: 2 Bi-LSTM Layers
         self.lstm = nn.LSTM(
-            input_size=cnn_filters, 
+            input_size=cnn_filters*2, 
             hidden_size=lstm_hidden, 
-            num_layers=1, 
+            num_layers=2, 
             batch_first=True, 
             bidirectional=True
         )
         
-        # Fully connected regression head
+        # FC block: 2 Fully Connected Layers
         self.fc = nn.Sequential(
-            nn.Linear(lstm_hidden * 2, 32), # *2 because bidirectional
+            nn.Linear(lstm_hidden * 2, 64),
             nn.ReLU(),
-            nn.Linear(32, 1)
+            nn.Linear(64, 1)
         )
         
     def forward(self, x):
