@@ -168,23 +168,40 @@ To give the model more context beyond raw sensor readings, we implemented robust
 
 ---
 
-## Slide 9 — Conclusions & Future Work (2 min)
+## Slide 9 — The Strategic Pivot: Continuous Forecasting (4 min)
 
-### What PFE2 Adds Over PFE1:
+**Based on the flaws found in DEPM, we proactively searched for robust forecasting methodologies.**
 
-1. **Critical Analysis** — Identified data leakage, impossible metrics (54 samples), and plagiarized text in the paper.
-2. **Rigorous Replication** — Full reproduction of all 6 experiments (with and without leakage).
-3. **Architecture Extension** — 5 new DL variants (LSTM, BiLSTM, GRU, BiGRU) × 2 modes (standalone + DEPM).
-4. **Cross-Dataset Validation** — Tested on Steel Industry dataset (paper only used one).
-5. **Deployment** — FastAPI dashboard for real-time prediction with all models.
-6. **Reproducibility** — All code open, documented, and runnable on Kaggle.
+**New Focus:** Predicting real energy values (Regression) rather than arbitrary High/Low classes.
+**Selected Literature:** *"Improving Electric Energy Consumption Prediction Using CNN and Bi-LSTM"* (Le et al., 2019).
+
+**The Replicated Architecture (EECP-CBL):**
+- **CNN Module:** Extracts spatial features from 6 sensors
+- **Bi-LSTM Module:** Captures forward and backward temporal trends
+- **Fully Connected:** Outputs actual kW predictions
+- Evaluated on multiple resolutions (Minutely, Hourly, Daily, Weekly)
+
+**Results & Validation:**
+- We successfully replicated the complex architecture in PyTorch.
+- Our metrics closely match the paper’s proposed model.
+- We implemented fair, consistent normalization across baselines (LR, LSTM), showing a truer performance gap.
+
+**Show:** Prediction vs Actual time-series graphs, and performance metrics (MSE, RMSE, MAPE) across the four temporal datasets.
+
+---
+
+## Slide 10 — Conclusions (2 min)
+
+### The Complete PFE2 Journey:
+
+1. **Critical Analysis** — Identified data leakage, impossible metrics, and plagiarized text in the initial assigned DEPM paper.
+2. **Rigorous DEPM Replication** — Full reproduction of 6 experiments (with and without leakage) + cross-dataset validation.
+3. **Architecture Extension** — Built 10 DEPM variants + a full FastAPI production dashboard.
+4. **Independent Pivot (The Proactive Step)** — Realized binary classification of power is useless for grid operators. Transitioned entirely to **Continuous Time-Series Regression**.
+5. **New Implementation** — Successfully replicated and validated the state-of-the-art EECP-CBL deep learning model.
 
 ### Key Takeaway:
-
-> *The DEPM paper's classification results are not reproducible as reported due to data leakage and fabricated metrics. A proper approach requires framing this as a Time-Series Regression problem to forecast continuous power usage.*
-
-### Future Work:
-- Implementing Short-Term Load Forecasting (STLF) using **Regression** (LSTM / XGBoost Regressor) with strict chronological splitting and evaluating via MAE, RMSE, and MAPE.
+> *A proper energy management system requires continuous load forecasting, not binary classification. We transitioned from exposing a flawed classification approach to implementing a robust, scientifically valid continuous prediction model.*
 
 ---
 
@@ -198,6 +215,7 @@ To give the model more context beyond raw sensor readings, we implemented robust
 | `notebooks/depm_steel_industry.ipynb` | Cross-dataset validation | Slide 7 |
 | `notebooks/fair_comparison.ipynb` | Initial leak investigation | Slide 2 |
 | `app/` | FastAPI dashboard | Slide 8 |
+| `notebooks/EECP_CBL_Replication.ipynb` | Continuous Forecasting Pivot | Slide 9 |
 
 ---
 
@@ -213,5 +231,6 @@ To give the model more context beyond raw sensor readings, we implemented robust
 | 6 | Architecture Variants | 4 min |
 | 7 | Cross-Dataset | 3 min |
 | 8 | FastAPI Demo | 2 min |
-| 9 | Conclusions | 2 min |
-| | **Total** | **~26 min** |
+| 9 | Pivot to Continuous Forecasting | 4 min |
+| 10 | Conclusions | 2 min |
+| | **Total** | **~30 min** |
