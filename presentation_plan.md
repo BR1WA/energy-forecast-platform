@@ -175,18 +175,17 @@ To give the model more context beyond raw sensor readings, we implemented robust
 **New Focus:** Predicting real energy values (Regression) rather than arbitrary High/Low classes.
 **Selected Literature:** *"Improving Electric Energy Consumption Prediction Using CNN and Bi-LSTM"* (Le et al., 2019).
 
-**The Replicated Architecture (EECP-CBL):**
-- **CNN Module:** Extracts spatial features from 6 sensors
-- **Bi-LSTM Module:** Captures forward and backward temporal trends
-- **Fully Connected:** Outputs actual kW predictions
-- Evaluated on multiple resolutions (Minutely, Hourly, Daily, Weekly)
+**The Proposed STLF Architecture (CNN-BiLSTM):**
+- **CNN Module:** Applies 1D Convolutions across the 24-hour sequence to extract local spatial-temporal features.
+- **Bi-LSTM Module:** Captures forward and backward long-term dependencies in power consumption.
+- **Fully Connected Layer:** Outputs actual continuous kW predictions.
 
-**Results & Validation:**
-- We successfully replicated the complex architecture in PyTorch.
-- Our metrics closely match the paper’s proposed model.
-- We implemented fair, consistent normalization across baselines (LR, LSTM), showing a truer performance gap.
+**Implementation Details:**
+- **Dataset:** Resampled to **Hourly** frequency (industry standard for Short-Term Load Forecasting).
+- **Sequence Length:** 24-hour lookback window.
+- **Evaluation:** Inverse-transformed predictions to report real-world metrics: MAE (kW), RMSE (kW), and MAPE (%).
 
-**Show:** Prediction vs Actual time-series graphs, and performance metrics (MSE, RMSE, MAPE) across the four temporal datasets.
+**Show:** Prediction vs Actual time-series graphs for a 1-week (168-hour) window, demonstrating how closely the model tracks real-world power demand.
 
 ---
 
@@ -198,7 +197,7 @@ To give the model more context beyond raw sensor readings, we implemented robust
 2. **Rigorous DEPM Replication** — Full reproduction of 6 experiments (with and without leakage) + cross-dataset validation.
 3. **Architecture Extension** — Built 10 DEPM variants + a full FastAPI production dashboard.
 4. **Independent Pivot (The Proactive Step)** — Realized binary classification of power is useless for grid operators. Transitioned entirely to **Continuous Time-Series Regression**.
-5. **New Implementation** — Successfully replicated and validated the state-of-the-art EECP-CBL deep learning model.
+5. **New Implementation** — Successfully built and deployed a clean, production-ready CNN-BiLSTM forecasting model based on state-of-the-art literature.
 
 ### Key Takeaway:
 > *A proper energy management system requires continuous load forecasting, not binary classification. We transitioned from exposing a flawed classification approach to implementing a robust, scientifically valid continuous prediction model.*
@@ -215,7 +214,7 @@ To give the model more context beyond raw sensor readings, we implemented robust
 | `notebooks/depm_steel_industry.ipynb` | Cross-dataset validation | Slide 7 |
 | `notebooks/fair_comparison.ipynb` | Initial leak investigation | Slide 2 |
 | `app/` | FastAPI dashboard | Slide 8 |
-| `notebooks/EECP_CBL_Replication.ipynb` | Continuous Forecasting Pivot | Slide 9 |
+| `notebooks/cnnbilstm.ipynb` | CNN-BiLSTM Implementation | Slide 9 |
 
 ---
 
