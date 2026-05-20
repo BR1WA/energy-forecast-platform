@@ -1,18 +1,18 @@
-# PFE2 Progress Presentation Plan
+# PFE Progress Presentation Plan
 
 > **Title:** Replication & Critical Analysis of the Deep Energy Predictor Model (DEPM)
 >
-> **Context:** PFE2 builds on PFE1 (initial implementation). Everything below is **new work**.
+> **Context:** This covers the progress, critical analysis, and pivot following the initial implementation phase.
 
 ---
 
-## Slide 1 — Recap: Where PFE1 Left Off (2 min)
+## Slide 1 — Recap: Initial Implementation (2 min)
 
 **Talking points:**
-- PFE1: Implemented the DEPM architecture from the paper (Cascaded ResNet + DNN + XGBoost)
+- Initial Phase: Implemented the DEPM architecture from the paper (Cascaded ResNet + DNN + XGBoost)
 - Dataset: UCI Household Electric Power Consumption (2M+ rows, 47 months)
 - Achieved initial results but noticed discrepancies with the paper's reported metrics
-- **PFE2 goal:** Investigate why, validate properly, extend the architecture
+- **Current Goal:** Investigate why, validate properly, extend the architecture
 
 ---
 
@@ -191,7 +191,7 @@ To give the model more context beyond raw sensor readings, we implemented robust
 
 ## Slide 10 — Conclusions (2 min)
 
-### The Complete PFE2 Journey:
+### The Complete Project Journey:
 
 1. **Critical Analysis** — Identified data leakage, impossible metrics, and plagiarized text in the initial assigned DEPM paper.
 2. **Rigorous DEPM Replication** — Full reproduction of 6 experiments (with and without leakage) + cross-dataset validation.
