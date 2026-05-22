@@ -1,0 +1,8 @@
+name,description
+winter_weekday_jan,Winter weekday (January) — high heating demand
+winter_weekend_feb,Winter weekend (February) — relaxed home consumption
+spring_transition_apr,"Spring transition (April) — moderate, variable loads"
+summer_weekday_jul,"Summer weekday (July) — low heating, cooling spikes"
+summer_weekend_aug,Summer weekend (August) — vacation/relaxed patterns
+autumn_evening_oct,Autumn weekday (October) — evening peaks returning
+late_autumn_nov,Late autumn (November) — heating ramp-up
