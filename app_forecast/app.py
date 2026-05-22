@@ -398,6 +398,19 @@ PLOTLY_LAYOUT = dict(
     legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(size=11)),
 )
 
+def get_layout(**kwargs):
+    """Helper to merge layout overrides without duplicate keyword arguments."""
+    layout = PLOTLY_LAYOUT.copy()
+    for k, v in kwargs.items():
+        if isinstance(v, dict) and k in layout and isinstance(layout[k], dict):
+            item_copy = layout[k].copy()
+            item_copy.update(v)
+            layout[k] = item_copy
+        else:
+            layout[k] = v
+    return layout
+
+
 COLORS = {
     'actual': '#e2e8f0',
     'sota': '#10b981',
@@ -718,13 +731,14 @@ if page == "🔮 Load Forecaster":
             )
 
             fig.update_layout(
-                **PLOTLY_LAYOUT,
-                title=dict(text='Global Active Power: Historical + Forecast', font=dict(size=16)),
-                xaxis_title='Time',
-                yaxis_title='Power (kW)',
-                height=450,
-                hovermode='x unified',
-                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                **get_layout(
+                    title=dict(text='Global Active Power: Historical + Forecast', font=dict(size=16)),
+                    xaxis_title='Time',
+                    yaxis_title='Power (kW)',
+                    height=450,
+                    hovermode='x unified',
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                )
             )
 
             st.plotly_chart(fig, use_container_width=True)
@@ -741,11 +755,12 @@ if page == "🔮 Load Forecaster":
                     hovertemplate='<b>%{x}</b><br>%{y:.3f} kW<extra></extra>',
                 ))
                 fig_bar.update_layout(
-                    **PLOTLY_LAYOUT,
-                    title='Hourly Predicted Load (Red = Peak Tariff, Green = Off-Peak)',
-                    height=300,
-                    xaxis_title='Hour', yaxis_title='Power (kW)',
-                    showlegend=False,
+                    **get_layout(
+                        title='Hourly Predicted Load (Red = Peak Tariff, Green = Off-Peak)',
+                        height=300,
+                        xaxis_title='Hour', yaxis_title='Power (kW)',
+                        showlegend=False,
+                    )
                 )
                 st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -806,12 +821,13 @@ elif page == "📊 Sub-Metering":
             hovertemplate='<b>%{label}</b><br>%{value:.0f} Wh (%{percent})<extra></extra>',
         )])
         fig_donut.update_layout(
-            **PLOTLY_LAYOUT,
-            title=dict(text='24h Energy Distribution', font=dict(size=14)),
-            height=380,
-            showlegend=False,
-            annotations=[dict(text=f'{total_wh:.0f}<br>Wh', x=0.5, y=0.5, font_size=18,
-                              font_color='#e2e8f0', showarrow=False, font_family='Inter')],
+            **get_layout(
+                title=dict(text='24h Energy Distribution', font=dict(size=14)),
+                height=380,
+                showlegend=False,
+                annotations=[dict(text=f'{total_wh:.0f}<br>Wh', x=0.5, y=0.5, font_size=18,
+                                  font_color='#e2e8f0', showarrow=False, font_family='Inter')],
+            )
         )
         st.plotly_chart(fig_donut, use_container_width=True)
 
@@ -852,12 +868,13 @@ elif page == "📊 Sub-Metering":
         ))
 
         fig_stack.update_layout(
-            **PLOTLY_LAYOUT,
-            barmode='stack',
-            title=dict(text='Hourly Sub-Metering Breakdown', font=dict(size=14)),
-            height=380,
-            xaxis_title='Hour', yaxis_title='Energy (Wh)',
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+            **get_layout(
+                barmode='stack',
+                title=dict(text='Hourly Sub-Metering Breakdown', font=dict(size=14)),
+                height=380,
+                xaxis_title='Hour', yaxis_title='Energy (Wh)',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+            )
         )
         st.plotly_chart(fig_stack, use_container_width=True)
 
@@ -879,9 +896,10 @@ elif page == "📊 Sub-Metering":
             hovertemplate='<b>%{y}</b> at %{x}<br>%{z:.1f} Wh<extra></extra>',
         ))
         fig_heat.update_layout(
-            **PLOTLY_LAYOUT,
-            title='Consumption Intensity by Category & Hour',
-            height=250,
+            **get_layout(
+                title='Consumption Intensity by Category & Hour',
+                height=250,
+            )
         )
         st.plotly_chart(fig_heat, use_container_width=True)
 
@@ -959,11 +977,12 @@ elif page == "⚡ Smart Grid Alerts":
             )
 
         fig_cost.update_layout(
-            **PLOTLY_LAYOUT,
-            title=dict(text='Hourly Electricity Cost (€)', font=dict(size=14)),
-            height=350,
-            xaxis_title='Hour', yaxis_title='Cost (€)',
-            showlegend=False,
+            **get_layout(
+                title=dict(text='Hourly Electricity Cost (€)', font=dict(size=14)),
+                height=350,
+                xaxis_title='Hour', yaxis_title='Cost (€)',
+                showlegend=False,
+            )
         )
         st.plotly_chart(fig_cost, use_container_width=True)
 
@@ -980,10 +999,11 @@ elif page == "⚡ Smart Grid Alerts":
             hovertemplate='<b>%{label}</b><br>%{value:.1f} kWh<extra></extra>',
         )])
         fig_pie.update_layout(
-            **PLOTLY_LAYOUT,
-            title=dict(text='Peak vs Off-Peak', font=dict(size=14)),
-            height=350,
-            showlegend=False,
+            **get_layout(
+                title=dict(text='Peak vs Off-Peak', font=dict(size=14)),
+                height=350,
+                showlegend=False,
+            )
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -1120,12 +1140,13 @@ elif page == "🧪 Model Playground":
             )
 
             fig_compare.update_layout(
-                **PLOTLY_LAYOUT,
-                title=dict(text='Model Comparison: Actual vs Predicted', font=dict(size=16)),
-                height=480,
-                xaxis_title='Time', yaxis_title='Power (kW)',
-                hovermode='x unified',
-                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                **get_layout(
+                    title=dict(text='Model Comparison: Actual vs Predicted', font=dict(size=16)),
+                    height=480,
+                    xaxis_title='Time', yaxis_title='Power (kW)',
+                    hovermode='x unified',
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                )
             )
             st.plotly_chart(fig_compare, use_container_width=True)
 
@@ -1190,11 +1211,12 @@ elif page == "🧪 Model Playground":
                         hovertemplate=f'<b>{model_name}</b><br>%{{x}}: %{{y:.3f}} kW error<extra></extra>',
                     ))
                 fig_err.update_layout(
-                    **PLOTLY_LAYOUT,
-                    title='Hourly Prediction Error (Actual − Predicted)',
-                    height=300,
-                    barmode='group',
-                    xaxis_title='Hour', yaxis_title='Error (kW)',
+                    **get_layout(
+                        title='Hourly Prediction Error (Actual − Predicted)',
+                        height=300,
+                        barmode='group',
+                        xaxis_title='Hour', yaxis_title='Error (kW)',
+                    )
                 )
                 st.plotly_chart(fig_err, use_container_width=True)
 
