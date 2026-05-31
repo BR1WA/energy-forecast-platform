@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # ======================== DATABASE ========================
+  db:
+    image: postgres:16-alpine
+    container_name: energy_db
+    environment:
+      POSTGRES_DB: energy_forecast
+      POSTGRES_USER: pfe
+      POSTGRES_PASSWORD: pfe_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pfe -d energy_forecast"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ======================== BACKEND ========================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: energy_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://pfe:pfe_password@db:5432/energy_forecast
+      JWT_SECRET_KEY: super-secret-key-change-in-production
+      FRONTEND_URL: http://localhost:3000
+      MODELS_DIR: /app/models
+    volumes:
+      - ./backend:/app
+      - ./models:/app/models
+      - ./app_forecast/samples:/app/app_forecast/samples
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ======================== FRONTEND ========================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: energy_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
