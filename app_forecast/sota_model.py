@@ -177,3 +177,65 @@ class CNN_BiLSTM(nn.Module):
         last_out = out[:, -1, :]
         pred = self.fc(last_out)
         return pred.view(-1, self.forecast_horizon, self.num_targets)
+
+
+class PatchTST(nn.Module):
+    """
+    PatchTST: A Time Series is Worth 64 Words (Nie et al., ICLR 2023).
+    Pure Transformer with channel-independent patching.
+    Must match training notebook definition EXACTLY to load saved weights.
+    """
+    def __init__(self, num_targets=7, patch_len=16, stride=8, lookback=96,
+                 d_model=128, n_heads=8, n_layers=3, d_ff=256,
+                 dropout=0.2, forecast_horizon=24):
+        super().__init__()
+        self.num_targets = num_targets
+        self.patch_len = patch_len
+        self.stride = stride
+        self.lookback = lookback
+        self.d_model = d_model
+        self.forecast_horizon = forecast_horizon
+
+        self.num_patches = (lookback - patch_len) // stride + 1
+
+        self.revin = RevIN(num_features=num_targets)
+        self.patch_embedding = nn.Linear(patch_len, d_model)
+        self.pos_encoding = nn.Parameter(
+            torch.randn(1, self.num_patches, d_model) * 0.02
+        )
+        self.input_norm = nn.LayerNorm(d_model)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=n_heads, dim_feedforward=d_ff,
+            dropout=dropout, batch_first=True, activation='gelu'
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=n_layers, norm=nn.LayerNorm(d_model)
+        )
+
+        self.flatten_dim = self.num_patches * d_model
+        self.prediction_head = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(self.flatten_dim, forecast_horizon)
+        )
+
+    def forward(self, x_targets, x_calendar=None):
+        batch_size = x_targets.shape[0]
+
+        x_norm, mean, stdev = self.revin(x_targets, mode='norm')
+        x_ci = x_norm.transpose(1, 2).reshape(batch_size * self.num_targets, self.lookback, 1)
+
+        patches = x_ci.unfold(dimension=1, size=self.patch_len, step=self.stride).squeeze(2)
+        patch_embed = self.patch_embedding(patches)
+        patch_embed = patch_embed + self.pos_encoding
+        patch_embed = self.input_norm(patch_embed)
+
+        transformer_out = self.transformer_encoder(patch_embed)
+        flat = transformer_out.reshape(batch_size * self.num_targets, -1)
+        preds_ci = self.prediction_head(flat)
+
+        preds = preds_ci.reshape(batch_size, self.num_targets, self.forecast_horizon)
+        preds = preds.transpose(1, 2)
+
+        pred_final = self.revin(preds, mode='denorm', mean=mean, stdev=stdev)
+        return pred_final

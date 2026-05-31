@@ -1,0 +1,46 @@
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { AuthProvider } from "@/lib/auth";
+import { Toaster } from "@/components/ui/sonner";
+
+const inter = Inter({
+  variable: "--font-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "EnergyAI — Smart Energy Management",
+  description:
+    "Premium energy consumption forecasting platform powered by AI",
+  icons: {
+    icon: "/favicon.ico",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-[#0A0F1C] text-slate-200">
+        <AuthProvider>
+          {children}
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: "#111827",
+                border: "1px solid rgba(59, 130, 246, 0.1)",
+                color: "#E2E8F0",
+              },
+            }}
+          />
+        </AuthProvider>
+      </body>
+    </html>
+  );
+}

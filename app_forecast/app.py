@@ -415,6 +415,7 @@ COLORS = {
     'actual': '#e2e8f0',
     'sota': '#10b981',
     'baseline': '#3b82f6',
+    'patchtst': '#e63946',
     'historical': '#6366f1',
     'peak': '#ef4444',
     'off_peak': '#10b981',
@@ -700,7 +701,7 @@ if page == "🔮 Load Forecaster":
             ))
 
             # Forecast
-            forecast_color = COLORS['sota'] if 'SOTA' in used_model else COLORS['baseline']
+            forecast_color = COLORS['patchtst'] if 'PatchTST' in used_model else (COLORS['sota'] if 'SOTA' in used_model else COLORS['baseline'])
             fig.add_trace(go.Scatter(
                 x=forecast_df.index, y=gap_forecast,
                 name=f'{used_model} Forecast (24h)',
@@ -1120,7 +1121,7 @@ elif page == "🧪 Model Playground":
             ))
 
             # Model predictions
-            model_colors = {'SOTA Model': COLORS['sota'], 'CNN-BiLSTM': COLORS['baseline']}
+            model_colors = {'SOTA Model': COLORS['sota'], 'CNN-BiLSTM': COLORS['baseline'], 'PatchTST': COLORS['patchtst']}
             for model_name, res in results.items():
                 color = model_colors.get(model_name, '#f59e0b')
                 fig_compare.add_trace(go.Scatter(

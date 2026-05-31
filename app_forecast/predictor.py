@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 import joblib
-from sota_model import SOTAForecastingModel, CNN_BiLSTM
+from sota_model import SOTAForecastingModel, CNN_BiLSTM, PatchTST
 
 # Column names matching the training pipeline
 TARGET_COLS = [
@@ -80,6 +80,23 @@ class AppPredictor:
             self.cnn_model = None
             self.models_loaded['CNN-BiLSTM'] = False
 
+        # Load PatchTST
+        patchtst_path = os.path.join(weights_dir, 'patchtst_weights.pth')
+        if os.path.exists(patchtst_path):
+            self.patchtst_model = PatchTST(
+                num_targets=7, patch_len=16, stride=8, lookback=96,
+                d_model=128, n_heads=8, n_layers=3, d_ff=256,
+                dropout=0.0, forecast_horizon=HORIZON
+            )
+            self.patchtst_model.load_state_dict(
+                torch.load(patchtst_path, map_location=self.device, weights_only=True)
+            )
+            self.patchtst_model.eval()
+            self.models_loaded['PatchTST'] = True
+        else:
+            self.patchtst_model = None
+            self.models_loaded['PatchTST'] = False
+
         # Load scaler (needed for CNN-BiLSTM inverse transform)
         scaler_path = os.path.join(weights_dir, 'target_scaler.pkl')
         if os.path.exists(scaler_path):
@@ -149,12 +166,40 @@ class AppPredictor:
         )
         return pd.DataFrame(preds_kw, index=future_index, columns=TARGET_COLS)
 
+    def predict_patchtst(self, df_input):
+        """
+        Run PatchTST inference.
+        Args:
+            df_input: DataFrame with 96 rows, 7 target columns, and DatetimeIndex.
+        Returns:
+            DataFrame with 24 rows of forecasted values (raw kW scale).
+        """
+        if self.patchtst_model is None:
+            raise RuntimeError("PatchTST model weights not loaded.")
+
+        targets = df_input[TARGET_COLS].values.astype(np.float32)
+        cal_features = get_cyclical_calendar_features(df_input.index).astype(np.float32)
+
+        x_targets = torch.tensor(targets).unsqueeze(0)   # [1, 96, 7]
+        x_calendar = torch.tensor(cal_features).unsqueeze(0)  # [1, 96, 6]
+
+        with torch.no_grad():
+            preds = self.patchtst_model(x_targets, x_calendar)  # [1, 24, 7]
+
+        preds_np = preds.squeeze(0).numpy()
+        future_index = pd.date_range(
+            start=df_input.index[-1] + pd.Timedelta(hours=1), periods=HORIZON, freq='h'
+        )
+        return pd.DataFrame(preds_np, index=future_index, columns=TARGET_COLS)
+
     def predict(self, df_input, model_name='SOTA Model'):
         """Unified predict interface."""
         if model_name == 'SOTA Model':
             return self.predict_sota(df_input)
         elif model_name == 'CNN-BiLSTM':
             return self.predict_baseline(df_input)
+        elif model_name == 'PatchTST':
+            return self.predict_patchtst(df_input)
         else:
             raise ValueError(f"Unknown model: {model_name}")
 
