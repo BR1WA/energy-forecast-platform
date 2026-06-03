@@ -144,22 +144,22 @@ def get_summary(
 
     # 4. Monthly accuracy
     monthly_accuracy = [
-        {"month": "Jul", "CNN-BiLSTM": 94.1, "SOTA Hybrid": 93.5, "PatchTST": 95.2},
-        {"month": "Aug", "CNN-BiLSTM": 94.8, "SOTA Hybrid": 94.2, "PatchTST": 95.8},
-        {"month": "Sep", "CNN-BiLSTM": 95.3, "SOTA Hybrid": 94.6, "PatchTST": 96.1},
-        {"month": "Oct", "CNN-BiLSTM": 95.7, "SOTA Hybrid": 95.1, "PatchTST": 96.5},
-        {"month": "Nov", "CNN-BiLSTM": 96.0, "SOTA Hybrid": 95.4, "PatchTST": 96.8},
-        {"month": "Dec", "CNN-BiLSTM": 96.2, "SOTA Hybrid": 95.8, "PatchTST": 97.1},
+        {"month": "Jul", "cnn_bilstm": 94.1, "sota_hybrid": 93.5, "patchtst": 95.2},
+        {"month": "Aug", "cnn_bilstm": 94.8, "sota_hybrid": 94.2, "patchtst": 95.8},
+        {"month": "Sep", "cnn_bilstm": 95.3, "sota_hybrid": 94.6, "patchtst": 96.1},
+        {"month": "Oct", "cnn_bilstm": 95.7, "sota_hybrid": 95.1, "patchtst": 96.5},
+        {"month": "Nov", "cnn_bilstm": 96.0, "sota_hybrid": 95.4, "patchtst": 96.8},
+        {"month": "Dec", "cnn_bilstm": 96.2, "sota_hybrid": 95.8, "patchtst": 97.1},
     ]
 
     # 5. Model comparison metrics
     model_performance = [
-        {"metric": "MAE", "CNN-BiLSTM": 85.0, "SOTA Hybrid": 80.0, "PatchTST": 90.0},
-        {"metric": "RMSE", "CNN-BiLSTM": 82.0, "SOTA Hybrid": 78.0, "PatchTST": 88.0},
-        {"metric": "MAPE", "CNN-BiLSTM": 88.0, "SOTA Hybrid": 84.0, "PatchTST": 92.0},
-        {"metric": "R² Score", "CNN-BiLSTM": 90.0, "SOTA Hybrid": 87.0, "PatchTST": 94.0},
-        {"metric": "Speed", "CNN-BiLSTM": 75.0, "SOTA Hybrid": 70.0, "PatchTST": 85.0},
-        {"metric": "Stability", "CNN-BiLSTM": 87.0, "SOTA Hybrid": 83.0, "PatchTST": 91.0},
+        {"metric": "MAE", "cnn_bilstm": 85.0, "sota_hybrid": 80.0, "patchtst": 90.0},
+        {"metric": "RMSE", "cnn_bilstm": 82.0, "sota_hybrid": 78.0, "patchtst": 88.0},
+        {"metric": "MAPE", "cnn_bilstm": 88.0, "sota_hybrid": 84.0, "patchtst": 92.0},
+        {"metric": "R² Score", "cnn_bilstm": 90.0, "sota_hybrid": 87.0, "patchtst": 94.0},
+        {"metric": "Speed", "cnn_bilstm": 75.0, "sota_hybrid": 70.0, "patchtst": 85.0},
+        {"metric": "Stability", "cnn_bilstm": 87.0, "sota_hybrid": 83.0, "patchtst": 91.0},
     ]
 
     # 6. Heatmap grid
