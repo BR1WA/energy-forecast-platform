@@ -41,6 +41,34 @@ interface AnalyticsData {
   unacknowledged_alerts: number;
   models_used: Record<string, number>;
   avg_peak_power: number | null;
+  weekly_consumption?: Array<{
+    week: string;
+    actual: number;
+    predicted: number;
+    savings: number;
+  }>;
+  consumption_by_hour?: Array<{
+    hour: string;
+    weekday: number;
+    weekend: number;
+  }>;
+  monthly_accuracy?: Array<{
+    month: string;
+    'CNN-BiLSTM': number;
+    'SOTA Hybrid': number;
+    PatchTST: number;
+  }>;
+  model_performance?: Array<{
+    metric: string;
+    'CNN-BiLSTM': number;
+    'SOTA Hybrid': number;
+    PatchTST: number;
+  }>;
+  heatmap_data?: Array<{
+    day: string;
+    hour: number;
+    value: number;
+  }>;
 }
 
 // Demo data for visual charts
@@ -112,6 +140,7 @@ export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const finalHeatmapData = analytics?.heatmap_data || heatmapData;
 
   useEffect(() => {
     analyticsApi
@@ -240,7 +269,7 @@ export default function AnalyticsPage() {
                 <CardContent>
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={weeklyConsumption}>
+                      <BarChart data={analytics?.weekly_consumption || weeklyConsumption}>
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke="rgba(59,130,246,0.06)"
@@ -297,7 +326,7 @@ export default function AnalyticsPage() {
                 <CardContent>
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={consumptionByHour}>
+                      <AreaChart data={analytics?.consumption_by_hour || consumptionByHour}>
                         <defs>
                           <linearGradient
                             id="gradWeekday"
@@ -401,7 +430,7 @@ export default function AnalyticsPage() {
                 <CardContent>
                   <div className="h-[320px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={monthlyAccuracy}>
+                      <LineChart data={analytics?.monthly_accuracy || monthlyAccuracy}>
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke="rgba(59,130,246,0.06)"
@@ -466,7 +495,7 @@ export default function AnalyticsPage() {
                 <CardContent>
                   <div className="h-[320px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart data={modelPerformance}>
+                      <RadarChart data={analytics?.model_performance || modelPerformance}>
                         <PolarGrid stroke="rgba(59,130,246,0.1)" />
                         <PolarAngleAxis
                           dataKey="metric"
@@ -535,7 +564,7 @@ export default function AnalyticsPage() {
                         <div className="w-12 shrink-0 flex items-center text-xs text-slate-400 font-medium">
                           {day}
                         </div>
-                        {heatmapData
+                        {finalHeatmapData
                           .filter((d) => d.day === day)
                           .map((cell, i) => (
                             <div

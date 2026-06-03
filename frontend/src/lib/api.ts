@@ -192,13 +192,45 @@ export const analyticsApi = {
 // Alerts API
 // ============================================================
 export const alertsApi = {
-  getAlerts: (): Promise<Alert[]> => apiFetch('/api/v1/alerts'),
+  getAlerts: async (): Promise<Alert[]> => {
+    const raw = await apiFetch<any[]>('/api/v1/alerts');
+    return raw.map((a) => ({
+      id: String(a.id),
+      type: a.alert_type,
+      severity: a.severity,
+      title: a.alert_type ? a.alert_type.replace(/_/g, ' ').toUpperCase() : 'ALERT',
+      message: a.message || '',
+      is_read: a.is_acknowledged,
+      created_at: a.created_at,
+    }));
+  },
 
-  configureAlerts: (config: AlertConfig): Promise<AlertConfig> =>
-    apiFetch('/api/v1/alerts/config', {
+  getConfig: async (): Promise<AlertConfig> => {
+    const raw = await apiFetch<any>('/api/v1/alerts/config');
+    return {
+      high_consumption_threshold: raw.threshold_kw,
+      anomaly_sensitivity: 'medium',
+      notification_email: raw.email_enabled,
+      notification_push: true,
+    };
+  },
+
+  configureAlerts: async (config: AlertConfig): Promise<AlertConfig> => {
+    const backendPayload = {
+      threshold_kw: config.high_consumption_threshold,
+      email_enabled: config.notification_email,
+    };
+    const raw = await apiFetch<any>('/api/v1/alerts/config', {
       method: 'POST',
-      body: JSON.stringify(config),
-    }),
+      body: JSON.stringify(backendPayload),
+    });
+    return {
+      high_consumption_threshold: raw.threshold_kw,
+      anomaly_sensitivity: config.anomaly_sensitivity,
+      notification_email: raw.email_enabled,
+      notification_push: config.notification_push,
+    };
+  },
 
   acknowledgeAlert: (alertId: string | number): Promise<void> =>
     apiFetch('/api/v1/alerts/acknowledge', {

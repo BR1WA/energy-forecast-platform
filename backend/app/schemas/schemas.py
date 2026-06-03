@@ -144,7 +144,44 @@ class AlertAcknowledge(BaseModel):
     alert_id: int
 
 
-# ======================== ANALYTICS ========================
+class ConsumptionTrendPoint(BaseModel):
+    date: str
+    consumption: float
+    predicted: Optional[float] = None
+
+class WeeklyConsumptionPoint(BaseModel):
+    week: str
+    actual: float
+    predicted: float
+    savings: float
+
+class HourlyPatternPoint(BaseModel):
+    hour: str
+    weekday: float
+    weekend: float
+
+class MonthlyAccuracyPoint(BaseModel):
+    month: str
+    cnn_bilstm: float = Field(..., serialization_alias="CNN-BiLSTM")
+    sota_hybrid: float = Field(..., serialization_alias="SOTA Hybrid")
+    patchtst: float = Field(..., serialization_alias="PatchTST")
+
+    class Config:
+        populate_by_name = True
+
+class ModelPerformancePoint(BaseModel):
+    metric: str
+    cnn_bilstm: float = Field(..., serialization_alias="CNN-BiLSTM")
+    sota_hybrid: float = Field(..., serialization_alias="SOTA Hybrid")
+    patchtst: float = Field(..., serialization_alias="PatchTST")
+
+    class Config:
+        populate_by_name = True
+
+class HeatmapPoint(BaseModel):
+    day: str
+    hour: int
+    value: float
 
 class AnalyticsSummary(BaseModel):
     total_forecasts: int
@@ -153,6 +190,12 @@ class AnalyticsSummary(BaseModel):
     models_used: Dict[str, int]  # {model_name: count}
     avg_peak_power: Optional[float] = None
     recent_forecasts: List[ForecastHistoryItem]
+    consumption_trend: List[ConsumptionTrendPoint] = []
+    weekly_consumption: List[WeeklyConsumptionPoint] = []
+    consumption_by_hour: List[HourlyPatternPoint] = []
+    monthly_accuracy: List[MonthlyAccuracyPoint] = []
+    model_performance: List[ModelPerformancePoint] = []
+    heatmap_data: List[HeatmapPoint] = []
 
 
 # ======================== ADMIN ========================

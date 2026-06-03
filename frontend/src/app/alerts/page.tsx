@@ -74,14 +74,19 @@ export default function AlertsPage() {
   useEffect(() => {
     const fetchAlertsAndConfig = async () => {
       try {
-        const [fetchedAlerts] = await Promise.all([
+        const [fetchedAlerts, config] = await Promise.all([
           alertsApi.getAlerts(),
+          alertsApi.getConfig(),
         ]);
         // Sort by created_at desc
         const sorted = fetchedAlerts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setAlerts(sorted);
+        if (config) {
+          setThreshold(String(config.high_consumption_threshold));
+          setSensitivity(config.anomaly_sensitivity);
+        }
       } catch (err) {
-        console.error('Failed to fetch alerts', err);
+        console.error('Failed to fetch alerts and config', err);
       } finally {
         setLoading(false);
       }

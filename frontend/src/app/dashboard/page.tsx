@@ -43,6 +43,11 @@ interface AnalyticsData {
     created_at: string;
     peak_power: number | null;
   }>;
+  consumption_trend?: Array<{
+    date: string;
+    consumption: number;
+    predicted?: number;
+  }>;
 }
 
 // Model display name mapping
@@ -240,7 +245,7 @@ export default function DashboardPage() {
             <CardContent className="pt-0">
               <div className="h-[280px] mt-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={defaultChartData}>
+                  <AreaChart data={analytics?.consumption_trend || defaultChartData}>
                     <defs>
                       <linearGradient
                         id="colorConsumption"
