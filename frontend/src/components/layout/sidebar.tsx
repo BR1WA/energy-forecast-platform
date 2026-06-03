@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import {
@@ -58,6 +58,7 @@ const navItems = [
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
 
   const initials = user?.full_name
@@ -189,20 +190,22 @@ export default function Sidebar() {
           >
             <DropdownMenuItem
               id="menu-settings"
-              onSelect={() => window.location.href = '/dashboard'}
-              className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
+              className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
             >
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings')}>
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/[0.06]" />
             <DropdownMenuItem
               id="menu-logout"
-              onSelect={() => logout()}
-              className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
+              className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer p-0"
             >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => logout()}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -92,6 +92,22 @@
 }
 
 /* ============================================================
+   Light Theme Inversion Trick
+   ============================================================ */
+.light body {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #0A0F1C;
+}
+
+.light img,
+.light svg,
+.light video,
+.light canvas,
+.light [data-recharts-surface] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* ============================================================
    Base Styles
    ============================================================ */
 

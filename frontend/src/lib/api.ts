@@ -173,6 +173,28 @@ export const forecastApi = {
     });
   },
 
+  compare: (data: File | string): Promise<Record<string, unknown>> => {
+    if (data instanceof File) {
+      const formData = new FormData();
+      formData.append('file', data);
+
+      const token = getAccessToken();
+      return fetch(`${API_BASE_URL}/api/v1/forecast/compare`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      }).then((r) => {
+        if (!r.ok) throw new Error('Comparison failed');
+        return r.json();
+      });
+    }
+
+    return apiFetch('/api/v1/forecast/compare', {
+      method: 'POST',
+      body: JSON.stringify({ sample_name: data }),
+    });
+  },
+
   getHistory: (): Promise<ForecastHistory[]> =>
     apiFetch('/api/v1/forecast/history'),
 

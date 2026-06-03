@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Bell, Search } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -33,6 +34,7 @@ const pageDescriptions: Record<string, string> = {
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
 
   const title = pageTitles[pathname] || 'EnergyAI';
@@ -121,28 +123,31 @@ export default function Navbar() {
             <DropdownMenuSeparator className="bg-white/[0.06]" />
             <DropdownMenuItem
               id="nav-profile"
-              onSelect={() => window.location.href = '/dashboard'}
-              className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
+              className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
             >
-              <User className="w-4 h-4 mr-2" />
-              Profile
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings')}>
+                <User className="w-4 h-4 mr-2" />
+                Profile
+              </div>
             </DropdownMenuItem>
             <DropdownMenuItem
               id="nav-settings"
-              onSelect={() => window.location.href = '/dashboard'}
-              className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
+              className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
             >
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings')}>
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/[0.06]" />
             <DropdownMenuItem
               id="nav-logout"
-              onSelect={() => logout()}
-              className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
+              className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer p-0"
             >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => logout()}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
