@@ -135,3 +135,13 @@ def get_stats(
             "viewer": db.query(User).filter(User.role == "viewer").count(),
         },
     }
+
+
+@router.get("/models")
+def list_models(
+    current_user: User = Depends(require_role(["admin"])),
+):
+    """List all registered ML models (admin only)."""
+    from app.services.forecast_service import get_forecast_service
+    service = get_forecast_service()
+    return service.get_available_models()

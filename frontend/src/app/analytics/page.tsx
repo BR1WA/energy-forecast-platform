@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,8 +32,18 @@ import {
   Radar,
   Legend,
 } from 'recharts';
+import { analyticsApi } from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
-// Demo data
+interface AnalyticsData {
+  total_forecasts: number;
+  total_alerts: number;
+  unacknowledged_alerts: number;
+  models_used: Record<string, number>;
+  avg_peak_power: number | null;
+}
+
+// Demo data for visual charts
 const monthlyAccuracy = [
   { month: 'Jul', 'CNN-BiLSTM': 94.1, 'SOTA Hybrid': 93.5, PatchTST: 95.2 },
   { month: 'Aug', 'CNN-BiLSTM': 94.8, 'SOTA Hybrid': 94.2, PatchTST: 95.8 },
@@ -100,6 +110,20 @@ function getHeatColor(value: number): string {
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    analyticsApi
+      .getSummary()
+      .then((data) => setAnalytics(data as unknown as AnalyticsData))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const bestModel = analytics?.models_used
+    ? Object.entries(analytics.models_used).sort((a, b) => b[1] - a[1])[0]
+    : null;
 
   return (
     <AppLayout>
@@ -119,30 +143,30 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
             {
-              label: 'Avg Daily Consumption',
-              value: '4,280 Wh',
-              trend: '-3.2%',
+              label: 'Avg Peak Power',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (analytics?.avg_peak_power ? `${analytics.avg_peak_power.toFixed(2)} kW` : '—'),
+              trend: 'Global Active Power',
               icon: Activity,
               positive: true,
             },
             {
-              label: 'Best Model',
-              value: 'PatchTST',
-              trend: '97.1% acc',
+              label: 'Most Used Model',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (bestModel ? bestModel[0] : '—'),
+              trend: bestModel ? `${bestModel[1]} runs` : '—',
               icon: Target,
               positive: true,
             },
             {
-              label: 'Peak Hour',
-              value: '18:00',
-              trend: '5,120 Wh avg',
+              label: 'Active Alerts',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (analytics ? analytics.unacknowledged_alerts.toString() : '—'),
+              trend: analytics ? `${analytics.total_alerts} total` : '—',
               icon: TrendingUp,
               positive: false,
             },
             {
               label: 'Total Forecasts',
-              value: '156',
-              trend: '+12 this week',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (analytics ? analytics.total_forecasts.toString() : '—'),
+              trend: 'All time',
               icon: Layers,
               positive: true,
             },

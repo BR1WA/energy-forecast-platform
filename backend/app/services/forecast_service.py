@@ -97,16 +97,42 @@ class ForecastService:
                 self.scaler = None
 
     def _load_samples(self):
-        """Load pre-generated test samples for quick demo."""
+        """Load pre-generated test samples (CSV) for quick demo."""
+        import pandas as pd
+        
         samples_dir = Path(settings.MODELS_DIR).resolve().parent / "app_forecast" / "samples"
         if samples_dir.exists():
-            for sample_file in sorted(samples_dir.glob("*.npz")):
-                data = np.load(str(sample_file), allow_pickle=True)
-                name = sample_file.stem
-                self.samples[name] = {
-                    'targets': data['targets'],     # [96, 7]
-                    'calendar': data['calendar'],   # [96, 6]
-                }
+            for sample_file in sorted(samples_dir.glob("*.csv")):
+                if sample_file.name == "sample_metadata.csv":
+                    continue
+                try:
+                    df = pd.read_csv(sample_file, index_col=0, parse_dates=True)
+                    # Take only the last 96 rows for inference
+                    df = df.tail(96)
+                    targets = df[TARGET_COLS].values.astype(np.float32)
+                    
+                    # Generate calendar features
+                    hours = df.index.hour.values
+                    days = df.index.dayofweek.values
+                    months = df.index.month.values
+                    
+                    hour_sin = np.sin(2 * np.pi * hours / 24.0)
+                    hour_cos = np.cos(2 * np.pi * hours / 24.0)
+                    day_sin = np.sin(2 * np.pi * days / 7.0)
+                    day_cos = np.cos(2 * np.pi * days / 7.0)
+                    month_sin = np.sin(2 * np.pi * months / 12.0)
+                    month_cos = np.cos(2 * np.pi * months / 12.0)
+                    
+                    calendar = np.stack([hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos], axis=1).astype(np.float32)
+                    
+                    name = sample_file.stem
+                    self.samples[name] = {
+                        'targets': targets,     # [96, 7]
+                        'calendar': calendar,   # [96, 6]
+                    }
+                except Exception as e:
+                    print(f"[ML] Error loading sample {sample_file.name}: {e}")
+                    
             print(f"[ML] Loaded {len(self.samples)} sample datasets")
 
     def get_available_models(self) -> List[dict]:

@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UML Diagrams - Energy Forecasting Platform</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 40px auto;
+            max-width: 1200px;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #1e3a8a;
+            margin-bottom: 40px;
+        }
+        .diagram-container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 40px;
+        }
+        h2 {
+            color: #2563eb;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>UML Diagrams - Energy Forecasting Platform</h1>
+
+    <div class="diagram-container">
+        <h2>1. Use Case Diagram</h2>
+        <div class="mermaid">
+graph TB
+    subgraph System["Energy Forecasting Platform"]
+        UC1["Login / Register"]
+        UC2["View Dashboard"]
+        UC3["Run Forecast"]
+        UC4["Compare Models"]
+        UC5["View Analytics"]
+        UC6["Configure Alerts"]
+        UC7["View Alert History"]
+        UC8["Manage Users"]
+        UC9["Monitor System Health"]
+        UC10["View Model Registry"]
+        UC11["Upload Custom Data"]
+        UC12["Export Forecast Results"]
+    end
+
+    Viewer["👤 Viewer"]
+    Analyst["👤 Analyst"]
+    Admin["👤 Administrator"]
+
+    Viewer --> UC1
+    Viewer --> UC2
+    Viewer --> UC3
+    Viewer --> UC5
+    Viewer --> UC7
+
+    Analyst --> UC1
+    Analyst --> UC2
+    Analyst --> UC3
+    Analyst --> UC4
+    Analyst --> UC5
+    Analyst --> UC6
+    Analyst --> UC7
+    Analyst --> UC11
+    Analyst --> UC12
+
+    Admin --> UC1
+    Admin --> UC2
+    Admin --> UC3
+    Admin --> UC4
+    Admin --> UC5
+    Admin --> UC6
+    Admin --> UC7
+    Admin --> UC8
+    Admin --> UC9
+    Admin --> UC10
+    Admin --> UC11
+    Admin --> UC12
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <h2>2. Class Diagram</h2>
+        <div class="mermaid">
+classDiagram
+    class User {
+        +int id
+        +string email
+        +string password_hash
+        +string full_name
+        +UserRole role
+        +bool is_active
+        +datetime created_at
+        +datetime last_login
+        +register()
+        +login()
+        +refresh_token()
+    }
+
+    class Forecast {
+        +int id
+        +int user_id
+        +string model_name
+        +datetime input_start
+        +datetime input_end
+        +json predictions
+        +json metrics
+        +datetime created_at
+    }
+
+    class Alert {
+        +int id
+        +int user_id
+        +int forecast_id
+        +string alert_type
+        +string severity
+        +string message
+        +float peak_kw
+        +bool is_acknowledged
+        +datetime created_at
+        +acknowledge()
+    }
+
+    class AlertConfig {
+        +int id
+        +int user_id
+        +float threshold_kw
+        +bool email_enabled
+        +datetime created_at
+        +update_threshold()
+    }
+
+    class ModelRegistry {
+        +int id
+        +string name
+        +string display_name
+        +string version
+        +string weights_path
+        +string architecture_type
+        +json training_metrics
+        +bool is_active
+        +datetime deployed_at
+    }
+
+    class ForecastService {
+        -dict models
+        -StandardScaler scaler
+        -dict samples
+        +load_models()
+        +predict(model_name, targets, calendar)
+        +predict_comparison(targets, calendar)
+        +check_alerts(predictions, threshold)
+        +get_available_models()
+    }
+
+    class AuthService {
+        +hash_password(password)
+        +verify_password(plain, hashed)
+        +create_access_token(data)
+        +create_refresh_token(data)
+        +decode_token(token)
+        +get_current_user(token)
+        +require_role(roles)
+        +authenticate_user(email, password)
+    }
+
+    class PatchTST {
+        +int num_targets
+        +int patch_len
+        +int stride
+        +int d_model
+        +int num_patches
+        +RevIN revin
+        +Linear patch_embedding
+        +TransformerEncoder transformer_encoder
+        +Sequential prediction_head
+        +forward(x_targets, x_calendar)
+    }
+
+    class SOTAForecastingModel {
+        +int num_targets
+        +int patch_len_1
+        +int patch_len_2
+        +RevIN revin
+        +GRU gru
+        +TransformerEncoder transformer
+        +TransformerEncoder cross_var_attn
+        +Linear predict_head
+        +forward(x_targets, x_calendar)
+    }
+
+    class CNN_BiLSTM {
+        +int num_targets
+        +int forecast_horizon
+        +Sequential cnn
+        +LSTM lstm
+        +Sequential fc
+        +forward(x_targets)
+    }
+
+    class RevIN {
+        +int num_features
+        +float eps
+        +Parameter affine_weight
+        +Parameter affine_bias
+        +forward(x, mode, mean, stdev)
+    }
+
+    User "1" --> "*" Forecast : creates
+    User "1" --> "*" Alert : receives
+    User "1" --> "0..1" AlertConfig : configures
+    Forecast "1" --> "*" Alert : triggers
+    ForecastService --> PatchTST : uses
+    ForecastService --> SOTAForecastingModel : uses
+    ForecastService --> CNN_BiLSTM : uses
+    PatchTST --> RevIN : uses
+    SOTAForecastingModel --> RevIN : uses
+
+    class UserRole {
+        &lt;&lt;enumeration&gt;&gt;
+        ADMIN
+        ANALYST
+        VIEWER
+    }
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <h2>3. Sequence Diagram — Forecast Request</h2>
+        <div class="mermaid">
+sequenceDiagram
+    actor User
+    participant Frontend as Next.js Frontend
+    participant API as FastAPI Backend
+    participant Auth as AuthService
+    participant DB as PostgreSQL
+    participant ML as ForecastService
+    participant Model as PatchTST / SOTA / CNN
+
+    User->>Frontend: Select model + input data
+    Frontend->>API: POST /api/v1/forecast/predict<br/>{model_name, data}
+    API->>Auth: Validate JWT token
+    Auth->>DB: Query user by ID
+    DB-->>Auth: User record
+    Auth-->>API: Authenticated User
+
+    API->>ML: predict(model_name, targets, calendar)
+    ML->>Model: forward(x_targets, x_calendar)
+    Note over Model: RevIN → Patching → Transformer → Predict → RevIN⁻¹
+    Model-->>ML: predictions [24, 7]
+    ML->>ML: check_alerts(predictions, threshold)
+    ML-->>API: predictions + alerts
+
+    API->>DB: INSERT forecast record
+    API->>DB: INSERT alert records (if any)
+    DB-->>API: Saved
+
+    API-->>Frontend: ForecastResponse<br/>{predictions, labels, alerts}
+    Frontend-->>User: Render interactive chart + alerts
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <h2>4. Sequence Diagram — Authentication Flow</h2>
+        <div class="mermaid">
+sequenceDiagram
+    actor User
+    participant Frontend as Next.js Frontend
+    participant API as FastAPI Backend
+    participant Auth as AuthService
+    participant DB as PostgreSQL
+
+    Note over User, DB: Registration Flow
+    User->>Frontend: Fill registration form
+    Frontend->>API: POST /api/v1/auth/register<br/>{email, password, full_name}
+    API->>DB: Check email uniqueness
+    DB-->>API: No conflict
+    API->>Auth: hash_password(password)
+    Auth-->>API: bcrypt hash
+    API->>DB: INSERT user
+    DB-->>API: User created
+    API->>Auth: create_access_token + create_refresh_token
+    Auth-->>API: JWT tokens
+    API-->>Frontend: {access_token, refresh_token, user}
+    Frontend->>Frontend: Store tokens in localStorage
+    Frontend-->>User: Redirect to Dashboard
+
+    Note over User, DB: Login Flow
+    User->>Frontend: Enter email + password
+    Frontend->>API: POST /api/v1/auth/login
+    API->>Auth: authenticate_user(email, password)
+    Auth->>DB: Query user by email
+    DB-->>Auth: User record
+    Auth->>Auth: bcrypt.checkpw(password, hash)
+    Auth-->>API: Authenticated user
+    API->>Auth: create_access_token + create_refresh_token
+    Auth-->>API: JWT tokens
+    API-->>Frontend: TokenResponse
+    Frontend-->>User: Redirect to Dashboard
+
+    Note over User, DB: Token Refresh
+    Frontend->>API: POST /api/v1/auth/refresh<br/>{refresh_token}
+    API->>Auth: decode_token(refresh_token)
+    Auth-->>API: Payload (user_id, type=refresh)
+    API->>Auth: create_access_token(user_id)
+    Auth-->>API: New access token
+    API-->>Frontend: {access_token}
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <h2>5. Deployment Diagram</h2>
+        <div class="mermaid">
+graph TB
+    subgraph Client["Client Browser"]
+        Browser["Web Browser<br/>(Chrome, Firefox, Safari)"]
+    end
+
+    subgraph DockerHost["Docker Host (Production)"]
+        subgraph FrontendContainer["Frontend Container :3000"]
+            NextJS["Next.js 14<br/>+ shadcn/ui<br/>+ Recharts"]
+        end
+
+        subgraph BackendContainer["Backend Container :8000"]
+            FastAPI["FastAPI Server<br/>+ Uvicorn ASGI"]
+            MLService["ML Inference Service"]
+            JWTAuth["JWT Auth + RBAC"]
+        end
+
+        subgraph DBContainer["Database Container :5432"]
+            Postgres["PostgreSQL 16"]
+        end
+
+        subgraph ModelVolume["Shared Volume: /models"]
+            PatchTST_W["patchtst_weights.pth<br/>1.7 MB"]
+            SOTA_W["sota_model_weights.pth<br/>4.9 MB"]
+            CNN_W["cnn_bilstm_baseline.pth<br/>0.8 MB"]
+        end
+    end
+
+    Browser -->|HTTPS :443| NextJS
+    NextJS -->|REST API :8000| FastAPI
+    FastAPI --> MLService
+    FastAPI --> JWTAuth
+    FastAPI -->|SQLAlchemy ORM| Postgres
+    MLService -->|PyTorch| ModelVolume
+
+    style FrontendContainer fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style BackendContainer fill:#1a3329,stroke:#10b981,color:#e2e8f0
+    style DBContainer fill:#3b1f2b,stroke:#ef4444,color:#e2e8f0
+    style ModelVolume fill:#2d1f4e,stroke:#8b5cf6,color:#e2e8f0
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <h2>6. Activity Diagram — Forecasting Workflow</h2>
+        <div class="mermaid">
+flowchart TD
+    A([Start]) --> B{Authenticated?}
+    B -->|No| C[Redirect to Login]
+    C --> D[Enter Credentials]
+    D --> E{Valid?}
+    E -->|No| D
+    E -->|Yes| F[Dashboard]
+    B -->|Yes| F
+
+    F --> G[Navigate to Forecast Page]
+    G --> H{Data Source?}
+
+    H -->|Sample| I[Select Sample Dataset]
+    H -->|Upload| J[Upload CSV File]
+    H -->|Custom| K[Enter Manual Data]
+
+    I --> L[Select Model]
+    J --> L
+    K --> L
+
+    L --> M{Model Selection}
+    M -->|Single| N[Run Single Model]
+    M -->|Compare| O[Run All 3 Models]
+
+    N --> P[Display Forecast Chart]
+    O --> Q[Display 3-Way Comparison]
+
+    P --> R{Peak Alert?}
+    Q --> R
+
+    R -->|Yes| S[Show Alert Notification]
+    R -->|No| T[Show Normal Results]
+
+    S --> U[View Sub-Metering Breakdown]
+    T --> U
+
+    U --> V[View Cost Estimate]
+    V --> W[Export / Save Results]
+    W --> X([End])
+
+    style A fill:#10b981,stroke:#059669,color:white
+    style X fill:#ef4444,stroke:#dc2626,color:white
+    style S fill:#f59e0b,stroke:#d97706,color:white
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <h2>7. Entity-Relationship Diagram</h2>
+        <div class="mermaid">
+erDiagram
+    USERS {
+        int id PK
+        varchar email UK
+        varchar password_hash
+        varchar full_name
+        varchar role
+        boolean is_active
+        timestamp created_at
+        timestamp last_login
+    }
+
+    FORECASTS {
+        int id PK
+        int user_id FK
+        varchar model_name
+        timestamp input_start
+        timestamp input_end
+        json predictions
+        json metrics
+        timestamp created_at
+    }
+
+    ALERTS {
+        int id PK
+        int user_id FK
+        int forecast_id FK
+        varchar alert_type
+        varchar severity
+        text message
+        float peak_kw
+        boolean is_acknowledged
+        timestamp created_at
+    }
+
+    ALERT_CONFIGS {
+        int id PK
+        int user_id FK
+        float threshold_kw
+        boolean email_enabled
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    MODEL_REGISTRY {
+        int id PK
+        varchar name UK
+        varchar display_name
+        varchar version
+        varchar weights_path
+        varchar architecture_type
+        text description
+        json training_metrics
+        boolean is_active
+        timestamp deployed_at
+    }
+
+    USERS ||--o{ FORECASTS : "creates"
+    USERS ||--o{ ALERTS : "receives"
+    USERS ||--o| ALERT_CONFIGS : "configures"
+    FORECASTS ||--o{ ALERTS : "triggers"
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <h2>8. Component Diagram</h2>
+        <div class="mermaid">
+graph TB
+    subgraph Presentation["Presentation Layer (Next.js)"]
+        LoginPage["Login / Register"]
+        Dashboard["Dashboard"]
+        ForecastPage["Forecast Page"]
+        AnalyticsPage["Analytics"]
+        AlertsPage["Alerts"]
+        AdminPanel["Admin Panel"]
+    end
+
+    subgraph APILayer["API Layer (FastAPI)"]
+        AuthRouter["Auth Router<br/>/api/v1/auth/*"]
+        ForecastRouter["Forecast Router<br/>/api/v1/forecast/*"]
+        AlertRouter["Alert Router<br/>/api/v1/alerts/*"]
+        AnalyticsRouter["Analytics Router<br/>/api/v1/analytics/*"]
+        AdminRouter["Admin Router<br/>/api/v1/admin/*"]
+    end
+
+    subgraph ServiceLayer["Service Layer"]
+        AuthSvc["AuthService<br/>JWT + bcrypt"]
+        ForecastSvc["ForecastService<br/>Model Inference"]
+        AlertSvc["AlertService<br/>Threshold Detection"]
+    end
+
+    subgraph MLLayer["ML Layer (PyTorch)"]
+        PatchTST_M["PatchTST<br/>Pure Transformer"]
+        SOTA_M["SOTA Hybrid<br/>BiGRU + Attention"]
+        CNN_M["CNN-BiLSTM<br/>Baseline"]
+        RevINM["RevIN<br/>Normalization"]
+    end
+
+    subgraph DataLayer["Data Layer"]
+        ORM["SQLAlchemy ORM"]
+        PG["PostgreSQL 16"]
+    end
+
+    LoginPage --> AuthRouter
+    Dashboard --> AnalyticsRouter
+    ForecastPage --> ForecastRouter
+    AlertsPage --> AlertRouter
+    AdminPanel --> AdminRouter
+
+    AuthRouter --> AuthSvc
+    ForecastRouter --> ForecastSvc
+    AlertRouter --> AlertSvc
+    AnalyticsRouter --> ORM
+    AdminRouter --> AuthSvc
+
+    ForecastSvc --> PatchTST_M
+    ForecastSvc --> SOTA_M
+    ForecastSvc --> CNN_M
+    PatchTST_M --> RevINM
+    SOTA_M --> RevINM
+
+    AuthSvc --> ORM
+    ForecastSvc --> ORM
+    AlertSvc --> ORM
+    ORM --> PG
+
+    style Presentation fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style APILayer fill:#1f2937,stroke:#6366f1,color:#e2e8f0
+    style ServiceLayer fill:#1a3329,stroke:#10b981,color:#e2e8f0
+    style MLLayer fill:#3b1f2b,stroke:#e63946,color:#e2e8f0
+    style DataLayer fill:#2d1f4e,stroke:#8b5cf6,color:#e2e8f0
+        </div>
+    </div>
+</body>
+</html>

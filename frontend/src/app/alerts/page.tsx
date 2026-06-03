@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,73 +27,12 @@ import {
   TrendingUp,
   ShieldAlert,
   Save,
+  Loader2,
 } from 'lucide-react';
+import { alertsApi } from '@/lib/api';
+import { Alert } from '@/types';
 
-// Demo alerts
-const demoAlerts = [
-  {
-    id: '1',
-    type: 'high_consumption',
-    severity: 'high' as const,
-    title: 'High Energy Consumption Detected',
-    message:
-      'Energy consumption exceeded 5000 Wh threshold at 18:00. Current reading: 5,340 Wh.',
-    is_read: false,
-    created_at: '10 minutes ago',
-  },
-  {
-    id: '2',
-    type: 'anomaly',
-    severity: 'critical' as const,
-    title: 'Anomalous Pattern Detected',
-    message:
-      'Unusual spike in consumption detected between 02:00-04:00. Pattern deviates 45% from baseline.',
-    is_read: false,
-    created_at: '1 hour ago',
-  },
-  {
-    id: '3',
-    type: 'threshold',
-    severity: 'medium' as const,
-    title: 'Approaching Daily Limit',
-    message:
-      'Daily consumption is at 85% of your configured threshold. Estimated to exceed by 20:00.',
-    is_read: false,
-    created_at: '3 hours ago',
-  },
-  {
-    id: '4',
-    type: 'system',
-    severity: 'low' as const,
-    title: 'Model Training Complete',
-    message:
-      'PatchTST model has completed retraining with latest data. New accuracy: 97.3%.',
-    is_read: true,
-    created_at: '6 hours ago',
-  },
-  {
-    id: '5',
-    type: 'high_consumption',
-    severity: 'medium' as const,
-    title: 'Weekly Consumption Above Average',
-    message:
-      'This week\'s total consumption is 12% above the 4-week rolling average.',
-    is_read: true,
-    created_at: '1 day ago',
-  },
-  {
-    id: '6',
-    type: 'system',
-    severity: 'low' as const,
-    title: 'Forecast Accuracy Improved',
-    message:
-      'CNN-BiLSTM model accuracy improved from 95.8% to 96.2% after latest data incorporation.',
-    is_read: true,
-    created_at: '2 days ago',
-  },
-];
-
-const severityConfig = {
+const severityConfig: Record<string, any> = {
   critical: {
     color: 'text-red-400',
     bg: 'bg-red-500/10',
@@ -126,17 +65,65 @@ const severityConfig = {
 
 export default function AlertsPage() {
   const [filter, setFilter] = useState('all');
-  const [threshold, setThreshold] = useState('5000');
+  const [threshold, setThreshold] = useState('3.0');
   const [sensitivity, setSensitivity] = useState('medium');
-  const [alerts] = useState(demoAlerts);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchAlertsAndConfig = async () => {
+      try {
+        const [fetchedAlerts] = await Promise.all([
+          alertsApi.getAlerts(),
+        ]);
+        // Sort by created_at desc
+        const sorted = fetchedAlerts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setAlerts(sorted);
+      } catch (err) {
+        console.error('Failed to fetch alerts', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAlertsAndConfig();
+  }, []);
+
+  const handleAcknowledge = async (id: string) => {
+    try {
+      await alertsApi.acknowledgeAlert(id);
+      setAlerts((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, is_read: true, is_acknowledged: true } : a))
+      );
+    } catch (err) {
+      console.error('Failed to acknowledge alert', err);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setSaving(true);
+    try {
+      await alertsApi.configureAlerts({
+        high_consumption_threshold: parseFloat(threshold),
+        anomaly_sensitivity: sensitivity as 'low' | 'medium' | 'high',
+        notification_email: true,
+        notification_push: true,
+      });
+      // Could show a toast here
+    } catch (err) {
+      console.error('Failed to save config', err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const filteredAlerts = alerts.filter((a) => {
     if (filter === 'all') return true;
-    if (filter === 'unread') return !a.is_read;
+    if (filter === 'unread') return !a.is_read && !(a as any).is_acknowledged;
     return a.severity === filter;
   });
 
-  const unreadCount = alerts.filter((a) => !a.is_read).length;
+  const unreadCount = alerts.filter((a) => !a.is_read && !(a as any).is_acknowledged).length;
 
   return (
     <AppLayout>
@@ -193,64 +180,72 @@ export default function AlertsPage() {
 
             {/* Alert Items */}
             <div className="space-y-3">
-              {filteredAlerts.map((alert) => {
-                const config = severityConfig[alert.severity];
-                const Icon = config.icon;
-                return (
-                  <Card
-                    key={alert.id}
-                    id={`alert-${alert.id}`}
-                    className={`glass-card border-white/[0.06] transition-all duration-200 hover:border-white/[0.1] ${
-                      !alert.is_read ? 'ring-1 ring-blue-500/10' : ''
-                    }`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex gap-3">
-                        <div
-                          className={`flex items-center justify-center w-10 h-10 rounded-xl ${config.bg} shrink-0`}
-                        >
-                          <Icon className={`w-5 h-5 ${config.color}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="text-sm font-semibold text-white">
-                                  {alert.title}
-                                </h3>
-                                {!alert.is_read && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                                )}
+              {loading ? (
+                <div className="flex justify-center p-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+                </div>
+              ) : filteredAlerts.length > 0 ? (
+                filteredAlerts.map((alert) => {
+                  const config = severityConfig[alert.severity] || severityConfig.medium;
+                  const Icon = config.icon;
+                  const isRead = alert.is_read || (alert as any).is_acknowledged;
+                  return (
+                    <Card
+                      key={alert.id}
+                      id={`alert-${alert.id}`}
+                      className={`glass-card border-white/[0.06] transition-all duration-200 hover:border-white/[0.1] ${
+                        !isRead ? 'ring-1 ring-blue-500/10' : ''
+                      }`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex gap-3">
+                          <div
+                            className={`flex items-center justify-center w-10 h-10 rounded-xl ${config.bg} shrink-0`}
+                          >
+                            <Icon className={`w-5 h-5 ${config.color}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-sm font-semibold text-white">
+                                    {alert.title || alert.type.replace(/_/g, ' ').toUpperCase()}
+                                  </h3>
+                                  {!isRead && (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                  )}
+                                </div>
+                                <p className="text-sm text-slate-400 mt-1">
+                                  {alert.message}
+                                </p>
                               </div>
-                              <p className="text-sm text-slate-400 mt-1">
-                                {alert.message}
-                              </p>
+                              <Badge
+                                variant="outline"
+                                className={`${config.badge} text-[10px] uppercase shrink-0`}
+                              >
+                                {alert.severity}
+                              </Badge>
                             </div>
-                            <Badge
-                              variant="outline"
-                              className={`${config.badge} text-[10px] uppercase shrink-0`}
-                            >
-                              {alert.severity}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-3 mt-3">
-                            <span className="text-xs text-slate-500">
-                              {alert.created_at}
-                            </span>
-                            {!alert.is_read && (
-                              <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                                Mark as read
-                              </button>
-                            )}
+                            <div className="flex items-center gap-3 mt-3">
+                              <span className="text-xs text-slate-500">
+                                {new Date(alert.created_at).toLocaleString()}
+                              </span>
+                              {!isRead && (
+                                <button
+                                  onClick={() => handleAcknowledge(alert.id)}
+                                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                >
+                                  Mark as read
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-
-              {filteredAlerts.length === 0 && (
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              ) : (
                 <Card className="glass-card border-white/[0.06]">
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-3" />
@@ -280,11 +275,12 @@ export default function AlertsPage() {
                 <div className="space-y-2">
                   <Label className="text-xs text-slate-300 flex items-center gap-2">
                     <Zap className="w-3 h-3 text-amber-400" />
-                    High Consumption Threshold (Wh)
+                    High Consumption Threshold (kW)
                   </Label>
                   <Input
                     id="threshold-input"
                     type="number"
+                    step="0.1"
                     value={threshold}
                     onChange={(e) => setThreshold(e.target.value)}
                     className="bg-white/[0.04] border-white/[0.08] text-white h-10"
@@ -358,9 +354,11 @@ export default function AlertsPage() {
 
                 <Button
                   id="save-alert-config"
+                  onClick={handleSaveConfig}
+                  disabled={saving}
                   className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white"
                 >
-                  <Save className="w-4 h-4 mr-2" />
+                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                   Save Configuration
                 </Button>
               </CardContent>

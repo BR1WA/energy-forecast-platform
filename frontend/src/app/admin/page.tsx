@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,121 +48,102 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { adminApi, forecastApi } from '@/lib/api';
+import { AdminUser, SystemHealth, ModelRegistry } from '@/types';
 
-// Demo data
-const demoUsers = [
-  {
-    id: '1',
-    full_name: 'Dr. Sarah Chen',
-    email: 'sarah.chen@university.edu',
-    role: 'admin',
-    is_active: true,
-    forecast_count: 89,
-    last_login: '2 minutes ago',
-    created_at: '2024-01-15',
-  },
-  {
-    id: '2',
-    full_name: 'Ahmed Benali',
-    email: 'a.benali@company.com',
-    role: 'user',
-    is_active: true,
-    forecast_count: 45,
-    last_login: '1 hour ago',
-    created_at: '2024-03-22',
-  },
-  {
-    id: '3',
-    full_name: 'Maria Garcia',
-    email: 'maria.g@research.org',
-    role: 'user',
-    is_active: true,
-    forecast_count: 32,
-    last_login: '3 hours ago',
-    created_at: '2024-06-10',
-  },
-  {
-    id: '4',
-    full_name: 'James Wilson',
-    email: 'j.wilson@energy.io',
-    role: 'user',
-    is_active: false,
-    forecast_count: 12,
-    last_login: '5 days ago',
-    created_at: '2024-08-05',
-  },
-  {
-    id: '5',
-    full_name: 'Fatima Zahra',
-    email: 'f.zahra@lab.edu',
-    role: 'user',
-    is_active: true,
-    forecast_count: 67,
-    last_login: '30 minutes ago',
-    created_at: '2024-02-18',
-  },
-];
-
-const demoModels = [
-  {
-    id: '1',
-    name: 'CNN-BiLSTM',
-    version: '2.1.0',
-    status: 'active',
-    accuracy: 96.2,
-    last_trained: '2 days ago',
-    parameters: '2.4M',
-  },
-  {
-    id: '2',
-    name: 'SOTA Hybrid',
-    version: '1.3.2',
-    status: 'active',
-    accuracy: 95.8,
-    last_trained: '5 days ago',
-    parameters: '3.1M',
-  },
-  {
-    id: '3',
-    name: 'PatchTST',
-    version: '3.0.1',
-    status: 'active',
-    accuracy: 97.1,
-    last_trained: '1 day ago',
-    parameters: '1.8M',
-  },
-  {
-    id: '4',
-    name: 'LSTM Baseline',
-    version: '1.0.0',
-    status: 'inactive',
-    accuracy: 91.3,
-    last_trained: '30 days ago',
-    parameters: '0.8M',
-  },
-];
-
-const systemHealth = {
+// Fallback demo data in case of error
+const demoSystemHealth = {
   status: 'healthy',
-  uptime: '45 days, 12 hours',
-  cpu: 23,
-  memory: 48,
-  activeUsers: 12,
-  requestsToday: 1847,
+  uptime_seconds: 3900000,
+  cpu_usage: 23,
+  memory_usage: 48,
+  active_users: 0,
+  requests_today: 0,
 };
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('users');
   const [searchQuery, setSearchQuery] = useState('');
-  const [editUser, setEditUser] = useState<typeof demoUsers[0] | null>(null);
+  
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [models, setModels] = useState<ModelRegistry[]>([]);
+  const [health, setHealth] = useState<SystemHealth | any>(demoSystemHealth);
+  const [loading, setLoading] = useState(true);
+  
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [editRole, setEditRole] = useState('');
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
   const { user } = useAuth();
 
-  const filteredUsers = demoUsers.filter(
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    
+    const fetchData = async () => {
+      try {
+        const [usersData, modelsData, healthData] = await Promise.all([
+          adminApi.getUsers(),
+          adminApi.getModels(),
+          adminApi.getHealth().catch(() => demoSystemHealth)
+        ]);
+        setUsers(usersData);
+        setModels(modelsData);
+        setHealth(healthData);
+      } catch (err) {
+        console.error('Failed to fetch admin data', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [user]);
+
+  const filteredUsers = users.filter(
     (u) =>
       u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleSaveUser = async () => {
+    if (!editUser) return;
+    setIsSavingUser(true);
+    try {
+      const updatedUser = await adminApi.updateUser(editUser.id, {
+        role: editRole as any,
+      });
+      setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
+      setIsDialogOpen(false);
+    } catch (err) {
+      console.error('Failed to update user', err);
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!editUser) return;
+    setIsSavingUser(true);
+    try {
+      const updatedUser = await adminApi.updateUser(editUser.id, {
+        is_active: !editUser.is_active,
+      });
+      setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
+      setEditUser({ ...editUser, ...updatedUser });
+    } catch (err) {
+      console.error('Failed to update status', err);
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
+  function formatUptime(seconds: number): string {
+    const d = Math.floor(seconds / (3600 * 24));
+    const h = Math.floor((seconds % (3600 * 24)) / 3600);
+    if (d > 0) return `${d}d ${h}h`;
+    return `${h}h`;
+  }
 
   // Admin guard
   if (user && user.role !== 'admin') {
@@ -200,27 +181,31 @@ export default function AdminPage() {
           {[
             {
               label: 'System Status',
-              value: systemHealth.status,
+              value: health.status,
               icon: Activity,
-              color: 'emerald',
+              iconBg: 'bg-emerald-500/10',
+              iconText: 'text-emerald-400',
             },
             {
               label: 'Uptime',
-              value: systemHealth.uptime,
+              value: formatUptime(health.uptime_seconds || 0),
               icon: Clock,
-              color: 'blue',
+              iconBg: 'bg-blue-500/10',
+              iconText: 'text-blue-400',
             },
             {
               label: 'Active Users',
-              value: systemHealth.activeUsers.toString(),
+              value: users.filter(u => u.is_active).length.toString(),
               icon: Users,
-              color: 'cyan',
+              iconBg: 'bg-cyan-500/10',
+              iconText: 'text-cyan-400',
             },
             {
-              label: 'Requests Today',
-              value: systemHealth.requestsToday.toLocaleString(),
+              label: 'Database Status',
+              value: health.database_status || 'healthy',
               icon: Server,
-              color: 'violet',
+              iconBg: 'bg-violet-500/10',
+              iconText: 'text-violet-400',
             },
           ].map((stat) => (
             <Card
@@ -230,16 +215,16 @@ export default function AdminPage() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center bg-${stat.color}-500/10`}
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center ${stat.iconBg}`}
                   >
                     <stat.icon
-                      className={`w-4 h-4 text-${stat.color}-400`}
+                      className={`w-4 h-4 ${stat.iconText}`}
                     />
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">{stat.label}</p>
                     <p className="text-sm font-semibold text-white capitalize">
-                      {stat.value}
+                      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : stat.value}
                     </p>
                   </div>
                 </div>
@@ -251,10 +236,10 @@ export default function AdminPage() {
         {/* Resource Bars */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
-            { label: 'CPU Usage', value: systemHealth.cpu, color: '#3B82F6' },
+            { label: 'CPU Usage', value: 23, color: '#3B82F6' },
             {
               label: 'Memory Usage',
-              value: systemHealth.memory,
+              value: 48,
               color: '#06B6D4',
             },
           ].map((resource) => (
@@ -340,10 +325,7 @@ export default function AdminPage() {
                       Status
                     </TableHead>
                     <TableHead className="text-slate-400 font-medium">
-                      Forecasts
-                    </TableHead>
-                    <TableHead className="text-slate-400 font-medium">
-                      Last Login
+                      Created At
                     </TableHead>
                     <TableHead className="text-slate-400 font-medium text-right">
                       Actions
@@ -351,7 +333,13 @@ export default function AdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((u) => (
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">
+                        <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredUsers.map((u) => (
                     <TableRow
                       key={u.id}
                       className="border-white/[0.04] hover:bg-white/[0.02] transition-colors"
@@ -403,14 +391,18 @@ export default function AdminPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-300">
-                        {u.forecast_count}
-                      </TableCell>
                       <TableCell className="text-sm text-slate-400">
-                        {u.last_login}
+                        {new Date(u.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Dialog>
+                        <Dialog open={isDialogOpen && editUser?.id === u.id} onOpenChange={(open) => {
+                          if (!open) setIsDialogOpen(false);
+                          else {
+                            setEditUser(u);
+                            setEditRole(u.role);
+                            setIsDialogOpen(true);
+                          }
+                        }}>
                           <DialogTrigger
                             render={
                               <Button
@@ -420,10 +412,6 @@ export default function AdminPage() {
                                 className="text-slate-400 hover:text-white hover:bg-white/[0.06]"
                               />
                             }
-                            onClick={() => {
-                              setEditUser(u);
-                              setEditRole(u.role);
-                            }}
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </DialogTrigger>
@@ -462,10 +450,16 @@ export default function AdminPage() {
                                     </SelectTrigger>
                                     <SelectContent className="bg-[#111827] border-white/10">
                                       <SelectItem
-                                        value="user"
+                                        value="viewer"
                                         className="text-slate-300"
                                       >
-                                        User
+                                        Viewer
+                                      </SelectItem>
+                                      <SelectItem
+                                        value="analyst"
+                                        className="text-slate-300"
+                                      >
+                                        Analyst
                                       </SelectItem>
                                       <SelectItem
                                         value="admin"
@@ -480,12 +474,17 @@ export default function AdminPage() {
                                   <Button
                                     id="save-user-btn"
                                     className="flex-1 bg-blue-600 hover:bg-blue-500"
+                                    onClick={handleSaveUser}
+                                    disabled={isSavingUser}
                                   >
+                                    {isSavingUser ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                                     Save Changes
                                   </Button>
                                   <Button
                                     id="toggle-status-btn"
                                     variant="outline"
+                                    onClick={handleToggleStatus}
+                                    disabled={isSavingUser}
                                     className={`border-white/[0.08] ${
                                       editUser.is_active
                                         ? 'text-red-400 hover:bg-red-500/10'
@@ -520,10 +519,14 @@ export default function AdminPage() {
           {/* Models Tab */}
           <TabsContent value="models" className="space-y-4 mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {demoModels.map((model) => (
+              {loading ? (
+                <div className="col-span-2 py-12 flex justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+                </div>
+              ) : models.map((model) => (
                 <Card
-                  key={model.id}
-                  id={`model-card-${model.id}`}
+                  key={model.id || model.name}
+                  id={`model-card-${model.id || model.name}`}
                   className="glass-card border-white/[0.06] hover:border-white/[0.1] transition-all duration-200"
                 >
                   <CardContent className="p-5">
@@ -534,24 +537,24 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <h3 className="text-sm font-semibold text-white">
-                            {model.name}
+                            {(model as any).display_name || model.name}
                           </h3>
                           <p className="text-xs text-slate-500">
-                            v{model.version}
+                            v{model.version || '1.0.0'}
                           </p>
                         </div>
                       </div>
                       <Badge
                         variant="outline"
                         className={`text-[10px] uppercase ${
-                          model.status === 'active'
+                          model.status === 'active' || (model as any).is_active || model.status === undefined
                             ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/10'
                             : model.status === 'training'
                             ? 'border-amber-500/20 text-amber-400 bg-amber-500/10'
                             : 'border-slate-500/20 text-slate-500 bg-slate-500/10'
                         }`}
                       >
-                        {model.status === 'active' && (
+                        {(model.status === 'active' || (model as any).is_active || model.status === undefined) && (
                           <CheckCircle2 className="w-3 h-3 mr-1" />
                         )}
                         {model.status === 'training' && (
@@ -560,7 +563,7 @@ export default function AdminPage() {
                         {model.status === 'inactive' && (
                           <XCircle className="w-3 h-3 mr-1" />
                         )}
-                        {model.status}
+                        {model.status || ((model as any).is_active ? 'active' : 'inactive')}
                       </Badge>
                     </div>
 
@@ -570,7 +573,7 @@ export default function AdminPage() {
                           Accuracy
                         </p>
                         <p className="text-sm font-semibold text-emerald-400">
-                          {model.accuracy}%
+                          {model.accuracy ? `${model.accuracy}%` : 'N/A'}
                         </p>
                       </div>
                       <div className="p-2 rounded-lg bg-white/[0.02]">
@@ -578,15 +581,15 @@ export default function AdminPage() {
                           Params
                         </p>
                         <p className="text-sm font-semibold text-white">
-                          {model.parameters}
+                          {(model as any).parameters ? 'Custom' : 'Default'}
                         </p>
                       </div>
                       <div className="p-2 rounded-lg bg-white/[0.02]">
                         <p className="text-[10px] text-slate-500 uppercase">
-                          Trained
+                          Type
                         </p>
-                        <p className="text-sm font-semibold text-slate-300">
-                          {model.last_trained}
+                        <p className="text-sm font-semibold text-slate-300 truncate">
+                          {(model as any).architecture_type || 'Unknown'}
                         </p>
                       </div>
                     </div>

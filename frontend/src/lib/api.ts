@@ -12,6 +12,7 @@ import type {
   AlertConfig,
   AdminUser,
   ModelRegistry,
+  SystemHealth,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -138,7 +139,7 @@ export const authApi = {
       skipAuth: true,
     }),
 
-  getMe: (): Promise<User> => apiFetch('/api/v1/users/me'),
+  getMe: (): Promise<User> => apiFetch('/api/v1/auth/me'),
 };
 
 // ============================================================
@@ -165,9 +166,10 @@ export const forecastApi = {
       });
     }
 
+    // String = sample name
     return apiFetch('/api/v1/forecast/predict', {
       method: 'POST',
-      body: JSON.stringify({ model_name: modelName, data }),
+      body: JSON.stringify({ model_name: modelName, sample_name: data }),
     });
   },
 
@@ -197,6 +199,12 @@ export const alertsApi = {
       method: 'POST',
       body: JSON.stringify(config),
     }),
+
+  acknowledgeAlert: (alertId: string | number): Promise<void> =>
+    apiFetch('/api/v1/alerts/acknowledge', {
+      method: 'POST',
+      body: JSON.stringify({ alert_id: Number(alertId) }),
+    }),
 };
 
 // ============================================================
@@ -216,6 +224,12 @@ export const adminApi = {
 
   getModels: (): Promise<ModelRegistry[]> =>
     apiFetch('/api/v1/admin/models'),
+
+  getHealth: (): Promise<SystemHealth> =>
+    apiFetch('/api/v1/admin/health'),
+
+  getStats: (): Promise<Record<string, unknown>> =>
+    apiFetch('/api/v1/admin/stats'),
 };
 
 // Export helpers for use in auth context

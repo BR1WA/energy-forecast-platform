@@ -189,6 +189,7 @@ export default function Sidebar() {
           >
             <DropdownMenuItem
               id="menu-settings"
+              onSelect={() => window.location.href = '/dashboard'}
               className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
             >
               <Settings className="w-4 h-4 mr-2" />
@@ -197,7 +198,7 @@ export default function Sidebar() {
             <DropdownMenuSeparator className="bg-white/[0.06]" />
             <DropdownMenuItem
               id="menu-logout"
-              onClick={logout}
+              onSelect={() => logout()}
               className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
             >
               <LogOut className="w-4 h-4 mr-2" />

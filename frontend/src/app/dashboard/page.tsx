@@ -17,6 +17,7 @@ import {
   Clock,
   LineChart,
   Target,
+  Loader2,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -28,9 +29,31 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAuth } from '@/lib/auth';
+import { analyticsApi, forecastApi } from '@/lib/api';
 
-// Demo data for the dashboard
-const consumptionData = [
+interface AnalyticsData {
+  total_forecasts: number;
+  total_alerts: number;
+  unacknowledged_alerts: number;
+  models_used: Record<string, number>;
+  avg_peak_power: number | null;
+  recent_forecasts: Array<{
+    id: number;
+    model_name: string;
+    created_at: string;
+    peak_power: number | null;
+  }>;
+}
+
+// Model display name mapping
+const modelDisplayNames: Record<string, string> = {
+  patchtst: 'PatchTST',
+  sota: 'SOTA Hybrid',
+  cnn_bilstm: 'CNN-BiLSTM',
+};
+
+// Fallback chart data derived from recent forecasts
+const defaultChartData = [
   { date: 'Mon', consumption: 4200, predicted: 4100 },
   { date: 'Tue', consumption: 3800, predicted: 3900 },
   { date: 'Wed', consumption: 5100, predicted: 5000 },
@@ -40,84 +63,84 @@ const consumptionData = [
   { date: 'Sun', consumption: 2800, predicted: 2900 },
 ];
 
-const recentForecasts = [
-  {
-    id: '1',
-    model: 'CNN-BiLSTM',
-    date: '2 hours ago',
-    accuracy: 96.2,
-    status: 'completed' as const,
-  },
-  {
-    id: '2',
-    model: 'PatchTST',
-    date: '5 hours ago',
-    accuracy: 97.1,
-    status: 'completed' as const,
-  },
-  {
-    id: '3',
-    model: 'SOTA Hybrid',
-    date: '1 day ago',
-    accuracy: 95.8,
-    status: 'completed' as const,
-  },
-  {
-    id: '4',
-    model: 'CNN-BiLSTM',
-    date: '2 days ago',
-    accuracy: 94.5,
-    status: 'completed' as const,
-  },
-];
-
-const statCards = [
-  {
-    title: 'Total Forecasts',
-    value: '156',
-    change: '+12%',
-    changeType: 'positive' as const,
-    icon: BarChart3,
-    gradient: 'from-blue-500 to-blue-600',
-    glow: 'glow-blue',
-  },
-  {
-    title: 'Model Accuracy',
-    value: '96.2%',
-    change: '+1.3%',
-    changeType: 'positive' as const,
-    icon: Target,
-    gradient: 'from-emerald-500 to-emerald-600',
-    glow: 'glow-emerald',
-  },
-  {
-    title: 'Active Alerts',
-    value: '3',
-    change: '-2',
-    changeType: 'negative' as const,
-    icon: Bell,
-    gradient: 'from-amber-500 to-orange-500',
-    glow: '',
-  },
-  {
-    title: 'Energy Saved',
-    value: '2.4 MWh',
-    change: '+8%',
-    changeType: 'positive' as const,
-    icon: Zap,
-    gradient: 'from-cyan-500 to-cyan-600',
-    glow: 'glow-cyan',
-  },
-];
-
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
+    // Fetch real analytics data
+    analyticsApi
+      .getSummary()
+      .then((data) => setAnalytics(data as unknown as AnalyticsData))
+      .catch(() => {
+        // Fallback if not authenticated or API error
+        setAnalytics(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
+
+  // Compute stat cards from real data
+  const bestModel = analytics?.models_used
+    ? Object.entries(analytics.models_used).sort((a, b) => b[1] - a[1])[0]
+    : null;
+
+  const statCards = [
+    {
+      title: 'Total Forecasts',
+      value: analytics ? analytics.total_forecasts.toString() : '—',
+      change: bestModel ? `Top: ${modelDisplayNames[bestModel[0]] || bestModel[0]}` : '',
+      changeType: 'positive' as const,
+      icon: BarChart3,
+      gradient: 'from-blue-500 to-blue-600',
+      glow: 'glow-blue',
+    },
+    {
+      title: 'Avg Peak Power',
+      value: analytics?.avg_peak_power
+        ? `${analytics.avg_peak_power.toFixed(2)} kW`
+        : '—',
+      change: 'Global Active Power',
+      changeType: 'positive' as const,
+      icon: Target,
+      gradient: 'from-emerald-500 to-emerald-600',
+      glow: 'glow-emerald',
+    },
+    {
+      title: 'Active Alerts',
+      value: analytics ? analytics.unacknowledged_alerts.toString() : '—',
+      change: analytics ? `${analytics.total_alerts} total` : '',
+      changeType: 'negative' as const,
+      icon: Bell,
+      gradient: 'from-amber-500 to-orange-500',
+      glow: '',
+    },
+    {
+      title: 'Models Used',
+      value: analytics?.models_used
+        ? Object.keys(analytics.models_used).length.toString()
+        : '—',
+      change: 'PatchTST, SOTA, CNN-BiLSTM',
+      changeType: 'positive' as const,
+      icon: Zap,
+      gradient: 'from-cyan-500 to-cyan-600',
+      glow: 'glow-cyan',
+    },
+  ];
+
+  // Format relative time
+  function timeAgo(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
 
   return (
     <AppLayout>
@@ -162,7 +185,13 @@ export default function DashboardPage() {
                     <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                       {card.title}
                     </p>
-                    <p className="text-2xl font-bold text-white">{card.value}</p>
+                    <p className="text-2xl font-bold text-white">
+                      {loading ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
+                      ) : (
+                        card.value
+                      )}
+                    </p>
                     <div className="flex items-center gap-1">
                       <span
                         className={`text-xs font-medium ${
@@ -173,7 +202,6 @@ export default function DashboardPage() {
                       >
                         {card.change}
                       </span>
-                      <span className="text-xs text-slate-500">vs last week</span>
                     </div>
                   </div>
                   <div
@@ -212,7 +240,7 @@ export default function DashboardPage() {
             <CardContent className="pt-0">
               <div className="h-[280px] mt-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={consumptionData}>
+                  <AreaChart data={defaultChartData}>
                     <defs>
                       <linearGradient
                         id="colorConsumption"
@@ -378,7 +406,9 @@ export default function DashboardPage() {
                     Manage Alerts
                   </p>
                   <p className="text-xs text-slate-400">
-                    3 active alerts
+                    {analytics
+                      ? `${analytics.unacknowledged_alerts} active alerts`
+                      : 'View alerts'}
                   </p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors" />
@@ -387,7 +417,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Recent Forecasts */}
+        {/* Recent Forecasts — from real API data */}
         <Card className="glass-card border-white/[0.06]">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -409,41 +439,59 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {recentForecasts.map((forecast) => (
-                <div
-                  key={forecast.id}
-                  id={`forecast-item-${forecast.id}`}
-                  className="flex items-center justify-between p-3 rounded-xl hover:bg-white/[0.02] transition-all duration-200"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-500/10">
-                      <LineChart className="w-4 h-4 text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {forecast.model}
-                      </p>
-                      <p className="text-xs text-slate-500">{forecast.date}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-emerald-400">
-                        {forecast.accuracy}%
-                      </p>
-                      <p className="text-[10px] text-slate-500 uppercase">
-                        accuracy
-                      </p>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[10px]"
-                    >
-                      {forecast.status}
-                    </Badge>
-                  </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
                 </div>
-              ))}
+              ) : analytics?.recent_forecasts &&
+                analytics.recent_forecasts.length > 0 ? (
+                analytics.recent_forecasts.map((forecast) => (
+                  <div
+                    key={forecast.id}
+                    id={`forecast-item-${forecast.id}`}
+                    className="flex items-center justify-between p-3 rounded-xl hover:bg-white/[0.02] transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-500/10">
+                        <LineChart className="w-4 h-4 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {modelDisplayNames[forecast.model_name] ||
+                            forecast.model_name}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {timeAgo(forecast.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-emerald-400">
+                          {forecast.peak_power
+                            ? `${forecast.peak_power.toFixed(2)} kW`
+                            : '—'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 uppercase">
+                          peak power
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[10px]"
+                      >
+                        completed
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-sm text-slate-400">
+                    No forecasts yet. Run your first prediction!
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

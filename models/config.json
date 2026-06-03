@@ -1,0 +1,1 @@
+{"features": ["Global_reactive_power", "Voltage", "Sub_metering_1", "Sub_metering_2", "Sub_metering_3", "Hour", "DayOfWeek", "Month", "Season", "IsWeekend", "SubTotal", "SubRatio_1", "SubRatio_2", "SubRatio_3", "IsHoliday"], "threshold": 0.612139837398374}
