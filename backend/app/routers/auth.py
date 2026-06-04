@@ -9,10 +9,10 @@ from app.database import get_db
 from app.models import User
 from app.schemas import (
     UserRegister, UserLogin, UserResponse, TokenResponse,
-    RefreshRequest, TokenData
+    RefreshRequest, TokenData, UserUpdateMe, PasswordUpdate
 )
 from app.services.auth_service import (
-    hash_password, authenticate_user, create_access_token,
+    hash_password, verify_password, authenticate_user, create_access_token,
     create_refresh_token, decode_token, get_current_user
 )
 
@@ -108,3 +108,34 @@ def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
 def get_me(current_user: User = Depends(get_current_user)):
     """Get current authenticated user profile."""
     return UserResponse.model_validate(current_user)
+
+
+@router.put("/me", response_model=UserResponse)
+def update_me(
+    data: UserUpdateMe,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update current user's profile."""
+    if data.full_name is not None:
+        current_user.full_name = data.full_name
+    db.commit()
+    db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
+@router.put("/password")
+def update_password(
+    data: PasswordUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change current user's password."""
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    current_user.password_hash = hash_password(data.new_password)
+    db.commit()
+    return {"message": "Password updated successfully"}

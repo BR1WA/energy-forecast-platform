@@ -33,6 +33,26 @@ def seed_database():
             db.add(admin)
             db.commit()
 
+        # Seed additional users if they don't exist
+        extra_users = [
+            {"email": "operator@energyforecast.com", "full_name": "Jane Operator", "role": "operator", "is_active": True},
+            {"email": "viewer@energyforecast.com", "full_name": "Bob Viewer", "role": "viewer", "is_active": False},
+            {"email": "alice@example.com", "full_name": "Alice Johnson", "role": "viewer", "is_active": False},
+            {"email": "charlie@example.com", "full_name": "Charlie Brown", "role": "analyst", "is_active": True},
+        ]
+        for u_data in extra_users:
+            existing = db.query(User).filter(User.email == u_data["email"]).first()
+            if not existing:
+                new_user = User(
+                    email=u_data["email"],
+                    password_hash=hash_password("password123"),
+                    full_name=u_data["full_name"],
+                    role=u_data["role"],
+                    is_active=u_data["is_active"],
+                )
+                db.add(new_user)
+        db.commit()
+
         service = get_forecast_service()
         if not service.samples:
             print("No samples found. Cannot generate realistic forecasts.")

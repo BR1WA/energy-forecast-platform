@@ -62,6 +62,13 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
 
+class UserUpdateMe(BaseModel):
+    full_name: Optional[str] = None
+
+class PasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=100)
+
 
 # ======================== FORECAST ========================
 

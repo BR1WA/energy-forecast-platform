@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,22 +8,115 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
+import { authApi, alertsApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
-import { User, Mail, Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
+import { User, Mail, Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
-  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  // Profile state
+  const [fullName, setFullName] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  // Notifications state
+  const [criticalAlerts, setCriticalAlerts] = useState(true);
+  const [weeklySummary, setWeeklySummary] = useState(false);
+  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+
+  // Initialize profile from user data
+  useEffect(() => {
+    if (user?.full_name) {
+      setFullName(user.full_name);
+    }
+  }, [user]);
+
+  // Load alert config
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const config = await alertsApi.getConfig();
+        setCriticalAlerts(config.notification_email);
+        setWeeklySummary(config.notification_push);
+      } catch (err) {
+        console.error('Failed to load alert config:', err);
+      }
+    };
+    loadConfig();
+  }, []);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSaving(false);
-    }, 1000);
+    if (!fullName.trim()) {
+      toast.error('Name cannot be empty');
+      return;
+    }
+    setIsSavingProfile(true);
+    try {
+      await authApi.updateProfile({ full_name: fullName.trim() });
+      toast.success('Profile updated successfully');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error('Please fill in all password fields');
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    setIsSavingPassword(true);
+    try {
+      await authApi.updatePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      toast.success('Password updated successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update password');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  const handleSavePreferences = async () => {
+    setIsSavingPrefs(true);
+    try {
+      await alertsApi.configureAlerts({
+        high_consumption_threshold: 3.0,
+        anomaly_sensitivity: 'medium',
+        notification_email: criticalAlerts,
+        notification_push: weeklySummary,
+      });
+      toast.success('Preferences saved successfully');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save preferences');
+    } finally {
+      setIsSavingPrefs(false);
+    }
   };
 
   return (
@@ -62,7 +155,7 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSave} className="space-y-4">
+                <form onSubmit={handleSaveProfile} className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="fullName" className="text-slate-300">Full Name</Label>
@@ -70,7 +163,8 @@ export default function SettingsPage() {
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <Input
                           id="fullName"
-                          defaultValue={user?.full_name || ''}
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
                           className="pl-9 bg-[#0A0F1C] border-white/10 text-white"
                           placeholder="Your Name"
                         />
@@ -105,10 +199,10 @@ export default function SettingsPage() {
                   <div className="pt-4 border-t border-white/[0.06] flex justify-end">
                     <Button
                       type="submit"
-                      disabled={isSaving}
+                      disabled={isSavingProfile}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                      {isSaving ? 'Saving...' : 'Save Changes'}
+                      {isSavingProfile ? 'Saving...' : 'Save Changes'}
                     </Button>
                   </div>
                 </form>
@@ -168,10 +262,13 @@ export default function SettingsPage() {
                         <p className="text-xs text-slate-400">Receive emails for peak consumption warnings</p>
                       </div>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
-                      <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
-                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setCriticalAlerts(!criticalAlerts)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${criticalAlerts ? 'bg-blue-500' : 'bg-slate-700'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${criticalAlerts ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    </button>
                   </div>
 
                   <div className="flex items-center justify-between p-3 rounded-lg border border-white/[0.06] bg-[#0A0F1C]">
@@ -184,20 +281,23 @@ export default function SettingsPage() {
                         <p className="text-xs text-slate-400">Receive a weekly digest of your energy usage</p>
                       </div>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" />
-                      <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
-                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setWeeklySummary(!weeklySummary)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${weeklySummary ? 'bg-blue-500' : 'bg-slate-700'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${weeklySummary ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    </button>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-white/[0.06] flex justify-end">
                   <Button
-                    onClick={handleSave}
-                    disabled={isSaving}
+                    onClick={handleSavePreferences}
+                    disabled={isSavingPrefs}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    {isSaving ? 'Saving...' : 'Save Preferences'}
+                    {isSavingPrefs ? 'Saving...' : 'Save Preferences'}
                   </Button>
                 </div>
               </CardContent>
@@ -214,7 +314,7 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSave} className="space-y-4">
+                <form onSubmit={handleSavePassword} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="current-password" className="text-slate-300">Current Password</Label>
                     <div className="relative">
@@ -222,6 +322,8 @@ export default function SettingsPage() {
                       <Input
                         id="current-password"
                         type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
                         className="pl-9 bg-[#0A0F1C] border-white/10 text-white"
                         placeholder="••••••••"
                       />
@@ -236,6 +338,8 @@ export default function SettingsPage() {
                         <Input
                           id="new-password"
                           type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
                           className="pl-9 bg-[#0A0F1C] border-white/10 text-white"
                           placeholder="••••••••"
                         />
@@ -248,20 +352,30 @@ export default function SettingsPage() {
                         <Input
                           id="confirm-password"
                           type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
                           className="pl-9 bg-[#0A0F1C] border-white/10 text-white"
                           placeholder="••••••••"
                         />
                       </div>
+                      {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                        <p className="text-xs text-red-400">Passwords do not match</p>
+                      )}
+                      {newPassword && confirmPassword && newPassword === confirmPassword && (
+                        <p className="text-xs text-emerald-400 flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Passwords match
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="pt-4 border-t border-white/[0.06] flex justify-end">
                     <Button
                       type="submit"
-                      disabled={isSaving}
+                      disabled={isSavingPassword}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                      {isSaving ? 'Updating...' : 'Update Password'}
+                      {isSavingPassword ? 'Updating...' : 'Update Password'}
                     </Button>
                   </div>
                 </form>

@@ -50,6 +50,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { adminApi, forecastApi } from '@/lib/api';
 import { AdminUser, SystemHealth, ModelRegistry } from '@/types';
+import { toast } from 'sonner';
 
 // Fallback demo data in case of error
 const demoSystemHealth = {
@@ -115,8 +116,10 @@ export default function AdminPage() {
       });
       setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
       setIsDialogOpen(false);
+      toast.success(`Role updated to ${editRole}`);
     } catch (err) {
       console.error('Failed to update user', err);
+      toast.error('Failed to update user role');
     } finally {
       setIsSavingUser(false);
     }
@@ -131,8 +134,10 @@ export default function AdminPage() {
       });
       setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
       setEditUser({ ...editUser, ...updatedUser });
+      toast.success(updatedUser.is_active ? 'User activated' : 'User deactivated');
     } catch (err) {
       console.error('Failed to update status', err);
+      toast.error('Failed to update user status');
     } finally {
       setIsSavingUser(false);
     }

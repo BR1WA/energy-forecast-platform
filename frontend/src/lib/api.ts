@@ -140,6 +140,18 @@ export const authApi = {
     }),
 
   getMe: (): Promise<User> => apiFetch('/api/v1/auth/me'),
+
+  updateProfile: (data: { full_name: string }): Promise<User> =>
+    apiFetch('/api/v1/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  updatePassword: (data: { current_password: string; new_password: string }): Promise<{ message: string }> =>
+    apiFetch('/api/v1/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
 // ============================================================
