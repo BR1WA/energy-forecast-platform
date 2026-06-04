@@ -35,6 +35,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime] = None
     avatar_url: Optional[str] = None
+    last_activity: Optional[datetime] = None
 
     class Config:
         from_attributes = True

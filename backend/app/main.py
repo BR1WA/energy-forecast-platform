@@ -55,6 +55,19 @@ async def lifespan(app: FastAPI):
             except Exception as ex:
                 print(f"[DB] Error adding avatar_url column: {ex}")
 
+    # Auto-migration: check if users table contains last_activity
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT last_activity FROM users LIMIT 1"))
+        except Exception:
+            print("[DB] Adding last_activity column to users table...")
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_activity DATETIME"))
+                conn.commit()
+                print("[DB] Column last_activity added successfully.")
+            except Exception as ex:
+                print(f"[DB] Error adding last_activity column: {ex}")
+
     # Pre-load ML models
     service = get_forecast_service()
     print(f"[ML] Models ready: {list(service.models.keys())}")

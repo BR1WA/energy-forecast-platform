@@ -64,6 +64,16 @@ const demoSystemHealth = {
   requests_today: 0,
 };
 
+const isOnline = (lastActivity: string | undefined | null) => {
+  if (!lastActivity) return false;
+  try {
+    const activityDate = parseDate(lastActivity);
+    return Date.now() - activityDate.getTime() < 5 * 60 * 1000;
+  } catch (e) {
+    return false;
+  }
+};
+
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('users');
   const [searchQuery, setSearchQuery] = useState('');
@@ -202,7 +212,7 @@ export default function AdminPage() {
             },
             {
               label: 'Active Users',
-              value: users.filter(u => u.is_active).length.toString(),
+              value: users.filter(u => isOnline(u.last_activity)).length.toString(),
               icon: Users,
               iconBg: 'bg-cyan-500/10',
               iconText: 'text-cyan-400',
@@ -381,18 +391,18 @@ export default function AdminPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          {u.is_active ? (
+                          {isOnline(u.last_activity) ? (
                             <>
                               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                               <span className="text-xs text-emerald-400">
-                                Active
+                                Online
                               </span>
                             </>
                           ) : (
                             <>
                               <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
                               <span className="text-xs text-slate-500">
-                                Inactive
+                                Offline
                               </span>
                             </>
                           )}

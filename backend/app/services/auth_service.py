@@ -105,6 +105,28 @@ def get_current_user(
             detail="Account is deactivated",
         )
 
+    # Update last_activity if it's more than 30 seconds ago (throttled to save database writes)
+    now = datetime.now(timezone.utc)
+    last_act = user.last_activity
+    should_update = False
+    if not last_act:
+        should_update = True
+    else:
+        if last_act.tzinfo is None:
+            last_act_utc = last_act.replace(tzinfo=timezone.utc)
+        else:
+            last_act_utc = last_act.astimezone(timezone.utc)
+        if (now - last_act_utc).total_seconds() > 30:
+            should_update = True
+
+    if should_update:
+        user.last_activity = now
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Failed to update last_activity: {e}")
+
     return user
 
 

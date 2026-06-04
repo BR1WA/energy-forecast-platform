@@ -10,6 +10,7 @@ export interface User {
   created_at: string;
   updated_at?: string;
   avatar_url?: string;
+  last_activity?: string;
 }
 
 export interface AuthTokens {
