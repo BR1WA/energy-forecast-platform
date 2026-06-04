@@ -6,8 +6,10 @@ import { useAuth } from '@/lib/auth';
 import { alertsApi } from '@/lib/api';
 import { formatTimeAgo } from '@/lib/utils';
 import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -323,6 +325,13 @@ export default function Navbar() {
             }
           >
               <Avatar className="w-8 h-8 ring-2 ring-blue-500/20">
+                {user?.avatar_url && (
+                  <AvatarImage
+                    src={user.avatar_url.startsWith('http') ? user.avatar_url : `${API_BASE_URL}${user.avatar_url}`}
+                    alt={user?.full_name}
+                    className="object-cover"
+                  />
+                )}
                 <AvatarFallback className="bg-gradient-to-br from-blue-600 to-cyan-500 text-white text-xs font-semibold">
                   {initials}
                 </AvatarFallback>
@@ -351,7 +360,7 @@ export default function Navbar() {
               id="nav-profile"
               className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
             >
-              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings')}>
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
                 <User className="w-4 h-4 mr-2" />
                 Profile
               </div>

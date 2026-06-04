@@ -16,8 +16,9 @@ import {
   Zap,
   LogOut,
   Settings,
+  User,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const navItems = [
   {
@@ -168,6 +171,13 @@ export default function Sidebar() {
             }
           >
               <Avatar className="w-8 h-8 shrink-0 ring-2 ring-blue-500/20">
+                {user?.avatar_url && (
+                  <AvatarImage
+                    src={user.avatar_url.startsWith('http') ? user.avatar_url : `${API_BASE_URL}${user.avatar_url}`}
+                    alt={user?.full_name}
+                    className="object-cover"
+                  />
+                )}
                 <AvatarFallback className="bg-gradient-to-br from-blue-600 to-cyan-500 text-white text-xs font-semibold">
                   {initials}
                 </AvatarFallback>
@@ -188,6 +198,16 @@ export default function Sidebar() {
             side="top"
             className="w-56 bg-[#111827] border-white/10"
           >
+            <DropdownMenuItem
+              id="menu-profile"
+              className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
+            >
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
+                <User className="w-4 h-4 mr-2" />
+                Profile
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-white/[0.06]" />
             <DropdownMenuItem
               id="menu-settings"
               className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"

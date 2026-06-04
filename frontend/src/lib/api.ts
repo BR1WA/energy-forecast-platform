@@ -79,9 +79,12 @@ async function apiFetch<T>(
   const { skipAuth = false, headers: customHeaders, ...rest } = options;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(customHeaders as Record<string, string>),
   };
+
+  if (!(rest.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (!skipAuth) {
     const token = getAccessToken();
@@ -152,6 +155,15 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+
+  uploadAvatar: (file: File): Promise<User> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiFetch('/api/v1/auth/me/avatar', {
+      method: 'POST',
+      body: formData,
+    });
+  },
 };
 
 // ============================================================

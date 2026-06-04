@@ -2,8 +2,10 @@
 Authentication router — login, register, token refresh.
 """
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
+import os
+import time
 
 from app.database import get_db
 from app.models import User
@@ -139,3 +141,73 @@ def update_password(
     current_user.password_hash = hash_password(data.new_password)
     db.commit()
     return {"message": "Password updated successfully"}
+
+
+@router.post("/me/avatar", response_model=UserResponse)
+def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a new profile picture/avatar (Admin/User)."""
+    # 1. Validate file extension and MIME type
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    allowed_mime_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+    filename = file.filename or "avatar"
+    _, ext = os.path.splitext(filename.lower())
+    
+    if ext not in allowed_extensions or file.content_type not in allowed_mime_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only JPG, JPEG, PNG, GIF, and WebP images are allowed.",
+        )
+
+    # 2. Validate file size (limit: 2MB)
+    max_size = 2 * 1024 * 1024 # 2MB
+    
+    try:
+        contents = file.file.read()
+        file_size = len(contents)
+        if file_size > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image file size must not exceed 2MB.",
+            )
+        
+        # 3. Create static/avatars/ directory if needed
+        os.makedirs("static/avatars", exist_ok=True)
+        
+        # 4. Generate unique filename
+        timestamp = int(time.time())
+        new_filename = f"user_{current_user.id}_{timestamp}{ext}"
+        file_path = os.path.join("static", "avatars", new_filename)
+        
+        # 5. Write contents to file
+        with open(file_path, "wb") as f:
+            f.write(contents)
+            
+        # 6. Delete old avatar file if it exists
+        if current_user.avatar_url and current_user.avatar_url.startswith("/static/avatars/"):
+            old_path = current_user.avatar_url.lstrip("/")
+            if os.path.exists(old_path):
+                try:
+                    os.remove(old_path)
+                except Exception as ex:
+                    print(f"Failed to remove old avatar: {ex}")
+                    
+        # 7. Update user's avatar_url
+        current_user.avatar_url = f"/static/avatars/{new_filename}"
+        db.commit()
+        db.refresh(current_user)
+        
+        return UserResponse.model_validate(current_user)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process image upload: {str(e)}",
+        )
+

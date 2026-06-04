@@ -11,16 +11,11 @@ import { useAuth } from '@/lib/auth';
 import { authApi, alertsApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
-import { User, Mail, Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
-
-  // Profile state
-  const [fullName, setFullName] = useState('');
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -32,13 +27,6 @@ export default function SettingsPage() {
   const [criticalAlerts, setCriticalAlerts] = useState(true);
   const [weeklySummary, setWeeklySummary] = useState(false);
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
-
-  // Initialize profile from user data
-  useEffect(() => {
-    if (user?.full_name) {
-      setFullName(user.full_name);
-    }
-  }, [user]);
 
   // Load alert config
   useEffect(() => {
@@ -53,23 +41,6 @@ export default function SettingsPage() {
     };
     loadConfig();
   }, []);
-
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) {
-      toast.error('Name cannot be empty');
-      return;
-    }
-    setIsSavingProfile(true);
-    try {
-      await authApi.updateProfile({ full_name: fullName.trim() });
-      toast.success('Profile updated successfully');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update profile');
-    } finally {
-      setIsSavingProfile(false);
-    }
-  };
 
   const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,12 +100,8 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <Tabs defaultValue="profile" className="w-full">
+        <Tabs defaultValue="preferences" className="w-full">
           <TabsList className="bg-[#111827] border border-white/[0.06] mb-6">
-            <TabsTrigger value="profile" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
-              <User className="w-4 h-4 mr-2" />
-              Profile
-            </TabsTrigger>
             <TabsTrigger value="preferences" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
               <Bell className="w-4 h-4 mr-2" />
               Preferences
@@ -144,71 +111,6 @@ export default function SettingsPage() {
               Security
             </TabsTrigger>
           </TabsList>
-
-          {/* Profile Tab */}
-          <TabsContent value="profile" className="space-y-4">
-            <Card className="bg-[#111827]/50 border-white/[0.06]">
-              <CardHeader>
-                <CardTitle className="text-lg text-white">Profile Information</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Update your account details.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSaveProfile} className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="fullName" className="text-slate-300">Full Name</Label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                        <Input
-                          id="fullName"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          className="pl-9 bg-[#0A0F1C] border-white/10 text-white"
-                          placeholder="Your Name"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-slate-300">Email Address</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                        <Input
-                          id="email"
-                          type="email"
-                          defaultValue={user?.email || ''}
-                          className="pl-9 bg-[#0A0F1C] border-white/10 text-slate-400"
-                          disabled
-                        />
-                      </div>
-                      <p className="text-xs text-slate-500">Email address cannot be changed.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-slate-300">Role</Label>
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 capitalize">
-                        {user?.role || 'User'}
-                      </Badge>
-                      <span className="text-xs text-slate-500">Assigned by administrator</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-white/[0.06] flex justify-end">
-                    <Button
-                      type="submit"
-                      disabled={isSavingProfile}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {isSavingProfile ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Preferences Tab */}
           <TabsContent value="preferences" className="space-y-4">

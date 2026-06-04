@@ -3,8 +3,10 @@ EnergyForecast API — Main FastAPI Application
 Master's PFE: Residential Energy Consumption Forecasting Platform
 """
 import time
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -16,6 +18,9 @@ from app.routers import auth, forecast, alerts, analytics, admin
 from app.services.forecast_service import get_forecast_service
 
 settings = get_settings()
+
+# Ensure static directories exist before FastAPI is configured
+os.makedirs("static/avatars", exist_ok=True)
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -32,6 +37,23 @@ async def lifespan(app: FastAPI):
     # Create database tables
     Base.metadata.create_all(bind=engine)
     print("[DB] Database tables created/verified")
+
+    # Ensure static/avatars directory exists
+    os.makedirs("static/avatars", exist_ok=True)
+
+    # Auto-migration: check if users table contains avatar_url
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT avatar_url FROM users LIMIT 1"))
+        except Exception:
+            print("[DB] Adding avatar_url column to users table...")
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)"))
+                conn.commit()
+                print("[DB] Column avatar_url added successfully.")
+            except Exception as ex:
+                print(f"[DB] Error adding avatar_url column: {ex}")
 
     # Pre-load ML models
     service = get_forecast_service()
@@ -93,6 +115,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files (for avatars)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include routers
 app.include_router(auth.router)
