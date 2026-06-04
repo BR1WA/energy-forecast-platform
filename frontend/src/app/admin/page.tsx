@@ -72,7 +72,10 @@ const isOnline = (lastActivity: string | undefined | null) => {
   if (!lastActivity) return false;
   try {
     const activityDate = parseDate(lastActivity);
-    return Date.now() - activityDate.getTime() < 5 * 60 * 1000;
+    // Since backend activity updates are throttled to 30s, and frontend navbar alerts poll
+    // every 30s, active tabs will have a last_activity update within 60s.
+    // Set threshold to 75 seconds for highly responsive offline detection.
+    return Date.now() - activityDate.getTime() < 75 * 1000;
   } catch (e) {
     return false;
   }
@@ -115,6 +118,8 @@ export default function AdminPage() {
     };
     
     fetchData();
+    const interval = setInterval(fetchData, 10000); // Poll user list every 10s for real-time presence
+    return () => clearInterval(interval);
   }, [user]);
 
   const filteredUsers = users.filter(
