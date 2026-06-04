@@ -130,6 +130,22 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteAvatar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Are you sure you want to remove your profile picture?')) {
+      setIsUploading(true);
+      try {
+        await authApi.deleteAvatar();
+        toast.success('Profile picture removed');
+        await refreshUser();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to remove profile picture');
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       validateAndUploadFile(e.target.files[0]);
@@ -232,6 +248,19 @@ export default function ProfilePage() {
                   accept="image/png, image/jpeg, image/jpg, image/gif, image/webp"
                   className="hidden"
                 />
+
+                {user?.avatar_url && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDeleteAvatar}
+                    disabled={isUploading}
+                    className="mt-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 px-2"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                    Remove picture
+                  </Button>
+                )}
 
                 <div className="text-center mt-4">
                   <h2 className="text-lg font-bold text-white truncate max-w-[240px]">

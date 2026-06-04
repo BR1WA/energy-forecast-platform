@@ -211,3 +211,26 @@ def upload_avatar(
             detail=f"Failed to process image upload: {str(e)}",
         )
 
+
+@router.delete("/me/avatar", response_model=UserResponse)
+def delete_avatar(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete current user's profile picture/avatar."""
+    if current_user.avatar_url:
+        if current_user.avatar_url.startswith("/static/avatars/"):
+            old_path = current_user.avatar_url.lstrip("/")
+            if os.path.exists(old_path):
+                try:
+                    os.remove(old_path)
+                except Exception as ex:
+                    print(f"Failed to remove avatar file: {ex}")
+        
+        current_user.avatar_url = None
+        db.commit()
+        db.refresh(current_user)
+        
+    return UserResponse.model_validate(current_user)
+
+

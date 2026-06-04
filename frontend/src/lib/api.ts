@@ -164,6 +164,11 @@ export const authApi = {
       body: formData,
     });
   },
+
+  deleteAvatar: (): Promise<User> =>
+    apiFetch('/api/v1/auth/me/avatar', {
+      method: 'DELETE',
+    }),
 };
 
 // ============================================================
