@@ -30,6 +30,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { alertsApi } from '@/lib/api';
+import { parseDate } from '@/lib/utils';
 import { Alert } from '@/types';
 
 const severityConfig: Record<string, any> = {
@@ -79,7 +80,7 @@ export default function AlertsPage() {
           alertsApi.getConfig(),
         ]);
         // Sort by created_at desc
-        const sorted = fetchedAlerts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const sorted = fetchedAlerts.sort((a, b) => parseDate(b.created_at).getTime() - parseDate(a.created_at).getTime());
         setAlerts(sorted);
         if (config) {
           setThreshold(String(config.high_consumption_threshold));
@@ -233,7 +234,7 @@ export default function AlertsPage() {
                             </div>
                             <div className="flex items-center gap-3 mt-3">
                               <span className="text-xs text-slate-500">
-                                {new Date(alert.created_at).toLocaleString()}
+                                {parseDate(alert.created_at).toLocaleString()}
                               </span>
                               {!isRead && (
                                 <button

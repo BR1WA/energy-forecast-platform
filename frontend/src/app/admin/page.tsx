@@ -49,8 +49,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { adminApi, forecastApi } from '@/lib/api';
+import { parseDate } from '@/lib/utils';
 import { AdminUser, SystemHealth, ModelRegistry } from '@/types';
 import { toast } from 'sonner';
+
 
 // Fallback demo data in case of error
 const demoSystemHealth = {
@@ -397,7 +399,7 @@ export default function AdminPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-slate-400">
-                        {new Date(u.created_at).toLocaleDateString()}
+                        {parseDate(u.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
                         <Dialog open={isDialogOpen && editUser?.id === u.id} onOpenChange={(open) => {

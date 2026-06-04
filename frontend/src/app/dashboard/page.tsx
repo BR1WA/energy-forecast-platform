@@ -30,6 +30,7 @@ import {
 } from 'recharts';
 import { useAuth } from '@/lib/auth';
 import { analyticsApi, forecastApi } from '@/lib/api';
+import { formatTimeAgo } from '@/lib/utils';
 
 interface AnalyticsData {
   total_forecasts: number;
@@ -136,21 +137,11 @@ export default function DashboardPage() {
     },
   ];
 
-  // Format relative time
-  function timeAgo(dateStr: string): string {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins} min ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  }
+  const timeAgo = formatTimeAgo;
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Greeting */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">
