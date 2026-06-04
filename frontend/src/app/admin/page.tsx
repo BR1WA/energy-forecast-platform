@@ -52,6 +52,10 @@ import { adminApi, forecastApi } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { AdminUser, SystemHealth, ModelRegistry } from '@/types';
 import { toast } from 'sonner';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 
 
 // Fallback demo data in case of error
@@ -363,12 +367,22 @@ export default function AdminPage() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-semibold">
-                            {u.full_name
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')}
-                          </div>
+                          <Avatar className="w-8 h-8">
+                            {u.avatar_url && (
+                              <AvatarImage
+                                src={u.avatar_url.startsWith('http') ? u.avatar_url : `${API_BASE_URL}${u.avatar_url}`}
+                                alt={u.full_name}
+                                className="object-cover"
+                              />
+                            )}
+                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white text-xs font-semibold">
+                              {u.full_name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
                           <div>
                             <p className="text-sm font-medium text-white">
                               {u.full_name}
