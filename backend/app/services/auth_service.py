@@ -116,7 +116,7 @@ def get_current_user(
             last_act_utc = last_act.replace(tzinfo=timezone.utc)
         else:
             last_act_utc = last_act.astimezone(timezone.utc)
-        if (now - last_act_utc).total_seconds() > 30:
+        if (now - last_act_utc).total_seconds() > 10:
             should_update = True
 
     if should_update:

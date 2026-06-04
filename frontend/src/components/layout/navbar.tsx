@@ -85,7 +85,7 @@ export default function Navbar() {
       }
     };
     loadAlerts();
-    const interval = setInterval(loadAlerts, 30000);
+    const interval = setInterval(loadAlerts, 10000);
     return () => clearInterval(interval);
   }, []);
 
