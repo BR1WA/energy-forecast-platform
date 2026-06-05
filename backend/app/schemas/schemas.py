@@ -75,7 +75,7 @@ class PasswordUpdate(BaseModel):
 # ======================== FORECAST ========================
 
 class ForecastRequest(BaseModel):
-    model_name: str = Field(description="Model to use: 'patchtst', 'sota', 'cnn_bilstm'")
+    model_name: Optional[str] = Field(None, description="Model to use: 'patchtst', 'sota', 'cnn_bilstm'")
     sample_name: Optional[str] = Field(None, description="Name of pre-loaded sample dataset")
     data: Optional[List[List[float]]] = Field(None, description="Raw input data [96 timesteps x 7 features]")
     calendar: Optional[List[List[float]]] = Field(None, description="Calendar features [96 x 6]")

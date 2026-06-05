@@ -38,8 +38,13 @@ def predict(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Run forecast with selected model."""
     service = get_forecast_service()
+
+    if not request.model_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="model_name is required for predictions",
+        )
 
     # Get input data
     if request.sample_name:
