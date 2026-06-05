@@ -40,6 +40,7 @@ import {
 } from 'recharts';
 
 import { forecastApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 // Icon and color mapping for models
 const modelMeta: Record<string, { icon: typeof Brain; color: string }> = {
@@ -171,6 +172,35 @@ export default function ForecastPage() {
       setError(err instanceof Error ? err.message : 'Prediction failed. Check your data format.');
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleDownloadCSV = () => {
+    if (!forecastData || forecastData.length === 0) return;
+    
+    try {
+      const keys = Object.keys(forecastData[0]);
+      const headers = keys.join(',');
+      const rows = forecastData.map(row => 
+        keys.map(k => JSON.stringify(row[k] ?? '')).join(',')
+      );
+      
+      const csvContent = [headers, ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      
+      const modelName = currentModel?.display_name || selectedModel;
+      link.setAttribute('download', `forecast_${modelName.toLowerCase().replace(/\s+/g, '_')}_results.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Forecast results CSV downloaded successfully');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to download CSV results');
     }
   };
 
@@ -409,6 +439,7 @@ export default function ForecastPage() {
                   <Button
                     id="download-results"
                     variant="outline"
+                    onClick={handleDownloadCSV}
                     className="w-full border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.04]"
                   >
                     <Download className="w-4 h-4 mr-2" />
