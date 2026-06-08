@@ -193,3 +193,266 @@ def get_summary(
         model_performance=model_performance,
         heatmap_data=heatmap_data,
     )
+
+
+@router.get("/report/pdf")
+def export_pdf_report(
+    forecast_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate and export a professional PDF energy report for the user."""
+    from datetime import datetime
+    import io
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from fastapi.responses import StreamingResponse
+    from fastapi import HTTPException, status
+
+    # Retrieve forecast
+    forecast = None
+    if forecast_id:
+        forecast = db.query(Forecast).filter(
+            Forecast.id == forecast_id,
+            Forecast.user_id == current_user.id
+        ).first()
+        if not forecast:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Forecast not found"
+            )
+    else:
+        forecast = db.query(Forecast).filter(
+            Forecast.user_id == current_user.id
+        ).order_by(Forecast.created_at.desc()).first()
+
+    # User statistics for report context
+    total_forecasts = db.query(Forecast).filter(Forecast.user_id == current_user.id).count()
+    total_alerts = db.query(Alert).filter(Alert.user_id == current_user.id).count()
+
+    # Create memory buffer
+    buffer = io.BytesIO()
+
+    # Setup document
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54
+    )
+    story = []
+
+    # Styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#1e3a8a')
+    )
+    subtitle_style = ParagraphStyle(
+        'DocSubtitle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Oblique',
+        fontSize=10,
+        leading=13,
+        textColor=colors.HexColor('#475569'),
+        spaceAfter=15
+    )
+    section_heading = ParagraphStyle(
+        'SectionHeading',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        leading=16,
+        textColor=colors.HexColor('#0f172a'),
+        spaceBefore=10,
+        spaceAfter=6
+    )
+    body_style = ParagraphStyle(
+        'BodyTextCustom',
+        parent=styles['BodyText'],
+        fontName='Helvetica',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#334155')
+    )
+    bold_body_style = ParagraphStyle(
+        'BoldBodyTextCustom',
+        parent=styles['BodyText'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#0f172a')
+    )
+    table_header_style = ParagraphStyle(
+        'TableHeaderCustom',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=10,
+        textColor=colors.white
+    )
+    table_cell_style = ParagraphStyle(
+        'TableCellCustom',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    # 1. Header
+    story.append(Paragraph("ENERGY FORECAST PLATFORM", title_style))
+    story.append(Paragraph("Residential Energy Consumption Analytical Report", subtitle_style))
+    story.append(Spacer(1, 10))
+
+    # 2. User & System Metadata Table
+    meta_data = [
+        [
+            Paragraph("User Details", bold_body_style), "",
+            Paragraph("System Overview", bold_body_style), ""
+        ],
+        [
+            Paragraph("Full Name:", body_style), Paragraph(current_user.full_name or "N/A", body_style),
+            Paragraph("Total Forecasts:", body_style), Paragraph(str(total_forecasts), body_style)
+        ],
+        [
+            Paragraph("Email Address:", body_style), Paragraph(current_user.email, body_style),
+            Paragraph("Total Alerts Logged:", body_style), Paragraph(str(total_alerts), body_style)
+        ],
+        [
+            Paragraph("Account Role:", body_style), Paragraph(current_user.role.upper(), body_style),
+            Paragraph("Report Generated:", body_style), Paragraph(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), body_style)
+        ]
+    ]
+
+    meta_table = Table(meta_data, colWidths=[90, 150, 110, 130])
+    meta_table.setStyle(TableStyle([
+        ('SPAN', (0, 0), (1, 0)),
+        ('SPAN', (2, 0), (3, 0)),
+        ('LINEBELOW', (0, 0), (1, 0), 1, colors.HexColor('#cbd5e1')),
+        ('LINEBELOW', (2, 0), (3, 0), 1, colors.HexColor('#cbd5e1')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    story.append(meta_table)
+    story.append(Spacer(1, 15))
+
+    # 3. Forecast Details or "No Forecast" note
+    if not forecast:
+        story.append(Paragraph("No Forecast Execution History", section_heading))
+        story.append(Paragraph("There are no forecast records available in the database for this user. Please navigate to the forecaster playground to run initial predictions.", body_style))
+    else:
+        model_display = forecast.model_name
+        if forecast.model_name == 'sota':
+            model_display = "SOTA Hybrid (Recurrent-Attention)"
+        elif forecast.model_name == 'patchtst':
+            model_display = "PatchTST (Pure Transformer)"
+        elif forecast.model_name == 'cnn_bilstm':
+            model_display = "CNN-BiLSTM (Baseline)"
+
+        # Calculate peak
+        gap_values = []
+        for row in forecast.predictions:
+            if isinstance(row, list) and len(row) > 0:
+                gap_values.append(row[0])
+            elif isinstance(row, (int, float)):
+                gap_values.append(row)
+
+        peak_val = max(gap_values) if gap_values else 0.0
+        avg_val = sum(gap_values) / len(gap_values) if gap_values else 0.0
+
+        # Calculate cost
+        total_cost = 0.0
+        for h_idx, val in enumerate(gap_values):
+            rate = 0.2460 if 6 <= h_idx < 22 else 0.1828
+            total_cost += val * rate
+
+        story.append(Paragraph(f"Latest Forecast Details (ID: #{forecast.id})", section_heading))
+
+        forecast_meta = [
+            [
+                Paragraph("Model Used:", body_style), Paragraph(model_display, bold_body_style),
+                Paragraph("Execution Date:", body_style), Paragraph(forecast.created_at.strftime("%Y-%m-%d %H:%M:%S") if forecast.created_at else "N/A", body_style)
+            ],
+            [
+                Paragraph("Avg Demand:", body_style), Paragraph(f"{avg_val:.3f} kW", body_style),
+                Paragraph("Peak Demand:", body_style), Paragraph(f"{peak_val:.3f} kW", bold_body_style)
+            ],
+            [
+                Paragraph("Estimated 24h Cost:", body_style), Paragraph(f"Euro {total_cost:.3f}", bold_body_style),
+                Paragraph("", body_style), Paragraph("", body_style)
+            ]
+        ]
+        forecast_meta_table = Table(forecast_meta, colWidths=[90, 150, 110, 130])
+        forecast_meta_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(forecast_meta_table)
+        story.append(Spacer(1, 15))
+
+        # 4. Hourly Predictions Table
+        story.append(Paragraph("Hourly Consumption Predictions & Tariffs", section_heading))
+
+        table_data = [
+            [
+                Paragraph("Hour", table_header_style),
+                Paragraph("Forecast", table_header_style),
+                Paragraph("Est. Cost", table_header_style),
+                "",
+                Paragraph("Hour", table_header_style),
+                Paragraph("Forecast", table_header_style),
+                Paragraph("Est. Cost", table_header_style)
+            ]
+        ]
+
+        # Populate rows (12 rows, splitting 24 values side-by-side)
+        for h in range(12):
+            val1 = gap_values[h] if h < len(gap_values) else 0.0
+            rate1 = 0.2460 if 6 <= h < 22 else 0.1828
+            cost1 = val1 * rate1
+
+            val2 = gap_values[h + 12] if (h + 12) < len(gap_values) else 0.0
+            rate2 = 0.2460 if 6 <= (h + 12) < 22 else 0.1828
+            cost2 = val2 * rate2
+
+            table_data.append([
+                Paragraph(f"{h:02d}:00", table_cell_style),
+                Paragraph(f"{val1:.3f} kW", table_cell_style),
+                Paragraph(f"Euro {cost1:.3f}", table_cell_style),
+                "",
+                Paragraph(f"{(h+12):02d}:00", table_cell_style),
+                Paragraph(f"{val2:.3f} kW", table_cell_style),
+                Paragraph(f"Euro {cost2:.3f}", table_cell_style),
+            ])
+
+        preds_table = Table(table_data, colWidths=[60, 95, 80, 10, 60, 95, 80])
+        preds_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (2, 0), colors.HexColor('#1e3a8a')),
+            ('BACKGROUND', (4, 0), (6, 0), colors.HexColor('#1e3a8a')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (2, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('GRID', (4, 0), (6, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        story.append(preds_table)
+
+    # Build PDF
+    doc.build(story)
+    buffer.seek(0)
+
+    filename = f"energy_report_{forecast.id if forecast else 'summary'}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

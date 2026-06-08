@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   BarChart3,
   TrendingUp,
@@ -12,6 +13,7 @@ import {
   Target,
   Calendar,
   Layers,
+  FileText,
 } from 'lucide-react';
 import {
   BarChart,
@@ -136,10 +138,13 @@ function getHeatColor(value: number): string {
   return 'bg-emerald-500/50';
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const finalHeatmapData = analytics?.heatmap_data || heatmapData;
 
   useEffect(() => {
@@ -150,6 +155,35 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleDownloadPDF = async () => {
+    setDownloading(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/analytics/report/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to generate report');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `energy_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download error:', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const bestModel = analytics?.models_used
     ? Object.entries(analytics.models_used).sort((a, b) => b[1] - a[1])[0]
     : null;
@@ -158,14 +192,30 @@ export default function AnalyticsPage() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-blue-400" />
-            Analytics
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Historical trends, model performance, and consumption insights
-          </p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-blue-400" />
+              Analytics
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              Historical trends, model performance, and consumption insights
+            </p>
+          </div>
+          <div>
+            <Button
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-2 shadow-lg shadow-blue-500/10"
+            >
+              {downloading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+              {downloading ? 'Generating...' : 'Export PDF Report'}
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
