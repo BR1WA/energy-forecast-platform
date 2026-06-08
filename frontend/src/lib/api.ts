@@ -313,6 +313,11 @@ export const adminApi = {
 
   getStats: (): Promise<Record<string, unknown>> =>
     apiFetch('/api/v1/admin/stats'),
+
+  retrainModel: (modelName: string): Promise<{ message: string }> =>
+    apiFetch(`/api/v1/admin/models/${modelName}/retrain`, {
+      method: 'POST',
+    }),
 };
 
 // Export helpers for use in auth context
