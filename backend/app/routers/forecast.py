@@ -98,6 +98,9 @@ def predict(
     db.add(forecast)
     db.flush()
 
+    # Save alerts and dispatch email notifications if enabled
+    email_enabled = alert_config.email_enabled if alert_config else True
+
     for alert_data in alerts_data:
         alert = Alert(
             user_id=current_user.id,
@@ -108,6 +111,18 @@ def predict(
             peak_kw=alert_data.get('peak_kw'),
         )
         db.add(alert)
+
+        if email_enabled and current_user.email:
+            try:
+                from app.services.alert_service import send_alert_email
+                send_alert_email(
+                    email_to=current_user.email,
+                    alert_type=alert_data['alert_type'],
+                    severity=alert_data['severity'],
+                    message=alert_data['message'],
+                )
+            except Exception as email_err:
+                print(f"Failed to dispatch alert email in route: {email_err}")
 
     db.commit()
     db.refresh(forecast)

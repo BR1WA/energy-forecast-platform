@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT: str = "10/minute"
 
+    # SMTP Settings
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@energyforecast.com"
+    SMTP_TLS: bool = True
+
     class Config:
         env_file = ".env"
         case_sensitive = True
