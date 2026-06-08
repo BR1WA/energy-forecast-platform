@@ -196,6 +196,7 @@ class ForecastService:
         model_name: str,
         targets: np.ndarray,
         calendar: Optional[np.ndarray] = None,
+        threshold_kw: float = 3.0,
     ) -> Tuple[np.ndarray, List[dict]]:
         """
         Run inference with a specified model.
@@ -204,6 +205,7 @@ class ForecastService:
             model_name: 'patchtst', 'sota', or 'cnn_bilstm'
             targets: numpy array [96, 7] — raw target values
             calendar: numpy array [96, 6] — cyclical calendar features
+            threshold_kw: threshold in kW for alert evaluation
 
         Returns:
             predictions: numpy array [24, 7] — forecasted values in kW
@@ -239,7 +241,7 @@ class ForecastService:
                 preds = model(x_targets, x_calendar).cpu().numpy()[0]  # [24, 7]
 
         # Generate alerts
-        alerts = self._check_alerts(preds)
+        alerts = self._check_alerts(preds, threshold_kw)
 
         return preds, alerts
 

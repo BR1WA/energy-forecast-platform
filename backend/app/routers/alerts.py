@@ -8,7 +8,7 @@ from typing import List
 from app.database import get_db
 from app.models import User, Alert, AlertConfig
 from app.schemas import AlertResponse, AlertConfigCreate, AlertConfigResponse, AlertAcknowledge
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
 
@@ -84,7 +84,7 @@ def get_alert_config(
 @router.post("/config", response_model=AlertConfigResponse)
 def update_alert_config(
     data: AlertConfigCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
 ):
     """Update alert threshold configuration."""

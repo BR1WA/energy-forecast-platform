@@ -12,7 +12,7 @@ from app.schemas import (
     ForecastRequest, ForecastResponse, ForecastHistoryItem,
     ModelInfo, SampleDataset
 )
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_role
 from app.services.forecast_service import get_forecast_service, TARGET_COLS
 
 router = APIRouter(prefix="/api/v1/forecast", tags=["Forecasting"])
@@ -35,7 +35,7 @@ def list_samples(current_user: User = Depends(get_current_user)):
 @router.post("/predict", response_model=ForecastResponse)
 def predict(
     request: ForecastRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
 ):
     service = get_forecast_service()
@@ -70,9 +70,17 @@ def predict(
             detail="Provide either 'sample_name' or 'data'",
         )
 
+    # Get user's custom alert threshold from config
+    alert_config = db.query(AlertConfig).filter(
+        AlertConfig.user_id == current_user.id
+    ).first()
+    threshold = alert_config.threshold_kw if alert_config else 3.0
+
     # Run inference
     try:
-        predictions, alerts_data = service.predict(request.model_name, targets, calendar)
+        predictions, alerts_data = service.predict(
+            request.model_name, targets, calendar, threshold_kw=threshold
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
@@ -89,12 +97,6 @@ def predict(
     )
     db.add(forecast)
     db.flush()
-
-    # Save alerts
-    alert_config = db.query(AlertConfig).filter(
-        AlertConfig.user_id == current_user.id
-    ).first()
-    threshold = alert_config.threshold_kw if alert_config else 3.0
 
     for alert_data in alerts_data:
         alert = Alert(
@@ -123,7 +125,7 @@ def predict(
 @router.post("/compare")
 def compare_models(
     request: ForecastRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(["admin", "analyst"])),
 ):
     """Run all models on the same input for comparison."""
     service = get_forecast_service()
