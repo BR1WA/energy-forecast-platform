@@ -3,7 +3,7 @@ Admin router — user management, model registry, system health.
 Restricted to admin role only.
 """
 import time
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -145,3 +145,20 @@ def list_models(
     from app.services.forecast_service import get_forecast_service
     service = get_forecast_service()
     return service.get_available_models()
+
+
+@router.post("/models/{model_name}/retrain")
+def retrain_model_endpoint(
+    model_name: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_role(["admin"])),
+):
+    """Simulate ML model retraining (admin only)."""
+    from app.services.forecast_service import get_forecast_service
+    service = get_forecast_service()
+    try:
+        service.retrain_model(model_name, background_tasks)
+        return {"message": f"Retraining started for model {model_name}"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
