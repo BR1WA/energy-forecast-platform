@@ -3,6 +3,7 @@ Analytics router — historical forecast data and summary statistics.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from typing import Optional
 from sqlalchemy import func
 
 from app.database import get_db
