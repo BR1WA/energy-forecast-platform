@@ -95,6 +95,9 @@ export default function AdminPage() {
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
+  const [selectedModel, setSelectedModel] = useState<ModelRegistry | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  
   const { user } = useAuth();
 
   useEffect(() => {
@@ -642,6 +645,10 @@ export default function AdminPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => {
+                          setSelectedModel(model);
+                          setIsDetailsOpen(true);
+                        }}
                         className="flex-1 border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.04] text-xs"
                       >
                         <MoreHorizontal className="w-3 h-3 mr-1" />
@@ -655,6 +662,79 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Model Details Dialog */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="bg-[#111827] border-white/10 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Cpu className="w-5 h-5 text-blue-400" />
+              {selectedModel ? (selectedModel as any).display_name || selectedModel.name : 'Model Details'}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedModel && (
+            <div className="space-y-4 mt-2">
+              <div>
+                <Label className="text-xs text-slate-400">Description</Label>
+                <p className="text-sm text-slate-200 mt-1">
+                  {(selectedModel as any).description || 'No description available.'}
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-400">Version</Label>
+                  <p className="text-sm text-white mt-0.5">{selectedModel.version || '1.0.0'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-400">Architecture Type</Label>
+                  <p className="text-sm text-white capitalize mt-0.5">
+                    {(selectedModel as any).architecture_type || 'Unknown'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-400">Accuracy Score</Label>
+                  <p className="text-sm text-emerald-400 font-semibold mt-0.5">
+                    {selectedModel.accuracy ? `${selectedModel.accuracy}%` : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-400">Last Trained</Label>
+                  <p className="text-sm text-white mt-0.5">
+                    {selectedModel.last_trained ? new Date(selectedModel.last_trained).toLocaleString() : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-slate-400 block mb-2">Model Hyperparameters</Label>
+                <div className="border border-white/10 rounded-lg overflow-hidden bg-white/[0.02] max-h-60 overflow-y-auto">
+                  <Table>
+                    <TableHeader className="bg-white/[0.04]">
+                      <TableRow className="border-white/10 hover:bg-transparent">
+                        <TableHead className="text-xs text-slate-400 h-8 py-1 font-medium">Hyperparameter</TableHead>
+                        <TableHead className="text-xs text-slate-400 h-8 py-1 font-medium text-right">Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedModel.parameters && Object.entries(selectedModel.parameters).map(([key, val]) => (
+                        <TableRow key={key} className="border-white/[0.04] hover:bg-white/[0.01]">
+                          <TableCell className="text-xs text-slate-300 py-1.5 capitalize">
+                            {key.replace(/_/g, ' ')}
+                          </TableCell>
+                          <TableCell className="text-xs text-white text-right py-1.5 font-mono">
+                            {String(val)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
