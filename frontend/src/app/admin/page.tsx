@@ -167,6 +167,21 @@ export default function AdminPage() {
     }
   };
 
+  const handleRetrainModel = async (modelName: string, displayName: string) => {
+    // 1. Instantly transition status locally to 'training' for immediate UI feedback
+    setModels(prev => prev.map(m => m.name === modelName ? { ...m, status: 'training' } : m));
+    
+    try {
+      await adminApi.retrainModel(modelName);
+      toast.success(`Simulating model retraining for ${displayName}. Keep polling state...`);
+    } catch (err) {
+      console.error('Failed to trigger retraining', err);
+      toast.error(`Failed to trigger retraining for ${displayName}`);
+      // Revert status on failure
+      setModels(prev => prev.map(m => m.name === modelName ? { ...m, status: 'active' } : m));
+    }
+  };
+
   function formatUptime(seconds: number): string {
     const d = Math.floor(seconds / (3600 * 24));
     const h = Math.floor((seconds % (3600 * 24)) / 3600);
@@ -637,10 +652,21 @@ export default function AdminPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => handleRetrainModel(model.name, (model as any).display_name || model.name)}
+                        disabled={model.status === 'training'}
                         className="flex-1 border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.04] text-xs"
                       >
-                        <Database className="w-3 h-3 mr-1" />
-                        Retrain
+                        {model.status === 'training' ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin text-amber-400" />
+                            Training...
+                          </>
+                        ) : (
+                          <>
+                            <Database className="w-3 h-3 mr-1" />
+                            Retrain
+                          </>
+                        )}
                       </Button>
                       <Button
                         size="sm"
