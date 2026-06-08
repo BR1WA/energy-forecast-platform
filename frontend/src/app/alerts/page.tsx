@@ -400,6 +400,54 @@ export default function AlertsPage() {
                 })}
               </CardContent>
             </Card>
+
+            {/* Load Shifting Recommendations Card */}
+            <Card className="glass-card border-white/[0.06]">
+              <CardContent className="p-4 space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-emerald-400" />
+                    Load-Shifting Advice
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Optimize appliance schedules for EDF French tariffs
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                    <div className="flex justify-between font-medium text-emerald-400 mb-1">
+                      <span>Off-Peak (Heures Creuses):</span>
+                      <span>22h-6h (€0.1828/kWh)</span>
+                    </div>
+                    <div className="flex justify-between font-medium text-amber-400">
+                      <span>Peak Hours (Heures Pleines):</span>
+                      <span>6h-22h (€0.2460/kWh)</span>
+                    </div>
+                  </div>
+
+                  {[
+                    {
+                      appliance: "Washing & Drying",
+                      advice: "Run cycles after 22:00 for a 25.6% tariff discount.",
+                    },
+                    {
+                      appliance: "EV Smart Charging",
+                      advice: "Configure home chargers to start at midnight.",
+                    },
+                    {
+                      appliance: "Water Heating",
+                      advice: "Restrict boiler reheat cycles to off-peak periods.",
+                    },
+                  ].map((rec, i) => (
+                    <div key={i} className="text-xs p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                      <p className="font-semibold text-slate-200">{rec.appliance}</p>
+                      <p className="text-slate-400 mt-0.5">{rec.advice}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
