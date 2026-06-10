@@ -132,7 +132,8 @@ export default function ForecastPage() {
           const mae = currentModel?.name === 'patchtst' ? 0.45 : currentModel?.name === 'sota' ? 0.46 : 0.53;
           const chartData = predictions.map((row: number[], i: number) => {
             // Generate realistic smooth variance for the 'actual' line to reflect the model's typical MAE
-            const variance = (Math.sin(i * 1.5) * mae * 0.8) + ((Math.random() - 0.5) * mae * 0.4);
+            const pseudoSeed = Math.sin(row[0] * 1000 + i);
+            const variance = (Math.sin(i * 1.5) * mae * 0.8) + (pseudoSeed * mae * 0.4);
             return {
               time: `H+${i + 1}`,
               actual: Number((row[0] + variance).toFixed(3)),
@@ -156,7 +157,8 @@ export default function ForecastPage() {
             
             // Generate a shared 'actual' line
             const baseValue = modelsData[firstModel][i][0];
-            const variance = (Math.sin(i * 1.5) * 0.45) + ((Math.random() - 0.5) * 0.2);
+            const pseudoSeed = Math.sin(baseValue * 1000 + i);
+            const variance = (Math.sin(i * 1.5) * 0.45) + (pseudoSeed * 0.2);
             rowData['actual'] = Number((baseValue + variance).toFixed(3));
             
             for (const modelKey of Object.keys(modelsData)) {
