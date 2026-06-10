@@ -311,9 +311,12 @@ export default function AnalyticsPage() {
               {/* Weekly Consumption Bar Chart */}
               <Card className="glass-card border-white/[0.06]">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-400" />
-                    Weekly Consumption vs Prediction
+                  <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-blue-400" />
+                      Weekly Consumption vs Prediction
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -368,9 +371,12 @@ export default function AnalyticsPage() {
               {/* Hourly Pattern */}
               <Card className="glass-card border-white/[0.06]">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-white flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-cyan-400" />
-                    Hourly Consumption Pattern
+                  <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-cyan-400" />
+                      Hourly Consumption Pattern
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -473,8 +479,9 @@ export default function AnalyticsPage() {
               {/* Accuracy Over Time */}
               <Card className="glass-card border-white/[0.06]">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-white">
-                    Model Accuracy Over Time
+                  <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
+                    <span>Model Accuracy Over Time</span>
+                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -538,8 +545,9 @@ export default function AnalyticsPage() {
               {/* Radar Chart */}
               <Card className="glass-card border-white/[0.06]">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-white">
-                    Model Comparison Radar
+                  <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
+                    <span>Model Comparison Radar</span>
+                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -589,8 +597,9 @@ export default function AnalyticsPage() {
           <TabsContent value="heatmap" className="space-y-6 mt-6">
             <Card className="glass-card border-white/[0.06]">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-white">
-                  Weekly Consumption Heatmap
+                <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
+                  <span>Weekly Consumption Heatmap</span>
+                  <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>

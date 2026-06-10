@@ -554,7 +554,7 @@ export default function ForecastPage() {
                 </Card>
 
                 {/* Metrics */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {(() => {
                     const m = trainingMetrics[selectedModel] || trainingMetrics.cnn_bilstm;
                     return [
