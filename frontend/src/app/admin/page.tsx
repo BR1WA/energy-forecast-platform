@@ -627,7 +627,7 @@ export default function AdminPage() {
                           R² Score
                         </p>
                         <p className="text-sm font-semibold text-emerald-400">
-                          {model.accuracy ? `${model.accuracy}%` : 'N/A'}
+                          {(model as any).training_metrics?.r2_score ? (model as any).training_metrics.r2_score.toFixed(4) : (model.accuracy ? `${model.accuracy}%` : 'N/A')}
                         </p>
                       </div>
                       <div className="p-2 rounded-lg bg-white/[0.02]">
@@ -721,7 +721,7 @@ export default function AdminPage() {
                 <div>
                   <Label className="text-xs text-slate-400">R² Score</Label>
                   <p className="text-sm text-emerald-400 font-semibold mt-0.5">
-                    {selectedModel.accuracy ? `${selectedModel.accuracy}%` : 'N/A'}
+                    {(selectedModel as any).training_metrics?.r2_score ? (selectedModel as any).training_metrics.r2_score.toFixed(4) : (selectedModel.accuracy ? `${selectedModel.accuracy}%` : 'N/A')}
                   </p>
                 </div>
                 <div>
