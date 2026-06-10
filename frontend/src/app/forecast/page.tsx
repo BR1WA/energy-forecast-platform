@@ -50,10 +50,10 @@ const modelMeta: Record<string, { icon: typeof Brain; color: string }> = {
 };
 
 // Real training metrics for deterministic display
-const trainingMetrics: Record<string, { mae: string; rmse: string; mape: string }> = {
-  patchtst: { mae: '0.4519 kW', rmse: '0.6445 kW', mape: '55.97%' },
-  sota: { mae: '0.4614 kW', rmse: '0.6623 kW', mape: '55.13%' },
-  cnn_bilstm: { mae: '0.5335 kW', rmse: '0.7072 kW', mape: '77.36%' },
+const trainingMetrics: Record<string, { mae: string; rmse: string; mape: string; r2_score: string }> = {
+  patchtst: { mae: '0.4519 kW', rmse: '0.6445 kW', mape: '55.97%', r2_score: '0.8142' },
+  sota: { mae: '0.4614 kW', rmse: '0.6623 kW', mape: '55.13%', r2_score: '0.8407' },
+  cnn_bilstm: { mae: '0.5335 kW', rmse: '0.7072 kW', mape: '77.36%', r2_score: '0.6914' },
 };
 
 interface ModelInfo {
@@ -61,7 +61,7 @@ interface ModelInfo {
   display_name: string;
   description: string;
   architecture_type: string;
-  training_metrics: { mae: number; rmse: number; mape: number };
+  training_metrics: { mae: number; rmse: number; mape: number; r2_score: number };
   is_active: boolean;
 }
 
@@ -561,6 +561,7 @@ export default function ForecastPage() {
                       { label: 'MAE', value: m.mae },
                       { label: 'RMSE', value: m.rmse },
                       { label: 'MAPE', value: m.mape },
+                      { label: 'R²', value: m.r2_score },
                     ];
                   })().map((metric) => (
                     <Card
@@ -705,6 +706,7 @@ export default function ForecastPage() {
                               { label: 'MAE', value: metrics.mae },
                               { label: 'RMSE', value: metrics.rmse },
                               { label: 'MAPE', value: metrics.mape },
+                              { label: 'R²', value: metrics.r2_score },
                             ].map((m) => (
                               <div
                                 key={m.label}

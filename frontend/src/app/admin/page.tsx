@@ -624,7 +624,7 @@ export default function AdminPage() {
                     <div className="grid grid-cols-3 gap-3">
                       <div className="p-2 rounded-lg bg-white/[0.02]">
                         <p className="text-[10px] text-slate-500 uppercase">
-                          Accuracy
+                          R² Score
                         </p>
                         <p className="text-sm font-semibold text-emerald-400">
                           {model.accuracy ? `${model.accuracy}%` : 'N/A'}
@@ -719,7 +719,7 @@ export default function AdminPage() {
                   </p>
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-400">Accuracy Score</Label>
+                  <Label className="text-xs text-slate-400">R² Score</Label>
                   <p className="text-sm text-emerald-400 font-semibold mt-0.5">
                     {selectedModel.accuracy ? `${selectedModel.accuracy}%` : 'N/A'}
                   </p>
@@ -731,6 +731,30 @@ export default function AdminPage() {
                   </p>
                 </div>
               </div>
+
+              {(selectedModel as any).training_metrics && (
+                <div>
+                  <Label className="text-xs text-slate-400 block mb-2">Training Metrics</Label>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                      <p className="text-[10px] text-slate-500 uppercase">MAE</p>
+                      <p className="text-sm font-medium text-white">{(selectedModel as any).training_metrics.mae}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                      <p className="text-[10px] text-slate-500 uppercase">RMSE</p>
+                      <p className="text-sm font-medium text-white">{(selectedModel as any).training_metrics.rmse}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                      <p className="text-[10px] text-slate-500 uppercase">MAPE</p>
+                      <p className="text-sm font-medium text-white">{(selectedModel as any).training_metrics.mape}%</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                      <p className="text-[10px] text-slate-500 uppercase">R² Score</p>
+                      <p className="text-sm font-medium text-blue-400">{(selectedModel as any).training_metrics.r2_score}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <Label className="text-xs text-slate-400 block mb-2">Model Hyperparameters</Label>
