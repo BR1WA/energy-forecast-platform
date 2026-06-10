@@ -56,15 +56,15 @@ interface AnalyticsData {
   }>;
   monthly_accuracy?: Array<{
     month: string;
-    'CNN-BiLSTM': number;
-    'SOTA Hybrid': number;
-    PatchTST: number;
+    cnn_bilstm: number;
+    sota_hybrid: number;
+    patchtst: number;
   }>;
   model_performance?: Array<{
     metric: string;
-    'CNN-BiLSTM': number;
-    'SOTA Hybrid': number;
-    PatchTST: number;
+    cnn_bilstm: number;
+    sota_hybrid: number;
+    patchtst: number;
   }>;
   heatmap_data?: Array<{
     day: string;
@@ -73,14 +73,13 @@ interface AnalyticsData {
   }>;
 }
 
-// Demo data for visual charts
 const monthlyAccuracy = [
-  { month: 'Jul', 'CNN-BiLSTM': 94.1, 'SOTA Hybrid': 93.5, PatchTST: 95.2 },
-  { month: 'Aug', 'CNN-BiLSTM': 94.8, 'SOTA Hybrid': 94.2, PatchTST: 95.8 },
-  { month: 'Sep', 'CNN-BiLSTM': 95.3, 'SOTA Hybrid': 94.6, PatchTST: 96.1 },
-  { month: 'Oct', 'CNN-BiLSTM': 95.7, 'SOTA Hybrid': 95.1, PatchTST: 96.5 },
-  { month: 'Nov', 'CNN-BiLSTM': 96.0, 'SOTA Hybrid': 95.4, PatchTST: 96.8 },
-  { month: 'Dec', 'CNN-BiLSTM': 96.2, 'SOTA Hybrid': 95.8, PatchTST: 97.1 },
+  { month: 'Jul', cnn_bilstm: 0.651, sota_hybrid: 0.825, patchtst: 0.798 },
+  { month: 'Aug', cnn_bilstm: 0.662, sota_hybrid: 0.831, patchtst: 0.802 },
+  { month: 'Sep', cnn_bilstm: 0.674, sota_hybrid: 0.835, patchtst: 0.807 },
+  { month: 'Oct', cnn_bilstm: 0.681, sota_hybrid: 0.838, patchtst: 0.811 },
+  { month: 'Nov', cnn_bilstm: 0.687, sota_hybrid: 0.840, patchtst: 0.813 },
+  { month: 'Dec', cnn_bilstm: 0.691, sota_hybrid: 0.841, patchtst: 0.814 },
 ];
 
 const consumptionByHour = Array.from({ length: 24 }, (_, i) => ({
@@ -90,12 +89,12 @@ const consumptionByHour = Array.from({ length: 24 }, (_, i) => ({
 }));
 
 const modelPerformance = [
-  { metric: 'MAE', 'CNN-BiLSTM': 85, 'SOTA Hybrid': 80, PatchTST: 90 },
-  { metric: 'RMSE', 'CNN-BiLSTM': 82, 'SOTA Hybrid': 78, PatchTST: 88 },
-  { metric: 'MAPE', 'CNN-BiLSTM': 88, 'SOTA Hybrid': 84, PatchTST: 92 },
-  { metric: 'R² Score', 'CNN-BiLSTM': 90, 'SOTA Hybrid': 87, PatchTST: 94 },
-  { metric: 'Speed', 'CNN-BiLSTM': 75, 'SOTA Hybrid': 70, PatchTST: 85 },
-  { metric: 'Stability', 'CNN-BiLSTM': 87, 'SOTA Hybrid': 83, PatchTST: 91 },
+  { metric: 'MAE', cnn_bilstm: 85, sota_hybrid: 80, patchtst: 90 },
+  { metric: 'RMSE', cnn_bilstm: 82, sota_hybrid: 78, patchtst: 88 },
+  { metric: 'MAPE', cnn_bilstm: 88, sota_hybrid: 84, patchtst: 92 },
+  { metric: 'R² Score', cnn_bilstm: 90, sota_hybrid: 87, patchtst: 94 },
+  { metric: 'Speed', cnn_bilstm: 75, sota_hybrid: 70, patchtst: 85 },
+  { metric: 'Stability', cnn_bilstm: 87, sota_hybrid: 83, patchtst: 91 },
 ];
 
 const weeklyConsumption = [
@@ -480,7 +479,7 @@ export default function AnalyticsPage() {
               <Card className="glass-card border-white/[0.06]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
-                    <span>Model Accuracy Over Time</span>
+                    <span>Model R² Score Over Time</span>
                     <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
                   </CardTitle>
                 </CardHeader>
@@ -500,7 +499,7 @@ export default function AnalyticsPage() {
                           tick={{ fill: '#64748B', fontSize: 12 }}
                         />
                         <YAxis
-                          domain={[92, 98]}
+                          domain={[0.6, 0.9]}
                           axisLine={false}
                           tickLine={false}
                           tick={{ fill: '#64748B', fontSize: 12 }}
@@ -517,24 +516,27 @@ export default function AnalyticsPage() {
                         <Legend />
                         <Line
                           type="monotone"
-                          dataKey="CNN-BiLSTM"
+                          dataKey="cnn_bilstm"
                           stroke="#3B82F6"
                           strokeWidth={2}
                           dot={{ r: 4, fill: '#3B82F6' }}
+                          name="CNN-BiLSTM"
                         />
                         <Line
                           type="monotone"
-                          dataKey="SOTA Hybrid"
+                          dataKey="sota_hybrid"
                           stroke="#06B6D4"
                           strokeWidth={2}
                           dot={{ r: 4, fill: '#06B6D4' }}
+                          name="SOTA Hybrid"
                         />
                         <Line
                           type="monotone"
-                          dataKey="PatchTST"
+                          dataKey="patchtst"
                           stroke="#10B981"
                           strokeWidth={2}
                           dot={{ r: 4, fill: '#10B981' }}
+                          name="PatchTST"
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -565,21 +567,21 @@ export default function AnalyticsPage() {
                         />
                         <Radar
                           name="CNN-BiLSTM"
-                          dataKey="CNN-BiLSTM"
+                          dataKey="cnn_bilstm"
                           stroke="#3B82F6"
                           fill="#3B82F6"
                           fillOpacity={0.1}
                         />
                         <Radar
                           name="SOTA Hybrid"
-                          dataKey="SOTA Hybrid"
+                          dataKey="sota_hybrid"
                           stroke="#06B6D4"
                           fill="#06B6D4"
                           fillOpacity={0.1}
                         />
                         <Radar
                           name="PatchTST"
-                          dataKey="PatchTST"
+                          dataKey="patchtst"
                           stroke="#10B981"
                           fill="#10B981"
                           fillOpacity={0.1}
