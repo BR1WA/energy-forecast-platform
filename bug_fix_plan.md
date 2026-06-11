@@ -27,6 +27,13 @@ These bugs have been resolved in prior commits:
 | `f477297` | M1: Integrate real database forecast records into backend analytics router and align schema keys with frontend charts |
 | `cb027f5` | M7: Apply rate limiting to login, predict, and predict_upload endpoints using a shared SlowAPI Limiter |
 | `4591d53` | M8: Compute estimated 24h cost using time-of-use tariffs (peak/off-peak rates based on hour of the day) rather than a flat rate |
+| `f1e3bd9` | L1: Implement drag-and-drop event handlers for file upload zone on forecaster page |
+| `063c338` | L2: Add profile page mapping to navbar pageTitles and pageDescriptions |
+| `28493fa` | L3: Lift sidebar collapsed state to AppLayout and adjust content area margin dynamically |
+| `507b42d` | L4: Remove unused and dead ModelRegistry database table class and imports |
+| `773781e` | L7: Explicitly list bcrypt as a backend dependency in requirements.txt |
+| `2885de9` | L8: Remove deprecated version key from docker-compose.yml |
+| `7fbd464` | L10: Display user-friendly model display_name instead of internal name during loading and configuration |
 
 ---
 
@@ -42,34 +49,6 @@ All medium priority bugs have been resolved and verified!
 
 ## 🔵 LOW — Nice to Fix
 
-### L1. "Drag & drop" text with no drag handler
-- **File**: [forecast/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/forecast/page.tsx#L357)
-- **Problem**: Upload area says "Drag & drop or click to browse" but has no `onDragOver`/`onDrop` handlers.
-- **Fix**: Add drag-and-drop event handlers, or change the text to "Click to browse".
-
----
-
-### L2. Missing `/profile` page title in navbar
-- **File**: [navbar.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/components/navbar.tsx#L22-L29)
-- **Problem**: `pageTitles` map doesn't include `/profile`, so the navbar shows "EnergyAI" instead of "Profile".
-- **Fix**: Add `'/profile': 'Profile'` to the `pageTitles` object.
-
----
-
-### L3. Sidebar collapse doesn't adjust content area
-- **File**: [app-layout.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/components/app-layout.tsx#L40)
-- **Problem**: Main content has `ml-[260px]` hardcoded. When sidebar collapses to 72px, the content area doesn't shift — leaving a large gap.
-- **Fix**: Share sidebar collapsed state via context or CSS variable, and dynamically adjust the margin.
-
----
-
-### L4. `ModelRegistry` DB table is dead code
-- **File**: [models.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/models/models.py#L81-L93)
-- **Problem**: Table is defined but never populated or queried. Admin router imports it but never uses it. Model metadata is hardcoded in `forecast_service.py`.
-- **Fix**: Either populate it and use it as the source of truth for model metadata, or remove the dead code.
-
----
-
 ### L5. Hardcoded admin password & JWT secret
 - **Files**: [main.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/main.py#L85), [config.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/config.py#L18), [docker-compose.yml](file:///c:/Users/salah/Documents/MASTER/PFE2/docker-compose.yml#L32)
 - **Problem**: Default admin password is `admin123`, JWT secret is `super-secret-key-change-in-production`, DB password is `pfe_password`.
@@ -81,34 +60,6 @@ All medium priority bugs have been resolved and verified!
 - **File**: [main.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/main.py#L44-L69)
 - **Problem**: Raw SQL `ALTER TABLE` runs on every startup with exceptions silently caught. Should use Alembic migrations (already in `requirements.txt`).
 - **Fix**: Create proper Alembic migration scripts for `avatar_url` and `last_activity` columns.
-
----
-
-### L7. `bcrypt` not explicitly listed in requirements
-- **File**: [requirements.txt](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/requirements.txt)
-- **Problem**: `bcrypt` is imported directly in `auth_service.py` but not in requirements. It's an implicit dependency through `passlib[bcrypt]`.
-- **Fix**: Add `bcrypt>=4.0.0` to `requirements.txt`.
-
----
-
-### L8. `docker-compose.yml` uses deprecated `version` key
-- **File**: [docker-compose.yml](file:///c:/Users/salah/Documents/MASTER/PFE2/docker-compose.yml#L1)
-- **Problem**: `version: '3.8'` is deprecated in Docker Compose V2 and generates a warning.
-- **Fix**: Remove the `version` line entirely.
-
----
-
-### L9. `active_models` hardcoded to 3 in SystemHealth
-- **File**: [admin.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/routers/admin.py#L92)
-- **Problem**: `active_models=3` is hardcoded in `SystemHealth` response.
-- **Fix**: Compute dynamically: `active_models=len(get_forecast_service().models)`.
-
----
-
-### L10. Loading text shows internal model name
-- **File**: [forecast/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/forecast/page.tsx#L817)
-- **Problem**: Shows `currentModel?.name` (e.g., "patchtst") instead of `display_name` (e.g., "PatchTST (Pure Transformer)").
-- **Fix**: Use `currentModel?.display_name || currentModel?.name`.
 
 ---
 
