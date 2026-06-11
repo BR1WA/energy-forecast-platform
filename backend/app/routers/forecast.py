@@ -54,6 +54,7 @@ def predict(
         )
 
     # Get input data
+    start_hour = None
     if payload.sample_name:
         if payload.sample_name not in service.samples:
             raise HTTPException(
@@ -63,6 +64,7 @@ def predict(
         sample = service.samples[payload.sample_name]
         targets = sample['targets']
         calendar = sample['calendar']
+        start_hour = sample.get('start_hour')
     elif payload.data:
         targets = np.array(payload.data, dtype=np.float32)
         calendar = np.array(payload.calendar, dtype=np.float32) if payload.calendar else None
@@ -86,7 +88,7 @@ def predict(
     # Run inference
     try:
         predictions, alerts_data = service.predict(
-            payload.model_name, targets, calendar, threshold_kw=threshold
+            payload.model_name, targets, calendar, threshold_kw=threshold, start_hour=start_hour
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -251,9 +253,10 @@ def predict_upload(
     threshold = alert_config.threshold_kw if alert_config else 3.0
 
     # Run inference
+    start_hour = int((df.index[-1].hour + 1) % 24)
     try:
         predictions, alerts_data = service.predict(
-            model_name, targets, calendar, threshold_kw=threshold
+            model_name, targets, calendar, threshold_kw=threshold, start_hour=start_hour
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

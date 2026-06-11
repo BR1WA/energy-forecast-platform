@@ -130,6 +130,7 @@ class ForecastService:
                     self.samples[name] = {
                         'targets': targets,     # [96, 7]
                         'calendar': calendar,   # [96, 6]
+                        'start_hour': int((df.index[-1].hour + 1) % 24),
                     }
                 except Exception as e:
                     print(f"[ML] Error loading sample {sample_file.name}: {e}")
@@ -274,6 +275,7 @@ class ForecastService:
         targets: np.ndarray,
         calendar: Optional[np.ndarray] = None,
         threshold_kw: float = 3.0,
+        start_hour: Optional[int] = None,
     ) -> Tuple[np.ndarray, List[dict]]:
         """
         Run inference with a specified model.
@@ -318,11 +320,11 @@ class ForecastService:
                 preds = model(x_targets, x_calendar).cpu().numpy()[0]  # [24, 7]
 
         # Generate alerts
-        alerts = self._check_alerts(preds, threshold_kw)
+        alerts = self._check_alerts(preds, threshold_kw, start_hour)
 
         return preds, alerts
 
-    def _check_alerts(self, predictions: np.ndarray, threshold_kw: float = 3.0) -> List[dict]:
+    def _check_alerts(self, predictions: np.ndarray, threshold_kw: float = 3.0, start_hour: Optional[int] = None) -> List[dict]:
         """Check predictions against alert thresholds."""
         alerts = []
         gap_predictions = predictions[:, 0]  # Global Active Power
@@ -339,9 +341,20 @@ class ForecastService:
                 'peak_kw': peak_power,
             })
 
-        # Cost alert for high-consumption periods
+        # Cost alert for high-consumption periods using time-of-use (EDF heures pleines / heures creuses) tariffs
+        if start_hour is None:
+            from datetime import datetime
+            start_hour = datetime.utcnow().hour
+
+        estimated_cost = 0.0
         total_kwh = float(np.sum(gap_predictions))
-        estimated_cost = total_kwh * EDF_TARIFFS['heures_pleines']
+        for i, val in enumerate(gap_predictions):
+            hour = (start_hour + i) % 24
+            if 22 <= hour or hour < 6:
+                estimated_cost += float(val) * EDF_TARIFFS['heures_creuses']
+            else:
+                estimated_cost += float(val) * EDF_TARIFFS['heures_pleines']
+
         if estimated_cost > 2.0:  # More than 2 EUR in 24h
             alerts.append({
                 'alert_type': 'cost_threshold',
