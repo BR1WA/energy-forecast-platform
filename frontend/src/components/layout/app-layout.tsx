@@ -18,7 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#0A0F1C]">
+      <div className="flex items-center justify-center h-screen bg-[#0A0F1C]" suppressHydrationWarning>
         <div className="flex flex-col items-center gap-4">
           <div className="relative w-12 h-12">
             <div className="absolute inset-0 rounded-full border-2 border-blue-500/20" />
@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-[#0A0F1C] overflow-hidden">
+    <div className="flex h-screen bg-[#0A0F1C] overflow-hidden" suppressHydrationWarning>
       <Sidebar />
       <div className="flex flex-col flex-1 ml-[260px] transition-all duration-300">
         <Navbar />
