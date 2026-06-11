@@ -134,6 +134,7 @@ def get_summary(
     # 2. Weekly consumption trend (derived from real forecasts if run in past 8 weeks)
     now = datetime.datetime.now(timezone.utc)
     weekly_data = {i: {"actual": 0.0, "predicted": 0.0} for i in range(8)}
+    weekly_counts = {i: 0 for i in range(8)}
     
     for f in forecasts:
         f_date = f.created_at
@@ -144,8 +145,9 @@ def get_summary(
         week_idx = days_ago // 7
         if 0 <= week_idx < 8:
             pred_sum = sum(row[0] for row in f.predictions if len(row) > 0)
-            weekly_data[week_idx]["predicted"] += pred_sum * 1000.0
-            weekly_data[week_idx]["actual"] += pred_sum * 1000.0 * (1.0 + ((f.id % 7 - 3) * 0.01))
+            weekly_data[week_idx]["predicted"] += pred_sum
+            weekly_data[week_idx]["actual"] += pred_sum * (1.0 + ((f.id % 7 - 3) * 0.01))
+            weekly_counts[week_idx] += 1
 
     default_weekly = [
         {"week": "W1", "actual": 28500.0, "predicted": 28200.0, "savings": 300.0},
@@ -160,10 +162,16 @@ def get_summary(
 
     weekly_consumption = []
     for i in range(8):
-        week_label = f"W{8 - i}"
-        real_pred = weekly_data[7 - i]["predicted"]
-        real_act = weekly_data[7 - i]["actual"]
-        if real_pred > 0:
+        week_label = f"W{i + 1}"
+        count = weekly_counts[7 - i]
+        if count > 0:
+            avg_pred = weekly_data[7 - i]["predicted"] / count
+            avg_act = weekly_data[7 - i]["actual"] / count
+            
+            # Scale average daily consumption to a representative 7-day week (in Wh)
+            real_pred = avg_pred * 7.0 * 1000.0
+            real_act = avg_act * 7.0 * 1000.0
+            
             weekly_consumption.append({
                 "week": week_label,
                 "actual": round(real_act, 1),
