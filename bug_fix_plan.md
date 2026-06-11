@@ -16,49 +16,22 @@ These bugs have been resolved in prior commits:
 | `0cdfeb3` | Deterministic baseline forecast generation (seeded PRNG) |
 | `2cf6f3d` | Fake "actual" chart line replaced with real historical `input_data` + deterministic analytics demo data |
 | `aa95e8f` | Chart H0 bridge gap fix, full 96h lookback display, CSV upload endpoints (`/predict/upload`, `/compare/upload`), Docker HMR with volume mounts |
+| `8aa38e6` | H1: Add token refresh to file uploads; H2: Preserve alert threshold in settings |
+| `d80f474` | H3: Sync frontend type interfaces with backend schemas |
+| `956aa4d` | H4/H5: Add missing fields to ModelInfo schema and standardize predict/upload response model |
+| `f586fc9` | M2: Replace hardcoded CPU/Memory bars in Admin page with live system stats using psutil |
+| `004dd83` | M3: Make alert notification checkboxes controlled React inputs and wire them to save payload |
+| `7988179` | M4: Guard against potential crash if model lacks training_metrics on forecast page |
+| `fdd44aa` | M5: Update PDF download to use apiFetch with automatic token refresh support |
+| `6d7bd9d` | M6: Add Demo Data badge to dashboard consumption trend chart when using fallback data |
+| `cb027f5` | M7: Apply rate limiting to login, predict, and predict_upload endpoints using a shared SlowAPI Limiter |
+| `4591d53` | M8: Compute estimated 24h cost using time-of-use tariffs (peak/off-peak rates based on hour of the day) rather than a flat rate |
 
 ---
 
 ## 🔴 HIGH — Must Fix
 
-### H1. File upload endpoints bypass token refresh
-- **Files**: [api.ts](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/lib/api.ts#L188-L195), [api.ts](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/lib/api.ts#L211-L218)
-- **Problem**: The `/predict/upload` and `/compare/upload` calls use raw `fetch()` instead of `apiFetch()`. This means they have **no automatic token refresh on 401**. If the user's access token expires while on the forecast page, CSV uploads silently fail with "Prediction failed" — no retry, no refresh, no useful error message.
-- **Fix**: Wrap the upload fetch calls with the same 401-retry logic that `apiFetch` uses: catch 401 → call `/auth/refresh` → retry with new token. Also parse `response.json().detail` for meaningful error messages instead of the generic "Prediction failed".
-
----
-
-### H2. Settings page resets alert threshold to 3.0
-- **File**: [settings/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/settings/page.tsx#L79-L84)
-- **Problem**: `handleSavePreferences` always sends `high_consumption_threshold: 3.0` and `anomaly_sensitivity: 'medium'`, ignoring whatever the user previously configured on the Alerts page. Saving preferences **overwrites** the user's custom threshold.
-- **Fix**: Either (a) load the current threshold from the API on mount and preserve it in state, or (b) don't send `high_consumption_threshold` / `anomaly_sensitivity` from the settings page at all — let the Alerts page be the sole owner of those fields.
-
----
-
-### H3. Type definitions completely out of sync with API
-- **File**: [types/index.ts](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/types/index.ts)
-- **Problem**: Multiple type interfaces don't match actual API responses:
-  - `ForecastResult` (L66-73): defines `predictions` as `ForecastPoint[]` but API returns `number[][]`
-  - `SampleDataset` (L91-97): defines `id, rows, columns` but API returns `name, description, season, date_range`
-  - `AnalyticsSummary` (L102-111): defines `active_alerts, avg_accuracy` but API returns `unacknowledged_alerts, avg_peak_power, models_used`
-  - `SystemHealth` (L171-178): defines `uptime: string` but API returns `uptime_seconds: number`
-  - `ModelRegistry` (L161-169): missing `display_name, description, architecture_type, training_metrics`
-- **Impact**: Pages use `as unknown as Record<string, unknown>` and `(model as any)` casts everywhere to bypass broken types. Any future developer using these types will write broken code.
-- **Fix**: Rewrite all interfaces to match the actual backend response schemas. Remove all `as any` casts from pages.
-
----
-
-### H4. ModelInfo schema drops critical fields
-- **File**: [schemas.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/schemas/schemas.py#L107-L113)
-- **Problem**: `ModelInfo` Pydantic model only includes `name, display_name, architecture_type, description, training_metrics, is_active`. But `get_available_models()` returns additional fields: `id, version, accuracy, last_trained, parameters, status`. Pydantic's `response_model=List[ModelInfo]` **silently strips** these fields from the API response, so the frontend never receives them.
-- **Fix**: Add the missing fields (`id`, `version`, `accuracy`, `last_trained`, `parameters`, `status`) to the `ModelInfo` schema.
-
----
-
-### H5. `/predict/upload` returns inconsistent response format
-- **File**: [forecast.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/routers/forecast.py#L296-L304)
-- **Problem**: `/predict` uses `response_model=ForecastResponse` (Pydantic serialization with proper ISO datetime), but `/predict/upload` returns a raw dict with `str(forecast.created_at)` — different datetime format. Frontend code that expects ISO 8601 may break on the upload response.
-- **Fix**: Use `response_model=ForecastResponse` on `/predict/upload` too, or at minimum serialize `created_at` with `.isoformat()`.
+All high priority bugs have been resolved and verified!
 
 ---
 
@@ -69,55 +42,6 @@ These bugs have been resolved in prior commits:
 - **Problem**: 6 out of 8 analytics chart sections are hardcoded/formula-generated: `consumption_trend`, `weekly_consumption`, `consumption_by_hour`, `monthly_accuracy`, `model_performance`, `heatmap_data`. Only summary cards (total_forecasts, alerts, avg_peak_power) use real data. The frontend also has its own set of hardcoded demo data.
 - **Impact**: The analytics page mostly shows fabricated data. The "Demo Data" badges help, but the underlying issue remains.
 - **Fix**: Derive chart data from real `Forecast` records in the database. If insufficient data, keep the demo fallback with badges.
-
----
-
-### M2. Admin CPU/Memory bars are hardcoded
-- **File**: [admin/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/admin/page.tsx#L283-L288)
-- **Problem**: CPU usage shows a fixed `23%` and Memory shows `48%`. The backend returns `cpu_usage` and `memory_usage` in the `SystemHealth` response, but the frontend ignores them and uses hardcoded values.
-- **Fix**: Read `health.cpu_usage` and `health.memory_usage` from the API response. Backend should also use `psutil` or similar to return real values (if it doesn't already).
-
----
-
-### M3. Alert notification checkboxes are uncontrolled
-- **File**: [alerts/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/alerts/page.tsx#L341-L358)
-- **Problem**: Notification toggle checkboxes use `defaultChecked` (uncontrolled React inputs). They don't bind to state and aren't included in the `handleSaveConfig` payload. Saving config always sends `notification_email: true, notification_push: true` regardless of checkbox state.
-- **Fix**: Convert to controlled inputs with `useState` and wire them into the save payload.
-
----
-
-### M4. Potential crash if model lacks `training_metrics`
-- **File**: [forecast/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/forecast/page.tsx#L329)
-- **Problem**: `model.training_metrics.mae.toFixed(3)` throws `Cannot read properties of undefined` if the API returns a model without `training_metrics`. The ModelInfo schema might strip this field (see H4).
-- **Fix**: Add optional chaining: `model.training_metrics?.mae?.toFixed(3) ?? 'N/A'`.
-
----
-
-### M5. PDF download bypasses token refresh
-- **File**: [analytics/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/analytics/page.tsx#L164-L191)
-- **Problem**: PDF download uses raw `fetch()` with manual token header, same as the upload endpoints — no 401 refresh.
-- **Fix**: Add 401-retry logic or use a shared fetch wrapper.
-
----
-
-### M6. Dashboard chart has no "Demo Data" badge
-- **File**: [dashboard/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/dashboard/page.tsx#L217-L239)
-- **Problem**: The consumption trend chart falls back to `defaultChartData` (hardcoded) when no real data is available. Unlike the analytics page, it shows **no visual indicator** that the data is demo/synthetic.
-- **Fix**: Add a "Demo Data" badge (same style as analytics) when using fallback data.
-
----
-
-### M7. Rate limiting configured but never applied
-- **Files**: [config.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/config.py#L30), [main.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/main.py#L26)
-- **Problem**: `RATE_LIMIT = "10/minute"` is defined in config and `limiter` is set up in `main.py`, but no `@limiter.limit()` decorators are used on any route. Rate limiting is effectively **disabled**.
-- **Fix**: Apply `@limiter.limit(settings.RATE_LIMIT)` to sensitive endpoints like `/auth/login`, `/forecast/predict`, `/forecast/predict/upload`.
-
----
-
-### M8. Cost alert uses peak tariff for all hours
-- **File**: [forecast_service.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/services/forecast_service.py#L344)
-- **Problem**: `estimated_cost = total_kwh * EDF_TARIFFS['heures_pleines']` applies the peak tariff to all 24 hours. Off-peak hours (22h-6h) should use the `heures_creuses` rate.
-- **Fix**: Split the 24 prediction hours into peak/off-peak buckets and apply the appropriate tariff.
 
 ---
 
