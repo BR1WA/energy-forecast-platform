@@ -178,21 +178,15 @@ class HourlyPatternPoint(BaseModel):
 
 class MonthlyAccuracyPoint(BaseModel):
     month: str
-    cnn_bilstm: float = Field(..., serialization_alias="CNN-BiLSTM")
-    sota_hybrid: float = Field(..., serialization_alias="SOTA Hybrid")
-    patchtst: float = Field(..., serialization_alias="PatchTST")
-
-    class Config:
-        populate_by_name = True
+    cnn_bilstm: float
+    sota_hybrid: float
+    patchtst: float
 
 class ModelPerformancePoint(BaseModel):
     metric: str
-    cnn_bilstm: float = Field(..., serialization_alias="CNN-BiLSTM")
-    sota_hybrid: float = Field(..., serialization_alias="SOTA Hybrid")
-    patchtst: float = Field(..., serialization_alias="PatchTST")
-
-    class Config:
-        populate_by_name = True
+    cnn_bilstm: float
+    sota_hybrid: float
+    patchtst: float
 
 class HeatmapPoint(BaseModel):
     day: str
