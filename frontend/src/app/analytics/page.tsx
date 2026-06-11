@@ -164,17 +164,7 @@ export default function AnalyticsPage() {
   const handleDownloadPDF = async () => {
     setDownloading(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/analytics/report/pdf`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to generate report');
-      }
-      const blob = await response.blob();
+      const blob = await analyticsApi.downloadReportPDF();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

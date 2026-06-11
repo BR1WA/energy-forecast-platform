@@ -45,6 +45,7 @@ function clearTokens() {
 // ============================================================
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
+  isBlob?: boolean;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -76,7 +77,7 @@ async function apiFetch<T>(
   endpoint: string,
   options: FetchOptions = {}
 ): Promise<T> {
-  const { skipAuth = false, headers: customHeaders, ...rest } = options;
+  const { skipAuth = false, isBlob = false, headers: customHeaders, ...rest } = options;
 
   const headers: Record<string, string> = {
     ...(customHeaders as Record<string, string>),
@@ -119,6 +120,10 @@ async function apiFetch<T>(
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.detail || `API error: ${res.status}`);
+  }
+
+  if (isBlob) {
+    return res.blob() as unknown as T;
   }
 
   return res.json();
@@ -227,6 +232,9 @@ export const forecastApi = {
 export const analyticsApi = {
   getSummary: (): Promise<AnalyticsSummary> =>
     apiFetch('/api/v1/analytics/summary'),
+
+  downloadReportPDF: (): Promise<Blob> =>
+    apiFetch('/api/v1/analytics/report/pdf', { isBlob: true }),
 };
 
 // ============================================================
