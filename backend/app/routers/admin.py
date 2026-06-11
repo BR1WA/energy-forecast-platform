@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.models import User, Forecast, Alert, ModelRegistry
+from app.models import User, Forecast, Alert
 from app.schemas import UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role, get_current_user
 

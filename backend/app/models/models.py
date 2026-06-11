@@ -77,17 +77,3 @@ class Alert(Base):
     user = relationship("User", back_populates="alerts")
     forecast = relationship("Forecast", back_populates="alerts")
 
-
-class ModelRegistry(Base):
-    __tablename__ = "model_registry"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False, unique=True)
-    display_name = Column(String(100), nullable=False)
-    version = Column(String(20), default="1.0")
-    weights_path = Column(String(500), nullable=False)
-    architecture_type = Column(String(50), nullable=True)  # transformer, hybrid, cnn-rnn
-    description = Column(Text, nullable=True)
-    training_metrics = Column(JSON, nullable=True)  # {mae, rmse, mape}
-    is_active = Column(Boolean, default=True)
-    deployed_at = Column(DateTime(timezone=True), server_default=func.now())
