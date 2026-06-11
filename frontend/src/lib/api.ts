@@ -184,14 +184,9 @@ export const forecastApi = {
       formData.append('model_name', modelName);
       formData.append('file', data);
 
-      const token = getAccessToken();
-      return fetch(`${API_BASE_URL}/api/v1/forecast/predict/upload`, {
+      return apiFetch('/api/v1/forecast/predict/upload', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
-      }).then((r) => {
-        if (!r.ok) throw new Error('Prediction failed');
-        return r.json();
       });
     }
 
@@ -207,14 +202,9 @@ export const forecastApi = {
       const formData = new FormData();
       formData.append('file', data);
 
-      const token = getAccessToken();
-      return fetch(`${API_BASE_URL}/api/v1/forecast/compare/upload`, {
+      return apiFetch('/api/v1/forecast/compare/upload', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
-      }).then((r) => {
-        if (!r.ok) throw new Error('Comparison failed');
-        return r.json();
       });
     }
 

@@ -27,6 +27,9 @@ export default function SettingsPage() {
   const [criticalAlerts, setCriticalAlerts] = useState(true);
   const [weeklySummary, setWeeklySummary] = useState(false);
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+  
+  // Hidden state to preserve alert threshold
+  const [threshold, setThreshold] = useState(3.0);
 
   // Load alert config
   useEffect(() => {
@@ -35,6 +38,7 @@ export default function SettingsPage() {
         const config = await alertsApi.getConfig();
         setCriticalAlerts(config.notification_email);
         setWeeklySummary(config.notification_push);
+        setThreshold(config.high_consumption_threshold);
       } catch (err) {
         console.error('Failed to load alert config:', err);
       }
@@ -77,7 +81,7 @@ export default function SettingsPage() {
     setIsSavingPrefs(true);
     try {
       await alertsApi.configureAlerts({
-        high_consumption_threshold: 3.0,
+        high_consumption_threshold: threshold,
         anomaly_sensitivity: 'medium',
         notification_email: criticalAlerts,
         notification_push: weeklySummary,
