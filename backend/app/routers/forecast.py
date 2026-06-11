@@ -179,7 +179,7 @@ def compare_models(
     }
 
 
-@router.post("/predict/upload")
+@router.post("/predict/upload", response_model=ForecastResponse)
 def predict_upload(
     file: UploadFile = File(...),
     model_name: str = Form(...),
@@ -293,15 +293,15 @@ def predict_upload(
 
     input_gap = targets[:, 0].tolist()
 
-    return {
-        'id': forecast.id,
-        'model_name': forecast.model_name,
-        'predictions': predictions.tolist(),
-        'prediction_labels': TARGET_COLS,
-        'created_at': str(forecast.created_at),
-        'alerts': alerts_data,
-        'input_data': input_gap,
-    }
+    return ForecastResponse(
+        id=forecast.id,
+        model_name=forecast.model_name,
+        predictions=predictions.tolist(),
+        prediction_labels=TARGET_COLS,
+        created_at=forecast.created_at,
+        alerts=alerts_data,
+        input_data=input_gap,
+    )
 
 
 @router.post("/compare/upload")

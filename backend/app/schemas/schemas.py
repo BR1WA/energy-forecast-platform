@@ -105,12 +105,18 @@ class ForecastHistoryItem(BaseModel):
 
 
 class ModelInfo(BaseModel):
+    id: str
     name: str
     display_name: str
     architecture_type: str
     description: Optional[str] = None
     training_metrics: Optional[Dict[str, float]] = None
     is_active: bool
+    version: str
+    accuracy: float
+    last_trained: Optional[str] = None
+    parameters: Dict[str, Any] = {}
+    status: str
 
 
 class SampleDataset(BaseModel):
