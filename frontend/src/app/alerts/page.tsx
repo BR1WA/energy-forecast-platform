@@ -32,6 +32,7 @@ import {
 import { alertsApi } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { Alert } from '@/types';
+import { toast } from 'sonner';
 
 const severityConfig: Record<string, any> = {
   critical: {
@@ -68,6 +69,8 @@ export default function AlertsPage() {
   const [filter, setFilter] = useState('all');
   const [threshold, setThreshold] = useState('3.0');
   const [sensitivity, setSensitivity] = useState('medium');
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(true);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -85,6 +88,8 @@ export default function AlertsPage() {
         if (config) {
           setThreshold(String(config.high_consumption_threshold));
           setSensitivity(config.anomaly_sensitivity);
+          setEmailEnabled(config.notification_email);
+          setPushEnabled(config.notification_push);
         }
       } catch (err) {
         console.error('Failed to fetch alerts and config', err);
@@ -112,12 +117,13 @@ export default function AlertsPage() {
       await alertsApi.configureAlerts({
         high_consumption_threshold: parseFloat(threshold),
         anomaly_sensitivity: sensitivity as 'low' | 'medium' | 'high',
-        notification_email: true,
-        notification_push: true,
+        notification_email: emailEnabled,
+        notification_push: pushEnabled,
       });
-      // Could show a toast here
+      toast.success('Configuration saved successfully');
     } catch (err) {
       console.error('Failed to save config', err);
+      toast.error('Failed to save configuration');
     } finally {
       setSaving(false);
     }
@@ -338,24 +344,32 @@ export default function AlertsPage() {
                   <Label className="text-xs text-slate-300">
                     Notifications
                   </Label>
-                  {[
-                    { label: 'Email Notifications', id: 'notif-email' },
-                    { label: 'Push Notifications', id: 'notif-push' },
-                  ].map((n) => (
-                    <label
-                      key={n.id}
-                      htmlFor={n.id}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-white/[0.02] cursor-pointer"
-                    >
-                      <span className="text-sm text-slate-300">{n.label}</span>
-                      <input
-                        id={n.id}
-                        type="checkbox"
-                        defaultChecked
-                        className="w-4 h-4 rounded border-white/20 bg-white/[0.04] text-blue-500 focus:ring-blue-500/20"
-                      />
-                    </label>
-                  ))}
+                  <label
+                    htmlFor="notif-email"
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-white/[0.02] cursor-pointer"
+                  >
+                    <span className="text-sm text-slate-300">Email Notifications</span>
+                    <input
+                      id="notif-email"
+                      type="checkbox"
+                      checked={emailEnabled}
+                      onChange={(e) => setEmailEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/20 bg-white/[0.04] text-blue-500 focus:ring-blue-500/20"
+                    />
+                  </label>
+                  <label
+                    htmlFor="notif-push"
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-white/[0.02] cursor-pointer"
+                  >
+                    <span className="text-sm text-slate-300">Push Notifications</span>
+                    <input
+                      id="notif-push"
+                      type="checkbox"
+                      checked={pushEnabled}
+                      onChange={(e) => setPushEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/20 bg-white/[0.04] text-blue-500 focus:ring-blue-500/20"
+                    />
+                  </label>
                 </div>
 
                 <Button
