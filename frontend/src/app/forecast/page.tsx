@@ -133,7 +133,7 @@ export default function ForecastPage() {
           const chartData: Array<Record<string, unknown>> = [];
           const modelDisplayName = currentModel?.display_name || selectedModel;
           
-          // Show last 24h of real historical data (from lookback window)
+          // Show full lookback window of real historical data
           if (inputData && Array.isArray(inputData)) {
             for (let i = 0; i < inputData.length; i++) {
               chartData.push({
@@ -141,6 +141,12 @@ export default function ForecastPage() {
                 historical: Number(inputData[i].toFixed(3)),
               });
             }
+            // Bridge point at H0: connects historical end to prediction start
+            chartData.push({
+              time: 'H',
+              historical: Number(inputData[inputData.length - 1].toFixed(3)),
+              [modelDisplayName]: Number(predictions[0][0].toFixed(3)),
+            });
           }
           
           // Then append the 24h predictions
@@ -164,15 +170,24 @@ export default function ForecastPage() {
           const length = modelsData[firstModel].length;
           const chartData: Array<Record<string, unknown>> = [];
           
-          // Show last 24 hours of real historical data
+          // Show full lookback window of real historical data
           if (inputData && Array.isArray(inputData)) {
-            const last24 = inputData.slice(-24);
-            for (let i = 0; i < last24.length; i++) {
+            for (let i = 0; i < inputData.length; i++) {
               chartData.push({
-                time: `H-${last24.length - i}`,
-                historical: Number(last24[i].toFixed(3)),
+                time: `H-${inputData.length - i}`,
+                historical: Number(inputData[i].toFixed(3)),
               });
             }
+            // Bridge point at H0
+            const bridgePoint: Record<string, unknown> = {
+              time: 'H',
+              historical: Number(inputData[inputData.length - 1].toFixed(3)),
+            };
+            for (const modelKey of Object.keys(modelsData)) {
+              const mDisplayName = models.find(m => m.name === modelKey)?.display_name || modelKey;
+              bridgePoint[mDisplayName] = Number(modelsData[modelKey][0][0].toFixed(3));
+            }
+            chartData.push(bridgePoint);
           }
           
           // Then append predictions from each model

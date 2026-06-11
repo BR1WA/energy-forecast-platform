@@ -1,10 +1,11 @@
 """
 Forecast router — model inference, history, samples.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import numpy as np
+import io
 
 from app.database import get_db
 from app.models import User, Forecast, Alert, AlertConfig
@@ -127,8 +128,8 @@ def predict(
     db.commit()
     db.refresh(forecast)
 
-    # Return the last 24 hours of actual GAP values as input_data for charting
-    input_gap = targets[-24:, 0].tolist()  # Last 24 hours of Global Active Power
+    # Return the full lookback window of actual GAP values as input_data for charting
+    input_gap = targets[:, 0].tolist()  # All 96 hours of Global Active Power
 
     return ForecastResponse(
         id=forecast.id,
@@ -175,6 +176,188 @@ def compare_models(
         },
         'labels': TARGET_COLS,
         'input_data': targets[:, 0].tolist(),  # GAP lookback for chart
+    }
+
+
+@router.post("/predict/upload")
+def predict_upload(
+    file: UploadFile = File(...),
+    model_name: str = Form(...),
+    current_user: User = Depends(require_role(["admin", "analyst"])),
+    db: Session = Depends(get_db),
+):
+    """Run forecast from an uploaded CSV file."""
+    import pandas as pd
+
+    if not file.filename or not file.filename.endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only CSV files are accepted.",
+        )
+
+    try:
+        contents = file.file.read()
+        df = pd.read_csv(io.BytesIO(contents), index_col=0, parse_dates=True)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse CSV: {str(e)}",
+        )
+
+    service = get_forecast_service()
+
+    # Take last 96 rows
+    df = df.tail(96)
+    if len(df) < 96:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"CSV must have at least 96 rows, got {len(df)}.",
+        )
+
+    # Validate columns
+    missing = [c for c in TARGET_COLS if c not in df.columns]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"CSV missing required columns: {missing}. Expected: {TARGET_COLS}",
+        )
+
+    targets = df[TARGET_COLS].values.astype(np.float32)
+
+    # Generate calendar features from the datetime index
+    hours = df.index.hour.values
+    days = df.index.dayofweek.values
+    months = df.index.month.values
+    hour_sin = np.sin(2 * np.pi * hours / 24.0)
+    hour_cos = np.cos(2 * np.pi * hours / 24.0)
+    day_sin = np.sin(2 * np.pi * days / 7.0)
+    day_cos = np.cos(2 * np.pi * days / 7.0)
+    month_sin = np.sin(2 * np.pi * months / 12.0)
+    month_cos = np.cos(2 * np.pi * months / 12.0)
+    calendar = np.stack([hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos], axis=1).astype(np.float32)
+
+    # Get user's custom alert threshold
+    alert_config = db.query(AlertConfig).filter(
+        AlertConfig.user_id == current_user.id
+    ).first()
+    threshold = alert_config.threshold_kw if alert_config else 3.0
+
+    # Run inference
+    try:
+        predictions, alerts_data = service.predict(
+            model_name, targets, calendar, threshold_kw=threshold
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Model inference failed: {str(e)}",
+        )
+
+    # Save forecast
+    forecast = Forecast(
+        user_id=current_user.id,
+        model_name=model_name,
+        predictions=predictions.tolist(),
+    )
+    db.add(forecast)
+    db.flush()
+
+    # Save alerts
+    email_enabled = alert_config.email_enabled if alert_config else True
+    for alert_data in alerts_data:
+        alert = Alert(
+            user_id=current_user.id,
+            forecast_id=forecast.id,
+            alert_type=alert_data['alert_type'],
+            severity=alert_data['severity'],
+            message=alert_data['message'],
+            peak_kw=alert_data.get('peak_kw'),
+        )
+        db.add(alert)
+        if email_enabled and current_user.email:
+            try:
+                from app.services.alert_service import send_alert_email
+                send_alert_email(
+                    email_to=current_user.email,
+                    alert_type=alert_data['alert_type'],
+                    severity=alert_data['severity'],
+                    message=alert_data['message'],
+                )
+            except Exception:
+                pass
+
+    db.commit()
+    db.refresh(forecast)
+
+    input_gap = targets[:, 0].tolist()
+
+    return {
+        'id': forecast.id,
+        'model_name': forecast.model_name,
+        'predictions': predictions.tolist(),
+        'prediction_labels': TARGET_COLS,
+        'created_at': str(forecast.created_at),
+        'alerts': alerts_data,
+        'input_data': input_gap,
+    }
+
+
+@router.post("/compare/upload")
+def compare_upload(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role(["admin", "analyst"])),
+):
+    """Run comparison from an uploaded CSV file."""
+    import pandas as pd
+
+    if not file.filename or not file.filename.endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only CSV files are accepted.",
+        )
+
+    try:
+        contents = file.file.read()
+        df = pd.read_csv(io.BytesIO(contents), index_col=0, parse_dates=True)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse CSV: {str(e)}",
+        )
+
+    service = get_forecast_service()
+    df = df.tail(96)
+    if len(df) < 96:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"CSV must have at least 96 rows, got {len(df)}.",
+        )
+
+    missing = [c for c in TARGET_COLS if c not in df.columns]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"CSV missing required columns: {missing}.",
+        )
+
+    targets = df[TARGET_COLS].values.astype(np.float32)
+    hours = df.index.hour.values
+    days = df.index.dayofweek.values
+    months = df.index.month.values
+    calendar = np.stack([
+        np.sin(2 * np.pi * hours / 24.0), np.cos(2 * np.pi * hours / 24.0),
+        np.sin(2 * np.pi * days / 7.0), np.cos(2 * np.pi * days / 7.0),
+        np.sin(2 * np.pi * months / 12.0), np.cos(2 * np.pi * months / 12.0),
+    ], axis=1).astype(np.float32)
+
+    results = service.predict_comparison(targets, calendar)
+
+    return {
+        'models': {name: preds.tolist() for name, preds in results.items()},
+        'labels': TARGET_COLS,
+        'input_data': targets[:, 0].tolist(),
     }
 
 

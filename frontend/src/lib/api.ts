@@ -185,7 +185,7 @@ export const forecastApi = {
       formData.append('file', data);
 
       const token = getAccessToken();
-      return fetch(`${API_BASE_URL}/api/v1/forecast/predict`, {
+      return fetch(`${API_BASE_URL}/api/v1/forecast/predict/upload`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -208,7 +208,7 @@ export const forecastApi = {
       formData.append('file', data);
 
       const token = getAccessToken();
-      return fetch(`${API_BASE_URL}/api/v1/forecast/compare`, {
+      return fetch(`${API_BASE_URL}/api/v1/forecast/compare/upload`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
