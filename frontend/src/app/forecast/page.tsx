@@ -452,7 +452,7 @@ export default function ForecastPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-400">Model</span>
                     <span className="text-white font-medium">
-                      {currentModel?.name || '—'}
+                      {currentModel?.display_name || currentModel?.name || '—'}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -845,7 +845,7 @@ export default function ForecastPage() {
                   Running Forecast
                 </h3>
                 <p className="text-sm text-slate-400">
-                  Processing your data through {currentModel?.name}...
+                  Processing your data through {currentModel?.display_name || currentModel?.name}...
                 </p>
               </CardContent>
             </Card>
