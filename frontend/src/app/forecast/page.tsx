@@ -82,6 +82,7 @@ export default function ForecastPage() {
   const [forecastData, setForecastData] = useState<Array<Record<string, unknown>> | null>(null);
   const [activeTab, setActiveTab] = useState('single');
   const [error, setError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
 
   // Fetch models and samples from API on mount
   useEffect(() => {
@@ -109,6 +110,28 @@ export default function ForecastPage() {
     },
     []
   );
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setIsDragging(true);
+    } else if (e.type === 'dragleave') {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+      setSelectedSample('');
+      setError('');
+    }
+  }, []);
 
   const handleRunForecast = async () => {
     if (!selectedModel) {
@@ -347,7 +370,15 @@ export default function ForecastPage() {
                 <div>
                   <label
                     htmlFor="file-upload"
-                    className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/[0.08] rounded-xl cursor-pointer hover:border-blue-500/30 hover:bg-blue-500/5 transition-all duration-200"
+                    onDragEnter={handleDrag}
+                    onDragOver={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDrop={handleDrop}
+                    className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
+                      isDragging
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-white/[0.08] hover:border-blue-500/30 hover:bg-blue-500/5'
+                    }`}
                   >
                     <Upload className="w-8 h-8 text-slate-500 mb-2" />
                     <p className="text-sm font-medium text-white">
