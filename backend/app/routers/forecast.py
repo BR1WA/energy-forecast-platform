@@ -127,6 +127,9 @@ def predict(
     db.commit()
     db.refresh(forecast)
 
+    # Return the last 24 hours of actual GAP values as input_data for charting
+    input_gap = targets[-24:, 0].tolist()  # Last 24 hours of Global Active Power
+
     return ForecastResponse(
         id=forecast.id,
         model_name=forecast.model_name,
@@ -134,6 +137,7 @@ def predict(
         prediction_labels=TARGET_COLS,
         created_at=forecast.created_at,
         alerts=alerts_data,
+        input_data=input_gap,
     )
 
 

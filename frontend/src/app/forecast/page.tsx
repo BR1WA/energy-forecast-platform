@@ -127,39 +127,57 @@ export default function ForecastPage() {
       if (activeTab === 'single') {
         const result = await forecastApi.predict(selectedModel, uploadedFile || selectedSample) as unknown as Record<string, unknown>;
         const predictions = result.predictions as number[][] | undefined;
+        const inputData = result.input_data as number[] | undefined;
         
         if (predictions && Array.isArray(predictions)) {
-          const mae = currentModel?.name === 'patchtst' ? 0.45 : currentModel?.name === 'sota' ? 0.46 : 0.53;
-          const chartData = predictions.map((row: number[], i: number) => {
-            // Generate realistic smooth variance for the 'actual' line to reflect the model's typical MAE
-            const pseudoSeed = Math.sin(row[0] * 1000 + i);
-            const variance = (Math.sin(i * 1.5) * mae * 0.8) + (pseudoSeed * mae * 0.4);
-            return {
+          const chartData: Array<Record<string, unknown>> = [];
+          const modelDisplayName = currentModel?.display_name || selectedModel;
+          
+          // Show last 24h of real historical data (from lookback window)
+          if (inputData && Array.isArray(inputData)) {
+            for (let i = 0; i < inputData.length; i++) {
+              chartData.push({
+                time: `H-${inputData.length - i}`,
+                historical: Number(inputData[i].toFixed(3)),
+              });
+            }
+          }
+          
+          // Then append the 24h predictions
+          for (let i = 0; i < predictions.length; i++) {
+            chartData.push({
               time: `H+${i + 1}`,
-              actual: Number((row[0] + variance).toFixed(3)),
-              [currentModel?.display_name || selectedModel]: Number(row[0].toFixed(3)),
-            };
-          });
+              [modelDisplayName]: Number(predictions[i][0].toFixed(3)),
+            });
+          }
+          
           setForecastData(chartData);
         }
       } else {
         // Comparison mode
         const result = await forecastApi.compare(uploadedFile || selectedSample);
         const modelsData = result.models as Record<string, number[][]>;
+        const inputData = result.input_data as number[] | undefined;
         
         if (modelsData && Object.keys(modelsData).length > 0) {
           const firstModel = Object.keys(modelsData)[0];
           const length = modelsData[firstModel].length;
-          const chartData = [];
+          const chartData: Array<Record<string, unknown>> = [];
           
+          // Show last 24 hours of real historical data
+          if (inputData && Array.isArray(inputData)) {
+            const last24 = inputData.slice(-24);
+            for (let i = 0; i < last24.length; i++) {
+              chartData.push({
+                time: `H-${last24.length - i}`,
+                historical: Number(last24[i].toFixed(3)),
+              });
+            }
+          }
+          
+          // Then append predictions from each model
           for (let i = 0; i < length; i++) {
-            const rowData: Record<string, any> = { time: `H+${i + 1}` };
-            
-            // Generate a shared 'actual' line
-            const baseValue = modelsData[firstModel][i][0];
-            const pseudoSeed = Math.sin(baseValue * 1000 + i);
-            const variance = (Math.sin(i * 1.5) * 0.45) + (pseudoSeed * 0.2);
-            rowData['actual'] = Number((baseValue + variance).toFixed(3));
+            const rowData: Record<string, unknown> = { time: `H+${i + 1}` };
             
             for (const modelKey of Object.keys(modelsData)) {
               const mDisplayName = models.find(m => m.name === modelKey)?.display_name || modelKey;
@@ -466,7 +484,7 @@ export default function ForecastPage() {
                       <div className="flex items-center gap-4 text-xs">
                         <div className="flex items-center gap-1.5">
                           <div className="w-2 h-2 rounded-full bg-blue-500" />
-                          <span className="text-slate-400">Actual</span>
+                          <span className="text-slate-400">Historical (kW)</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <div
@@ -475,7 +493,7 @@ export default function ForecastPage() {
                               backgroundColor: modelMeta[selectedModel]?.color || '#3B82F6',
                             }}
                           />
-                          <span className="text-slate-400">Predicted</span>
+                          <span className="text-slate-400">Predicted (kW)</span>
                         </div>
                       </div>
                     </div>
@@ -483,10 +501,10 @@ export default function ForecastPage() {
                   <CardContent>
                     <div className="h-[400px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={forecastData.slice(0, 48)}>
+                        <AreaChart data={forecastData}>
                           <defs>
                             <linearGradient
-                              id="gradActual"
+                              id="gradHistorical"
                               x1="0"
                               y1="0"
                               x2="0"
@@ -500,6 +518,24 @@ export default function ForecastPage() {
                               <stop
                                 offset="100%"
                                 stopColor="#3B82F6"
+                                stopOpacity={0}
+                              />
+                            </linearGradient>
+                            <linearGradient
+                              id="gradPredicted"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="0%"
+                                stopColor={modelMeta[selectedModel]?.color || '#10B981'}
+                                stopOpacity={0.15}
+                              />
+                              <stop
+                                offset="100%"
+                                stopColor={modelMeta[selectedModel]?.color || '#10B981'}
                                 stopOpacity={0}
                               />
                             </linearGradient>
@@ -534,20 +570,22 @@ export default function ForecastPage() {
                           />
                           <Area
                             type="monotone"
-                            dataKey="actual"
+                            dataKey="historical"
                             stroke="#3B82F6"
                             strokeWidth={2}
-                            fill="url(#gradActual)"
-                            name="Actual"
+                            fill="url(#gradHistorical)"
+                            name="Historical (kW)"
+                            connectNulls={false}
                           />
-                          <Line
+                          <Area
                             type="monotone"
                             dataKey={currentModel?.display_name || selectedModel}
-                            stroke={modelMeta[selectedModel]?.color || '#3B82F6'}
+                            stroke={modelMeta[selectedModel]?.color || '#10B981'}
                             strokeWidth={2}
                             strokeDasharray="5 3"
-                            dot={false}
-                            name="Predicted"
+                            fill="url(#gradPredicted)"
+                            name="Predicted (kW)"
+                            connectNulls={false}
                           />
                         </AreaChart>
                       </ResponsiveContainer>
@@ -595,7 +633,7 @@ export default function ForecastPage() {
                       <div className="flex items-center gap-4 text-xs">
                         <div className="flex items-center gap-1.5">
                           <div className="w-2 h-2 rounded-full bg-slate-400" />
-                          <span className="text-slate-400">Actual</span>
+                          <span className="text-slate-400">Historical</span>
                         </div>
                         {models.map((m) => (
                           <div
@@ -615,7 +653,7 @@ export default function ForecastPage() {
                   <CardContent>
                     <div className="h-[400px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={forecastData.slice(0, 48)}>
+                        <LineChart data={forecastData}>
                           <CartesianGrid
                             strokeDasharray="3 3"
                             stroke="rgba(59,130,246,0.06)"
@@ -647,11 +685,11 @@ export default function ForecastPage() {
                           <Legend />
                           <Line
                             type="monotone"
-                            dataKey="actual"
+                            dataKey="historical"
                             stroke="#94A3B8"
                             strokeWidth={2}
                             dot={false}
-                            name="Actual"
+                            name="Historical"
                           />
                           {models.map((m) => (
                             <Line

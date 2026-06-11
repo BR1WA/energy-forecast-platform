@@ -82,10 +82,16 @@ const monthlyAccuracy = [
   { month: 'Dec', cnn_bilstm: 0.691, sota_hybrid: 0.841, patchtst: 0.814 },
 ];
 
+// Seeded pseudo-random number generator for deterministic demo data
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 const consumptionByHour = Array.from({ length: 24 }, (_, i) => ({
   hour: `${String(i).padStart(2, '0')}:00`,
-  weekday: Math.round(2000 + Math.sin((i - 6) * (Math.PI / 12)) * 2500 + (Math.random() - 0.5) * 300),
-  weekend: Math.round(1500 + Math.sin((i - 8) * (Math.PI / 12)) * 1800 + (Math.random() - 0.5) * 200),
+  weekday: Math.round(2000 + Math.sin((i - 6) * (Math.PI / 12)) * 2500 + (seededRandom(i * 3 + 1) - 0.5) * 300),
+  weekend: Math.round(1500 + Math.sin((i - 8) * (Math.PI / 12)) * 1800 + (seededRandom(i * 3 + 2) - 0.5) * 200),
 }));
 
 const modelPerformance = [
@@ -111,6 +117,7 @@ const weeklyConsumption = [
 const heatmapData = (() => {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const data: { day: string; hour: number; value: number }[] = [];
+  let seedCounter = 0;
   days.forEach((day) => {
     for (let h = 0; h < 24; h++) {
       const isWeekend = day === 'Sat' || day === 'Sun';
@@ -120,7 +127,7 @@ const heatmapData = (() => {
       data.push({
         day,
         hour: h,
-        value: Math.round(base + Math.max(0, factor) * (peak - base) + (Math.random() - 0.5) * 300),
+        value: Math.round(base + Math.max(0, factor) * (peak - base) + (seededRandom(seedCounter++) - 0.5) * 300),
       });
     }
   });

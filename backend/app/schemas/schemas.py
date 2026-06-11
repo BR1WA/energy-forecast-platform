@@ -88,6 +88,7 @@ class ForecastResponse(BaseModel):
     prediction_labels: List[str]  # column names
     created_at: datetime
     alerts: List[Dict[str, Any]] = []
+    input_data: Optional[List[float]] = None  # GAP lookback values for chart
 
     class Config:
         from_attributes = True
