@@ -61,7 +61,7 @@ interface ModelInfo {
   display_name: string;
   description: string;
   architecture_type: string;
-  training_metrics: { mae: number; rmse: number; mape: number; r2_score: number };
+  training_metrics?: { mae: number; rmse: number; mape: number; r2_score: number };
   is_active: boolean;
 }
 
@@ -326,7 +326,7 @@ export default function ForecastPage() {
                         variant="outline"
                         className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[10px] shrink-0"
                       >
-                        MAE: {model.training_metrics.mae.toFixed(3)}
+                        MAE: {model.training_metrics?.mae !== undefined ? model.training_metrics.mae.toFixed(3) : 'N/A'}
                       </Badge>
                     </button>
                   );
