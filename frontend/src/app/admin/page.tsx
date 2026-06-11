@@ -280,10 +280,10 @@ export default function AdminPage() {
         {/* Resource Bars */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
-            { label: 'CPU Usage', value: 23, color: '#3B82F6' },
+            { label: 'CPU Usage', value: Math.round(health?.cpu_usage ?? 0), color: '#3B82F6' },
             {
               label: 'Memory Usage',
-              value: 48,
+              value: Math.round(health?.memory_usage ?? 0),
               color: '#06B6D4',
             },
           ].map((resource) => (

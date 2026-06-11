@@ -87,13 +87,22 @@ def system_health(
     except Exception:
         db_status = "unhealthy"
 
+    import psutil
+    cpu_percent = psutil.cpu_percent(interval=0.1)
+    mem_percent = psutil.virtual_memory().percent
+
+    from app.services.forecast_service import get_forecast_service
+    service = get_forecast_service()
+
     return SystemHealth(
         status="operational",
-        active_models=3,
+        active_models=len(service.models),
         total_users=db.query(User).count(),
         total_forecasts=db.query(Forecast).count(),
         database_status=db_status,
         uptime_seconds=time.time() - _start_time,
+        cpu_usage=cpu_percent,
+        memory_usage=mem_percent,
     )
 
 

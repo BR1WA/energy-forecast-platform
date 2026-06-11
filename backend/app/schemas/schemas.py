@@ -223,3 +223,5 @@ class SystemHealth(BaseModel):
     total_forecasts: int
     database_status: str
     uptime_seconds: float
+    cpu_usage: float
+    memory_usage: float
