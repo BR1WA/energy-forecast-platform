@@ -220,6 +220,11 @@ export default function DashboardPage() {
                 <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
                   <Activity className="w-4 h-4 text-blue-400" />
                   Energy Consumption Trend
+                  {(!analytics || !analytics.consumption_trend || analytics.consumption_trend.length === 0) && (
+                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10 ml-2">
+                      Demo Data
+                    </Badge>
+                  )}
                 </CardTitle>
                 <div className="flex items-center gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
