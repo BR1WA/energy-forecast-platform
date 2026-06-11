@@ -312,7 +312,7 @@ export default function AnalyticsPage() {
                       <Calendar className="w-4 h-4 text-blue-400" />
                       Weekly Consumption vs Prediction
                     </div>
-                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -372,7 +372,7 @@ export default function AnalyticsPage() {
                       <Activity className="w-4 h-4 text-cyan-400" />
                       Hourly Consumption Pattern
                     </div>
-                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -477,7 +477,7 @@ export default function AnalyticsPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
                     <span>Model R² Score Over Time</span>
-                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -546,7 +546,7 @@ export default function AnalyticsPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
                     <span>Model Comparison Radar</span>
-                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -598,7 +598,7 @@ export default function AnalyticsPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
                   <span>Weekly Consumption Heatmap</span>
-                  <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10">Demo Data</Badge>
+                  <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
