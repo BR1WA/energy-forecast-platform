@@ -24,6 +24,7 @@ These bugs have been resolved in prior commits:
 | `7988179` | M4: Guard against potential crash if model lacks training_metrics on forecast page |
 | `fdd44aa` | M5: Update PDF download to use apiFetch with automatic token refresh support |
 | `6d7bd9d` | M6: Add Demo Data badge to dashboard consumption trend chart when using fallback data |
+| `f477297` | M1: Integrate real database forecast records into backend analytics router and align schema keys with frontend charts |
 | `cb027f5` | M7: Apply rate limiting to login, predict, and predict_upload endpoints using a shared SlowAPI Limiter |
 | `4591d53` | M8: Compute estimated 24h cost using time-of-use tariffs (peak/off-peak rates based on hour of the day) rather than a flat rate |
 
@@ -37,13 +38,7 @@ All high priority bugs have been resolved and verified!
 
 ## 🟡 MEDIUM — Should Fix
 
-### M1. Analytics data is mostly hardcoded
-- **Files**: [analytics.py](file:///c:/Users/salah/Documents/MASTER/PFE2/backend/app/routers/analytics.py#L103-L181), [analytics/page.tsx](file:///c:/Users/salah/Documents/MASTER/PFE2/frontend/src/app/analytics/page.tsx#L76-L135)
-- **Problem**: 6 out of 8 analytics chart sections are hardcoded/formula-generated: `consumption_trend`, `weekly_consumption`, `consumption_by_hour`, `monthly_accuracy`, `model_performance`, `heatmap_data`. Only summary cards (total_forecasts, alerts, avg_peak_power) use real data. The frontend also has its own set of hardcoded demo data.
-- **Impact**: The analytics page mostly shows fabricated data. The "Demo Data" badges help, but the underlying issue remains.
-- **Fix**: Derive chart data from real `Forecast` records in the database. If insufficient data, keep the demo fallback with badges.
-
----
+All medium priority bugs have been resolved and verified!
 
 ## 🔵 LOW — Nice to Fix
 
