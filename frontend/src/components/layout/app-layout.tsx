@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from './sidebar';
@@ -9,6 +9,7 @@ import Navbar from './navbar';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -36,8 +37,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-[#0A0F1C] overflow-hidden" suppressHydrationWarning>
-      <Sidebar />
-      <div className="flex flex-col flex-1 ml-[260px] transition-all duration-300">
+      <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+      <div className={`flex flex-col flex-1 transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-[260px]'}`}>
         <Navbar />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
