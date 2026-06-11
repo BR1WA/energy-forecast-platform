@@ -45,6 +45,8 @@ export interface ForecastModel {
   name: string;
   display_name: string;
   description: string;
+  architecture_type?: string;
+  training_metrics?: ForecastMetrics;
   accuracy?: number;
   is_active: boolean;
   version: string;
@@ -64,10 +66,11 @@ export interface ForecastPoint {
 }
 
 export interface ForecastResult {
-  id: string;
+  id?: string;
   model_name: string;
-  predictions: ForecastPoint[];
-  metrics: ForecastMetrics;
+  predictions: number[][];
+  input_data?: number[][];
+  metrics?: ForecastMetrics;
   created_at: string;
   status: 'completed' | 'processing' | 'failed';
 }
@@ -89,11 +92,10 @@ export interface ForecastHistory {
 }
 
 export interface SampleDataset {
-  id: string;
   name: string;
   description: string;
-  rows: number;
-  columns: string[];
+  season?: string;
+  date_range?: string;
 }
 
 // ============================================================
@@ -101,13 +103,11 @@ export interface SampleDataset {
 // ============================================================
 export interface AnalyticsSummary {
   total_forecasts: number;
-  active_alerts: number;
-  avg_accuracy: number;
-  total_data_points: number;
-  forecasts_this_week: number;
-  model_usage: ModelUsage[];
-  recent_activity: ActivityItem[];
-  consumption_trend: ConsumptionPoint[];
+  unacknowledged_alerts: number;
+  avg_peak_power: number;
+  models_used: number;
+  recent_forecasts: ForecastHistory[];
+  consumption_trend?: ConsumptionPoint[];
 }
 
 export interface ModelUsage {
@@ -161,6 +161,10 @@ export interface AdminUser extends User {
 export interface ModelRegistry {
   id: string;
   name: string;
+  display_name?: string;
+  description?: string;
+  architecture_type?: string;
+  training_metrics?: ForecastMetrics;
   version: string;
   status: 'active' | 'inactive' | 'training';
   accuracy: number;
@@ -170,7 +174,7 @@ export interface ModelRegistry {
 
 export interface SystemHealth {
   status: 'healthy' | 'degraded' | 'down';
-  uptime: string;
+  uptime_seconds: number;
   cpu_usage: number;
   memory_usage: number;
   active_users: number;
