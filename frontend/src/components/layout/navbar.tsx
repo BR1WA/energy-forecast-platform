@@ -26,6 +26,7 @@ const pageTitles: Record<string, string> = {
   '/alerts': 'Alerts',
   '/admin': 'Admin Panel',
   '/settings': 'Settings',
+  '/profile': 'Profile',
 };
 
 const pageDescriptions: Record<string, string> = {
@@ -35,6 +36,7 @@ const pageDescriptions: Record<string, string> = {
   '/alerts': 'Manage alerts and thresholds',
   '/admin': 'System administration and management',
   '/settings': 'Manage your account preferences',
+  '/profile': 'Manage your user profile details',
 };
 
 // Search items
