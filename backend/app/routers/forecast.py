@@ -1,7 +1,7 @@
 """
 Forecast router — model inference, history, samples.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import numpy as np
@@ -15,6 +15,10 @@ from app.schemas import (
 )
 from app.services.auth_service import get_current_user, require_role
 from app.services.forecast_service import get_forecast_service, TARGET_COLS
+from app.limiter import limiter
+from app.config import get_settings
+
+settings = get_settings()
 
 router = APIRouter(prefix="/api/v1/forecast", tags=["Forecasting"])
 
@@ -34,32 +38,34 @@ def list_samples(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/predict", response_model=ForecastResponse)
+@limiter.limit(settings.RATE_LIMIT)
 def predict(
-    request: ForecastRequest,
+    request: Request,
+    payload: ForecastRequest,
     current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
 ):
     service = get_forecast_service()
 
-    if not request.model_name:
+    if not payload.model_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="model_name is required for predictions",
         )
 
     # Get input data
-    if request.sample_name:
-        if request.sample_name not in service.samples:
+    if payload.sample_name:
+        if payload.sample_name not in service.samples:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Sample '{request.sample_name}' not found. Available: {list(service.samples.keys())}",
+                detail=f"Sample '{payload.sample_name}' not found. Available: {list(service.samples.keys())}",
             )
-        sample = service.samples[request.sample_name]
+        sample = service.samples[payload.sample_name]
         targets = sample['targets']
         calendar = sample['calendar']
-    elif request.data:
-        targets = np.array(request.data, dtype=np.float32)
-        calendar = np.array(request.calendar, dtype=np.float32) if request.calendar else None
+    elif payload.data:
+        targets = np.array(payload.data, dtype=np.float32)
+        calendar = np.array(payload.calendar, dtype=np.float32) if payload.calendar else None
         if targets.shape != (96, 7):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -80,7 +86,7 @@ def predict(
     # Run inference
     try:
         predictions, alerts_data = service.predict(
-            request.model_name, targets, calendar, threshold_kw=threshold
+            payload.model_name, targets, calendar, threshold_kw=threshold
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -93,7 +99,7 @@ def predict(
     # Save forecast to database
     forecast = Forecast(
         user_id=current_user.id,
-        model_name=request.model_name,
+        model_name=payload.model_name,
         predictions=predictions.tolist(),
     )
     db.add(forecast)
@@ -180,7 +186,9 @@ def compare_models(
 
 
 @router.post("/predict/upload", response_model=ForecastResponse)
+@limiter.limit(settings.RATE_LIMIT)
 def predict_upload(
+    request: Request,
     file: UploadFile = File(...),
     model_name: str = Form(...),
     current_user: User = Depends(require_role(["admin", "analyst"])),

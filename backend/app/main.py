@@ -8,22 +8,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.database import engine, Base
 from app.routers import auth, forecast, alerts, analytics, admin
 from app.services.forecast_service import get_forecast_service
+from app.limiter import limiter
 
 settings = get_settings()
 
 # Ensure static directories exist before FastAPI is configured
 os.makedirs("static/avatars", exist_ok=True)
-
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager

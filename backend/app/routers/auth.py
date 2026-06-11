@@ -2,7 +2,7 @@
 Authentication router — login, register, token refresh.
 """
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 import os
 import time
@@ -17,6 +17,10 @@ from app.services.auth_service import (
     hash_password, verify_password, authenticate_user, create_access_token,
     create_refresh_token, decode_token, get_current_user
 )
+from app.limiter import limiter
+from app.config import get_settings
+
+settings = get_settings()
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
@@ -57,7 +61,8 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT)
+def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     """Authenticate and receive JWT tokens."""
     user = authenticate_user(db, data.email, data.password)
     if not user:
