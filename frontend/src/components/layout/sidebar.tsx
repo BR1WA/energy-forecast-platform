@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
+import { useI18n } from '@/lib/i18n';
 import {
   LayoutDashboard,
   LineChart,
@@ -32,26 +33,31 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const navItems = [
   {
     label: 'Dashboard',
+    translationKey: 'nav.dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
   },
   {
     label: 'Forecaster',
+    translationKey: 'nav.forecast',
     href: '/forecast',
     icon: LineChart,
   },
   {
     label: 'Analytics',
+    translationKey: 'nav.analytics',
     href: '/analytics',
     icon: BarChart3,
   },
   {
     label: 'Alerts',
+    translationKey: 'nav.alerts',
     href: '/alerts',
     icon: Bell,
   },
   {
     label: 'Admin',
+    translationKey: 'nav.admin',
     href: '/admin',
     icon: Shield,
     adminOnly: true,
@@ -67,6 +73,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { t, isRTL } = useI18n();
 
   const initials = user?.full_name
     ?.split(' ')
@@ -78,8 +85,9 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
     <aside
       id="sidebar"
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen flex flex-col transition-all duration-300 ease-in-out',
-        'bg-[#0d1321]/80 backdrop-blur-2xl border-r border-white/[0.06]',
+        'fixed top-0 z-40 h-screen flex flex-col transition-all duration-300 ease-in-out',
+        'bg-[#0d1321]/80 backdrop-blur-2xl',
+        isRTL ? 'right-0 border-l border-white/[0.06]' : 'left-0 border-r border-white/[0.06]',
         collapsed ? 'w-[72px]' : 'w-[260px]'
       )}
     >
@@ -95,7 +103,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
                 EnergyAI
               </h1>
               <p className="text-[10px] text-slate-400 -mt-0.5">
-                Management Platform
+                {isRTL ? 'منصة إدارة الطاقة' : 'Management Platform'}
               </p>
             </div>
           )}
@@ -123,7 +131,10 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
                 )}
               >
                 {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-blue-400" />
+                  <div className={cn(
+                    'absolute top-1/2 -translate-y-1/2 w-[3px] h-5 bg-blue-400',
+                    isRTL ? 'right-0 rounded-l-full' : 'left-0 rounded-r-full'
+                  )} />
                 )}
                 <item.icon
                   className={cn(
@@ -135,11 +146,14 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
                 />
                 {!collapsed && (
                   <span className="truncate animate-in fade-in slide-in-from-left-2 duration-200">
-                    {item.label}
+                    {t(item.translationKey)}
                   </span>
                 )}
                 {isActive && !collapsed && (
-                  <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-blue-400 shadow-sm shadow-blue-400/50" />
+                  <div className={cn(
+                    'absolute w-1.5 h-1.5 rounded-full bg-blue-400 shadow-sm shadow-blue-400/50',
+                    isRTL ? 'left-3' : 'right-3'
+                  )} />
                 )}
               </Link>
             );
@@ -155,9 +169,9 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           className="flex items-center justify-center w-full py-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.04] transition-all duration-200"
         >
           {collapsed ? (
-            <ChevronRight className="w-4 h-4" />
+            isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
           ) : (
-            <ChevronLeft className="w-4 h-4" />
+            isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />
           )}
         </button>
 
@@ -208,7 +222,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
             >
               <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
                 <User className="w-4 h-4 mr-2" />
-                Profile
+                {t('nav.profile')}
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/[0.06]" />
@@ -218,7 +232,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
             >
               <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings')}>
                 <Settings className="w-4 h-4 mr-2" />
-                Settings
+                {t('nav.settings')}
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/[0.06]" />
@@ -228,7 +242,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
             >
               <div className="w-full h-full flex items-center px-3 py-2" onClick={() => logout()}>
                 <LogOut className="w-4 h-4 mr-2" />
-                Logout
+                {t('nav.logout')}
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>

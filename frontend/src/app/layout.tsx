@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { I18nProvider } from "@/lib/i18n";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -34,19 +35,21 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>
-            {children}
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: "#111827",
-                border: "1px solid rgba(59, 130, 246, 0.1)",
-                color: "#E2E8F0",
-              },
-            }}
-          />
-          </AuthProvider>
+          <I18nProvider>
+            <AuthProvider>
+              {children}
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  style: {
+                    background: "#111827",
+                    border: "1px solid rgba(59, 130, 246, 0.1)",
+                    color: "#E2E8F0",
+                  },
+                }}
+              />
+            </AuthProvider>
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

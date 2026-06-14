@@ -6,6 +6,7 @@ import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useI18n } from '@/lib/i18n';
 import {
   BarChart3,
   TrendingUp,
@@ -29,7 +30,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAuth } from '@/lib/auth';
-import { analyticsApi, forecastApi } from '@/lib/api';
+import { analyticsApi } from '@/lib/api';
 import { formatTimeAgo } from '@/lib/utils';
 
 interface AnalyticsData {
@@ -72,6 +73,7 @@ const defaultChartData = [
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { t, language } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,6 +91,21 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const getGreetingText = () => {
+    const hour = new Date().getHours();
+    if (language === 'ar') {
+      if (hour < 12) return 'صباح الخير';
+      return 'مساء الخير';
+    }
+    if (language === 'fr') {
+      if (hour < 12) return 'Bonjour';
+      return 'Bonsoir';
+    }
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   // Compute stat cards from real data
   const bestModel = analytics?.models_used
     ? Object.entries(analytics.models_used).sort((a, b) => b[1] - a[1])[0]
@@ -96,7 +113,7 @@ export default function DashboardPage() {
 
   const statCards = [
     {
-      title: 'Total Forecasts',
+      title: t('dashboard.forecasts_run'),
       value: analytics ? analytics.total_forecasts.toString() : '—',
       change: bestModel ? `Top: ${modelDisplayNames[bestModel[0]] || bestModel[0]}` : '',
       changeType: 'positive' as const,
@@ -105,18 +122,18 @@ export default function DashboardPage() {
       glow: 'glow-blue',
     },
     {
-      title: 'Avg Peak Power',
+      title: t('dashboard.total_consumption'),
       value: analytics?.avg_peak_power
         ? `${analytics.avg_peak_power.toFixed(2)} kW`
         : '—',
-      change: 'Global Active Power',
+      change: language === 'ar' ? 'متوسط حمل الطاقة' : language === 'fr' ? 'Puissance moyenne' : 'Avg Peak Power',
       changeType: 'positive' as const,
       icon: Target,
       gradient: 'from-emerald-500 to-emerald-600',
       glow: 'glow-emerald',
     },
     {
-      title: 'Active Alerts',
+      title: t('alerts.active_alerts'),
       value: analytics ? analytics.unacknowledged_alerts.toString() : '—',
       change: analytics ? `${analytics.total_alerts} total` : '',
       changeType: 'negative' as const,
@@ -125,7 +142,7 @@ export default function DashboardPage() {
       glow: '',
     },
     {
-      title: 'Models Used',
+      title: language === 'ar' ? 'النماذج المستعملة' : language === 'fr' ? 'Modèles Utilisés' : 'Models Used',
       value: analytics?.models_used
         ? Object.keys(analytics.models_used).length.toString()
         : '—',
@@ -145,13 +162,13 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">
-              Good {getGreeting()},{' '}
+              {getGreetingText()},{' '}
               <span className="gradient-text">
                 {user?.full_name?.split(' ')[0] || 'User'}
               </span>
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Here&apos;s your energy overview for today
+              {t('dashboard.subtitle')}
             </p>
           </div>
           <Button
@@ -160,7 +177,7 @@ export default function DashboardPage() {
             className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20 transition-all duration-300 hover:shadow-blue-500/30"
           >
             <LineChart className="w-4 h-4 mr-2" />
-            New Forecast
+            {t('forecast.run_forecast')}
           </Button>
         </div>
 
@@ -219,21 +236,21 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
                   <Activity className="w-4 h-4 text-blue-400" />
-                  Energy Consumption Trend
+                  {t('dashboard.consumption_forecast')}
                   {(!analytics || !analytics.consumption_trend || analytics.consumption_trend.length === 0) && (
                     <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/20 bg-amber-500/10 ml-2">
-                      Demo Data
+                      {language === 'ar' ? 'بيانات توضيحية' : language === 'fr' ? 'Données Démo' : 'Demo Data'}
                     </Badge>
                   )}
                 </CardTitle>
                 <div className="flex items-center gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="text-slate-400">Actual</span>
+                    <span className="text-slate-400">{language === 'ar' ? 'حقيقي' : language === 'fr' ? 'Réel' : 'Actual'}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-cyan-400" />
-                    <span className="text-slate-400">Predicted</span>
+                    <span className="text-slate-400">{language === 'ar' ? 'متوقع' : language === 'fr' ? 'Prédit' : 'Predicted'}</span>
                   </div>
                 </div>
               </div>
@@ -333,7 +350,7 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
                 <Zap className="w-4 h-4 text-cyan-400" />
-                Quick Actions
+                {language === 'ar' ? 'إجراءات سريعة' : language === 'fr' ? 'Actions Rapides' : 'Quick Actions'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -347,10 +364,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-white">
-                    Run Forecast
+                    {t('forecast.run_forecast')}
                   </p>
                   <p className="text-xs text-slate-400">
-                    Predict energy consumption
+                    {language === 'ar' ? 'توقع استهلاك الطاقة' : language === 'fr' ? 'Prédire la consommation' : 'Predict energy consumption'}
                   </p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 transition-colors" />
@@ -366,10 +383,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-white">
-                    Compare Models
+                    {language === 'ar' ? 'مقارنة النماذج' : language === 'fr' ? 'Comparer les Modèles' : 'Compare Models'}
                   </p>
                   <p className="text-xs text-slate-400">
-                    3-way model comparison
+                    {language === 'ar' ? 'مقارنة ثلاثية للنماذج' : language === 'fr' ? 'Comparaison de 3 modèles' : '3-way model comparison'}
                   </p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 transition-colors" />
@@ -385,10 +402,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-white">
-                    View Analytics
+                    {t('nav.analytics')}
                   </p>
                   <p className="text-xs text-slate-400">
-                    Explore insights & trends
+                    {language === 'ar' ? 'استكشاف الأنماط والاتجاهات' : language === 'fr' ? 'Explorer les tendances' : 'Explore insights & trends'}
                   </p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors" />
@@ -404,12 +421,12 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-white">
-                    Manage Alerts
+                    {language === 'ar' ? 'إدارة التنبيهات' : language === 'fr' ? 'Gérer les Alertes' : 'Manage Alerts'}
                   </p>
                   <p className="text-xs text-slate-400">
                     {analytics
-                      ? `${analytics.unacknowledged_alerts} active alerts`
-                      : 'View alerts'}
+                      ? `${analytics.unacknowledged_alerts} ${language === 'ar' ? 'تنبيهات نشطة' : language === 'fr' ? 'alertes actives' : 'active alerts'}`
+                      : t('nav.alerts')}
                   </p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors" />
@@ -424,7 +441,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
                 <Clock className="w-4 h-4 text-blue-400" />
-                Recent Forecasts
+                {t('dashboard.recent_activity')}
               </CardTitle>
               <Button
                 id="dashboard-view-all"
@@ -433,7 +450,7 @@ export default function DashboardPage() {
                 onClick={() => router.push('/forecast')}
                 className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
               >
-                View All
+                {language === 'ar' ? 'عرض الكل' : language === 'fr' ? 'Voir Tout' : 'View All'}
                 <ArrowUpRight className="w-3 h-3 ml-1" />
               </Button>
             </div>
@@ -474,14 +491,14 @@ export default function DashboardPage() {
                             : '—'}
                         </p>
                         <p className="text-[10px] text-slate-500 uppercase">
-                          peak power
+                          {language === 'ar' ? 'حمل الذروة' : language === 'fr' ? 'puissance max' : 'peak power'}
                         </p>
                       </div>
                       <Badge
                         variant="outline"
                         className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[10px]"
                       >
-                        completed
+                        {language === 'ar' ? 'مكتمل' : language === 'fr' ? 'terminé' : 'completed'}
                       </Badge>
                     </div>
                   </div>
@@ -489,7 +506,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="text-center py-8">
                   <p className="text-sm text-slate-400">
-                    No forecasts yet. Run your first prediction!
+                    {t('dashboard.no_forecasts')}
                   </p>
                 </div>
               )}
@@ -499,11 +516,4 @@ export default function DashboardPage() {
       </div>
     </AppLayout>
   );
-}
-
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'morning';
-  if (hour < 18) return 'afternoon';
-  return 'evening';
 }

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useI18n } from '@/lib/i18n';
 import {
   Select,
   SelectContent,
@@ -73,6 +74,7 @@ interface SampleInfo {
 }
 
 export default function ForecastPage() {
+  const { t, language } = useI18n();
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [sampleDatasets, setSampleDatasets] = useState<SampleInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -277,10 +279,10 @@ export default function ForecastPage() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <LineChartIcon className="w-6 h-6 text-blue-400" />
-            Energy Forecaster
+            {t('forecast.title')}
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Run predictive models and analyze forecast results
+            {t('forecast.subtitle')}
           </p>
         </div>
 

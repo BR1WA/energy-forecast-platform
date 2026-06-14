@@ -10,12 +10,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
 import { authApi, alertsApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
+import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { language, setLanguage, t } = useI18n();
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -86,7 +88,7 @@ export default function SettingsPage() {
         notification_email: criticalAlerts,
         notification_push: weeklySummary,
       });
-      toast.success('Preferences saved successfully');
+      toast.success(t('settings.save') + ' ' + (language === 'en' ? 'successful' : language === 'fr' ? 'réussie' : 'بنجاح'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save preferences');
     } finally {
@@ -98,9 +100,9 @@ export default function SettingsPage() {
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Account Settings</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">{t('settings.title')}</h1>
           <p className="text-slate-400 mt-1">
-            Manage your profile, preferences, and security settings.
+            {t('settings.subtitle')}
           </p>
         </div>
 
@@ -108,11 +110,11 @@ export default function SettingsPage() {
           <TabsList className="bg-[#111827] border border-white/[0.06] mb-6">
             <TabsTrigger value="preferences" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
               <Bell className="w-4 h-4 mr-2" />
-              Preferences
+              {t('settings.preferences')}
             </TabsTrigger>
             <TabsTrigger value="security" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
               <Shield className="w-4 h-4 mr-2" />
-              Security
+              {t('settings.security')}
             </TabsTrigger>
           </TabsList>
 
@@ -120,43 +122,75 @@ export default function SettingsPage() {
           <TabsContent value="preferences" className="space-y-4">
             <Card className="bg-[#111827]/50 border-white/[0.06]">
               <CardHeader>
-                <CardTitle className="text-lg text-white">Display & Notifications</CardTitle>
+                <CardTitle className="text-lg text-white">{t('settings.display')}</CardTitle>
                 <CardDescription className="text-slate-400">
-                  Customize how EnergyAI looks and communicates with you.
+                  {t('settings.display_desc')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Theme Selection */}
                 <div className="space-y-3">
-                  <Label className="text-slate-300">Theme Preference</Label>
+                  <Label className="text-slate-300">{t('settings.theme')}</Label>
                   <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={() => setTheme('light')}
                       className={`flex flex-col items-center justify-center p-4 rounded-xl border ${theme === 'light' ? 'border-blue-500 bg-blue-500/10' : 'border-white/[0.06] bg-[#0A0F1C] hover:bg-white/[0.04]'} transition-all`}
                     >
                       <Sun className={`w-6 h-6 mb-2 ${theme === 'light' ? 'text-blue-400' : 'text-slate-400'}`} />
-                      <span className={`text-sm ${theme === 'light' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>Light</span>
+                      <span className={`text-sm ${theme === 'light' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>{t('settings.theme_light')}</span>
                     </button>
                     <button
                       onClick={() => setTheme('dark')}
                       className={`flex flex-col items-center justify-center p-4 rounded-xl border ${theme === 'dark' ? 'border-blue-500 bg-blue-500/10' : 'border-white/[0.06] bg-[#0A0F1C] hover:bg-white/[0.04]'} transition-all`}
                     >
                       <Moon className={`w-6 h-6 mb-2 ${theme === 'dark' ? 'text-blue-400' : 'text-slate-400'}`} />
-                      <span className={`text-sm ${theme === 'dark' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>Dark</span>
+                      <span className={`text-sm ${theme === 'dark' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>{t('settings.theme_dark')}</span>
                     </button>
                     <button
                       onClick={() => setTheme('system')}
                       className={`flex flex-col items-center justify-center p-4 rounded-xl border ${theme === 'system' ? 'border-blue-500 bg-blue-500/10' : 'border-white/[0.06] bg-[#0A0F1C] hover:bg-white/[0.04]'} transition-all`}
                     >
                       <Monitor className={`w-6 h-6 mb-2 ${theme === 'system' ? 'text-blue-400' : 'text-slate-400'}`} />
-                      <span className={`text-sm ${theme === 'system' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>System</span>
+                      <span className={`text-sm ${theme === 'system' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>{t('settings.theme_system')}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Language Selection */}
+                <div className="space-y-3 pt-4 border-t border-white/[0.06]">
+                  <Label className="text-slate-300 flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-blue-400" />
+                    {t('settings.language')}
+                  </Label>
+                  <p className="text-xs text-slate-400 mb-2">{t('settings.language_desc')}</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      onClick={() => setLanguage('en')}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border ${language === 'en' ? 'border-blue-500 bg-blue-500/10' : 'border-white/[0.06] bg-[#0A0F1C] hover:bg-white/[0.04]'} transition-all`}
+                    >
+                      <span className={`text-lg font-bold mb-1 ${language === 'en' ? 'text-blue-400' : 'text-slate-400'}`}>EN</span>
+                      <span className={`text-xs ${language === 'en' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>English</span>
+                    </button>
+                    <button
+                      onClick={() => setLanguage('fr')}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border ${language === 'fr' ? 'border-blue-500 bg-blue-500/10' : 'border-white/[0.06] bg-[#0A0F1C] hover:bg-white/[0.04]'} transition-all`}
+                    >
+                      <span className={`text-lg font-bold mb-1 ${language === 'fr' ? 'text-blue-400' : 'text-slate-400'}`}>FR</span>
+                      <span className={`text-xs ${language === 'fr' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>Français</span>
+                    </button>
+                    <button
+                      onClick={() => setLanguage('ar')}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border ${language === 'ar' ? 'border-blue-500 bg-blue-500/10' : 'border-white/[0.06] bg-[#0A0F1C] hover:bg-white/[0.04]'} transition-all`}
+                    >
+                      <span className={`text-lg font-bold mb-1 ${language === 'ar' ? 'text-blue-400' : 'text-slate-400'}`}>AR</span>
+                      <span className={`text-xs ${language === 'ar' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>العربية</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Notifications */}
                 <div className="space-y-4 pt-4 border-t border-white/[0.06]">
-                  <Label className="text-slate-300">Email Notifications</Label>
+                  <Label className="text-slate-300">{t('settings.email_notifs')}</Label>
                   
                   <div className="flex items-center justify-between p-3 rounded-lg border border-white/[0.06] bg-[#0A0F1C]">
                     <div className="flex items-center gap-3">
@@ -164,8 +198,8 @@ export default function SettingsPage() {
                         <AlertTriangle className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">Critical Alerts</p>
-                        <p className="text-xs text-slate-400">Receive emails for peak consumption warnings</p>
+                        <p className="text-sm font-medium text-white">{t('settings.critical_alerts')}</p>
+                        <p className="text-xs text-slate-400">{t('settings.critical_desc')}</p>
                       </div>
                     </div>
                     <button
@@ -183,8 +217,8 @@ export default function SettingsPage() {
                         <Monitor className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">Weekly Summary</p>
-                        <p className="text-xs text-slate-400">Receive a weekly digest of your energy usage</p>
+                        <p className="text-sm font-medium text-white">{t('settings.weekly_summary')}</p>
+                        <p className="text-xs text-slate-400">{t('settings.weekly_desc')}</p>
                       </div>
                     </div>
                     <button
@@ -203,7 +237,7 @@ export default function SettingsPage() {
                     disabled={isSavingPrefs}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    {isSavingPrefs ? 'Saving...' : 'Save Preferences'}
+                    {isSavingPrefs ? '...' : t('settings.save')}
                   </Button>
                 </div>
               </CardContent>
@@ -214,15 +248,15 @@ export default function SettingsPage() {
           <TabsContent value="security" className="space-y-4">
             <Card className="bg-[#111827]/50 border-white/[0.06]">
               <CardHeader>
-                <CardTitle className="text-lg text-white">Security Settings</CardTitle>
+                <CardTitle className="text-lg text-white">{t('settings.password_title')}</CardTitle>
                 <CardDescription className="text-slate-400">
-                  Manage your password and account security.
+                  {t('settings.password_desc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSavePassword} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="current-password" className="text-slate-300">Current Password</Label>
+                    <Label htmlFor="current-password" className="text-slate-300">{t('settings.current_password')}</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                       <Input
@@ -238,7 +272,7 @@ export default function SettingsPage() {
                   
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="new-password" className="text-slate-300">New Password</Label>
+                      <Label htmlFor="new-password" className="text-slate-300">{t('settings.new_password')}</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <Input
@@ -252,7 +286,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="confirm-password" className="text-slate-300">Confirm New Password</Label>
+                      <Label htmlFor="confirm-password" className="text-slate-300">{t('settings.confirm_password')}</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <Input
@@ -281,7 +315,7 @@ export default function SettingsPage() {
                       disabled={isSavingPassword}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                      {isSavingPassword ? 'Updating...' : 'Update Password'}
+                      {isSavingPassword ? '...' : t('settings.update_password')}
                     </Button>
                   </div>
                 </form>

@@ -11,12 +11,12 @@
   - `[x]` Update training stats, version increments, and metrics on completion
   - `[x]` Verify registry details update and commit changes
 
-- `[ ]` **Component 3: i18n Localization & RTL**
-  - `[ ]` Create `frontend/src/lib/i18n.tsx` translation context (EN / FR / AR)
-  - `[ ]` Setup RTL layout mirroring when Arabic is active
-  - `[ ]` Integrate translation helper `t()` across Navbar, Sidebar, Dashboard, Forecast, Analytics, Admin pages
-  - `[ ]` Add Language Selection settings card in `frontend/src/app/settings/page.tsx`
-  - `[ ]` Verify translations work and commit changes
+- `[x]` **Component 3: i18n Localization & RTL**
+  - `[x]` Create `frontend/src/lib/i18n.tsx` translation context (EN / FR / AR)
+  - `[x]` Setup RTL layout mirroring when Arabic is active
+  - `[x]` Integrate translation helper `t()` across Navbar, Sidebar, Dashboard, Forecast, Analytics, Admin pages
+  - `[x]` Add Language Selection settings card in `frontend/src/app/settings/page.tsx`
+  - `[x]` Verify translations work and commit changes
 
 - `[ ]` **Component 4: WebSockets & Auto-Forecasting**
   - `[ ]` Create `backend/app/services/websocket_manager.py` ConnectionManager class

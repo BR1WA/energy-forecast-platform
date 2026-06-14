@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { alertsApi } from '@/lib/api';
-import { formatTimeAgo } from '@/lib/utils';
+import { formatTimeAgo, cn } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -19,40 +20,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User } from 'lucide-react';
 
-const pageTitles: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/forecast': 'Forecaster',
-  '/analytics': 'Analytics',
-  '/alerts': 'Alerts',
-  '/admin': 'Admin Panel',
-  '/settings': 'Settings',
-  '/profile': 'Profile',
-};
-
-const pageDescriptions: Record<string, string> = {
-  '/dashboard': 'Monitor your energy consumption overview',
-  '/forecast': 'Run predictive models on your data',
-  '/analytics': 'Explore historical trends and insights',
-  '/alerts': 'Manage alerts and thresholds',
-  '/admin': 'System administration and management',
-  '/settings': 'Manage your account preferences',
-  '/profile': 'Manage your user profile details',
-};
-
-// Search items
-const searchPages = [
-  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, description: 'Energy overview & stats' },
-  { name: 'Forecaster', path: '/forecast', icon: LineChart, description: 'Run ML predictions' },
-  { name: 'Analytics', path: '/analytics', icon: BarChart3, description: 'Historical trends' },
-  { name: 'Alerts', path: '/alerts', icon: AlertTriangle, description: 'Alert management' },
-  { name: 'Admin Panel', path: '/admin', icon: Shield, description: 'User & system management' },
-  { name: 'Settings', path: '/settings', icon: SettingsIcon, description: 'Account preferences' },
-];
-
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { t, isRTL } = useI18n();
 
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -66,8 +38,47 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const title = pageTitles[pathname] || 'EnergyAI';
-  const description = pageDescriptions[pathname] || '';
+  const getPageTitle = () => {
+    switch (pathname) {
+      case '/dashboard':
+        return t('nav.dashboard');
+      case '/forecast':
+        return t('forecast.title');
+      case '/analytics':
+        return t('analytics.title');
+      case '/alerts':
+        return t('alerts.title');
+      case '/admin':
+        return t('admin.title');
+      case '/settings':
+        return t('settings.title');
+      case '/profile':
+        return t('nav.profile');
+      default:
+        return 'EnergyAI';
+    }
+  };
+
+  const getPageDescription = () => {
+    switch (pathname) {
+      case '/dashboard':
+        return t('dashboard.subtitle');
+      case '/forecast':
+        return t('forecast.subtitle');
+      case '/analytics':
+        return t('analytics.subtitle');
+      case '/alerts':
+        return t('alerts.subtitle');
+      case '/admin':
+        return t('admin.subtitle');
+      case '/settings':
+        return t('settings.subtitle');
+      case '/profile':
+        return t('settings.subtitle');
+      default:
+        return '';
+    }
+  };
 
   const initials = user?.full_name
     ?.split(' ')
@@ -130,6 +141,15 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const searchPages = [
+    { name: t('nav.dashboard'), path: '/dashboard', icon: LayoutDashboard, description: t('dashboard.subtitle') },
+    { name: t('nav.forecast'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
+    { name: t('nav.analytics'), path: '/analytics', icon: BarChart3, description: t('analytics.subtitle') },
+    { name: t('nav.alerts'), path: '/alerts', icon: AlertTriangle, description: t('alerts.subtitle') },
+    { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle') },
+    { name: t('nav.settings'), path: '/settings', icon: SettingsIcon, description: t('settings.subtitle') },
+  ];
+
   const filteredPages = searchPages.filter(
     (p) =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -167,9 +187,9 @@ export default function Navbar() {
     >
       {/* Left: Page Title */}
       <div>
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
-        {description && (
-          <p className="text-xs text-slate-400 -mt-0.5">{description}</p>
+        <h2 className="text-lg font-semibold text-white">{getPageTitle()}</h2>
+        {getPageDescription() && (
+          <p className="text-xs text-slate-400 -mt-0.5">{getPageDescription()}</p>
         )}
       </div>
 
@@ -183,15 +203,18 @@ export default function Navbar() {
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.06] transition-all duration-200 text-sm"
           >
             <Search className="w-4 h-4" />
-            <span className="hidden md:inline">Search...</span>
+            <span className="hidden md:inline">{isRTL ? 'بحث...' : 'Search...'}</span>
             <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/[0.06] text-[10px] font-mono text-slate-500">
-              ⌘K
+              Ctrl+K
             </kbd>
           </button>
 
           {/* Search Dropdown */}
           {searchOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-[#111827] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className={cn(
+              "absolute top-full mt-2 w-80 bg-[#111827] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200",
+              isRTL ? "left-0" : "right-0"
+            )}>
               <div className="flex items-center gap-2 p-3 border-b border-white/[0.06]">
                 <Search className="w-4 h-4 text-slate-500 shrink-0" />
                 <input
@@ -199,7 +222,7 @@ export default function Navbar() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search pages..."
+                  placeholder={isRTL ? 'البحث في الصفحات...' : 'Search pages...'}
                   className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-500 outline-none"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && filteredPages.length > 0) {
@@ -213,7 +236,7 @@ export default function Navbar() {
               </div>
               <div className="max-h-64 overflow-y-auto py-1">
                 {filteredPages.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">No results found</p>
+                  <p className="text-sm text-slate-500 text-center py-4">{isRTL ? 'لم يتم العثور على نتائج' : 'No results found'}</p>
                 ) : (
                   filteredPages.map((page) => (
                     <button
@@ -261,12 +284,15 @@ export default function Navbar() {
 
           {/* Notifications Dropdown */}
           {notifOpen && (
-            <div className="absolute right-0 top-full mt-2 w-96 bg-[#111827] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className={cn(
+              "absolute top-full mt-2 w-96 bg-[#111827] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200",
+              isRTL ? "left-0" : "right-0"
+            )}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-                <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                <h3 className="text-sm font-semibold text-white">{isRTL ? 'الإشعارات' : 'Notifications'}</h3>
                 {unreadCount > 0 && (
                   <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">
-                    {unreadCount} unread
+                    {unreadCount} {isRTL ? 'غير مقروءة' : 'unread'}
                   </Badge>
                 )}
               </div>
@@ -274,7 +300,7 @@ export default function Navbar() {
                 {alerts.length === 0 ? (
                   <div className="py-8 text-center">
                     <Bell className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500">No notifications</p>
+                    <p className="text-sm text-slate-500">{isRTL ? 'لا توجد إشعارات' : 'No notifications'}</p>
                   </div>
                 ) : (
                   alerts.map((alert) => (
@@ -298,7 +324,7 @@ export default function Navbar() {
                             onClick={() => handleAcknowledge(alert.id)}
                             className="text-[10px] text-blue-400 hover:text-blue-300 mt-1 font-medium"
                           >
-                            Mark as read
+                            {isRTL ? 'تحديد كمقروء' : 'Mark as read'}
                           </button>
                         )}
                       </div>
@@ -307,10 +333,10 @@ export default function Navbar() {
                 )}
               </div>
               <button
-                onClick={() => { router.push('/alerts'); setNotifOpen(false); }}
+                onClick={() => { router.push('/alerts'); setSearchOpen(false); setNotifOpen(false); }}
                 className="w-full px-4 py-2.5 text-xs text-center text-blue-400 hover:text-blue-300 hover:bg-white/[0.02] border-t border-white/[0.06] font-medium transition-colors"
               >
-                View all alerts →
+                {isRTL ? 'عرض جميع التنبيهات ←' : 'View all alerts →'}
               </button>
             </div>
           )}
@@ -364,7 +390,7 @@ export default function Navbar() {
             >
               <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
                 <User className="w-4 h-4 mr-2" />
-                Profile
+                {t('nav.profile')}
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -373,7 +399,7 @@ export default function Navbar() {
             >
               <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings')}>
                 <Settings className="w-4 h-4 mr-2" />
-                Settings
+                {t('nav.settings')}
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/[0.06]" />
@@ -383,7 +409,7 @@ export default function Navbar() {
             >
               <div className="w-full h-full flex items-center px-3 py-2" onClick={() => logout()}>
                 <LogOut className="w-4 h-4 mr-2" />
-                Logout
+                {t('nav.logout')}
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
