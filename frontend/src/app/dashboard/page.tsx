@@ -102,7 +102,7 @@ export default function DashboardPage() {
   const [history, setHistory] = useState<TelemetryFrame[]>([]);
   const [connected, setConnected] = useState(false);
   const [framesLog, setFramesLog] = useState<string[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Load analytics & establish WebSockets connection on mount
   useEffect(() => {
@@ -180,8 +180,8 @@ export default function DashboardPage() {
 
   // Auto scroll telemetry logs
   useEffect(() => {
-    if (activeTab === 'telemetry') {
-      logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (activeTab === 'telemetry' && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [framesLog, activeTab]);
 
@@ -649,13 +649,12 @@ export default function DashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                  <div className="w-full h-full rounded-xl bg-black/60 border border-white/5 p-3 font-mono text-[9px] text-slate-400 overflow-y-auto space-y-1">
+                  <div ref={logContainerRef} className="w-full h-full rounded-xl bg-black/60 border border-white/5 p-3 font-mono text-[9px] text-slate-400 overflow-y-auto space-y-1">
                     {framesLog.map((log, i) => (
                       <p key={i} className={log.includes('[SYSTEM]') ? 'text-emerald-400' : 'text-slate-400'}>
                         {log}
                       </p>
                     ))}
-                    <div ref={logEndRef} />
                   </div>
                 </CardContent>
               </Card>
