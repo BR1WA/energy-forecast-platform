@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 import {
@@ -86,7 +87,7 @@ export default function Navbar() {
     .join('')
     .toUpperCase() || 'U';
 
-  // Load alerts
+  // Load alerts & WebSockets connection for real-time alerts
   useEffect(() => {
     const loadAlerts = async () => {
       try {
@@ -98,9 +99,60 @@ export default function Navbar() {
       }
     };
     loadAlerts();
-    const interval = setInterval(loadAlerts, 10000);
-    return () => clearInterval(interval);
-  }, []);
+
+    if (!user) return;
+    
+    // Resolve ws URL based on NEXT_PUBLIC_API_URL or current host
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
+    const host = apiBase.replace(/^https?:\/\//, '');
+    const wsUrl = `${wsProto}://${host}/api/v1/alerts/ws/${user.id}`;
+    
+    console.log(`[WS] Connecting to ${wsUrl}`);
+    let ws: WebSocket;
+    let reconnectTimer: NodeJS.Timeout;
+    
+    const connect = () => {
+      ws = new WebSocket(wsUrl);
+      
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          console.log('[WS] Received payload:', payload);
+          
+          if (payload.type === 'alert') {
+            // Prepend new alert to dropdown in real time
+            setAlerts((prev) => [payload, ...prev].slice(0, 8));
+            setUnreadCount((prev) => prev + 1);
+            
+            // Show sonner toast
+            toast.warning(payload.title, {
+              description: payload.message,
+              duration: 8000,
+              action: {
+                label: 'View',
+                onClick: () => router.push('/alerts')
+              }
+            });
+          }
+        } catch (err) {
+          console.error('[WS] Error parsing message:', err);
+        }
+      };
+      
+      ws.onclose = () => {
+        console.log('[WS] Disconnected. Reconnecting in 5s...');
+        reconnectTimer = setTimeout(connect, 5000);
+      };
+    };
+    
+    connect();
+    
+    return () => {
+      if (ws) ws.close();
+      clearTimeout(reconnectTimer);
+    };
+  }, [user, router]);
 
   // Keyboard shortcut ⌘K / Ctrl+K
   useEffect(() => {

@@ -75,6 +75,62 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Start auto-forecasting and alert check ticker task
+    import asyncio
+    from app.services.websocket_manager import manager
+
+    async def auto_forecast_loop():
+        print("[AUTO-FORECAST] Starting background loop...")
+        await asyncio.sleep(5)  # Wait for startup to complete fully
+        while True:
+            try:
+                import random
+                from datetime import datetime, timezone
+                if manager.active_connections:
+                    val = round(random.uniform(2.5, 5.2), 2)
+                    threshold = 4.0
+                    print(f"[AUTO-FORECAST] Simulating load check: current usage {val} kW (threshold {threshold} kW)")
+                    
+                    if val > threshold:
+                        alert_payload = {
+                            "type": "alert",
+                            "severity": "high",
+                            "title": "Peak Consumption Warning",
+                            "message": f"Real-time usage is {val} kW, exceeding safety threshold of {threshold} kW. Recommend shifting load.",
+                            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                        }
+                        
+                        # Save alert to DB
+                        from app.database import SessionLocal
+                        from app.models import Alert, User
+                        db_session = SessionLocal()
+                        try:
+                            first_user = db_session.query(User).first()
+                            if first_user:
+                                db_alert = Alert(
+                                    user_id=first_user.id,
+                                    title=alert_payload["title"],
+                                    message=alert_payload["message"],
+                                    severity=alert_payload["severity"],
+                                    is_acknowledged=False
+                                )
+                                db_session.add(db_alert)
+                                db_session.commit()
+                                db_session.refresh(db_alert)
+                                alert_payload["id"] = str(db_alert.id)
+                        except Exception as db_err:
+                            print(f"[AUTO-FORECAST] DB log error: {db_err}")
+                        finally:
+                            db_session.close()
+
+                        print(f"[AUTO-FORECAST] Broadcasting alert: {alert_payload['message']}")
+                        await manager.broadcast_global(alert_payload)
+            except Exception as e:
+                print(f"[AUTO-FORECAST] Loop exception: {e}")
+            await asyncio.sleep(30)
+
+    loop_task = asyncio.create_task(auto_forecast_loop())
+
     print("[APP] Server ready!")
     print("=" * 60)
 
@@ -82,6 +138,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     print("[APP] Shutting down...")
+    loop_task.cancel()
 
 
 # Create FastAPI app

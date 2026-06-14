@@ -1,7 +1,7 @@
 """
 Alerts router — alert management and configuration.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import User, Alert, AlertConfig
 from app.schemas import AlertResponse, AlertConfigCreate, AlertConfigResponse, AlertAcknowledge
 from app.services.auth_service import get_current_user, require_role
+from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
 
@@ -103,3 +104,18 @@ def update_alert_config(
     db.commit()
     db.refresh(config)
     return AlertConfigResponse.model_validate(config)
+
+
+@router.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await manager.connect(client_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Echo: {data}")
+    except WebSocketDisconnect:
+        manager.disconnect(client_id, websocket)
+    except Exception as e:
+        print(f"[WS] Exception for client {client_id}: {e}")
+        manager.disconnect(client_id, websocket)
+

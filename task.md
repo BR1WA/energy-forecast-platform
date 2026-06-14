@@ -18,9 +18,9 @@
   - `[x]` Add Language Selection settings card in `frontend/src/app/settings/page.tsx`
   - `[x]` Verify translations work and commit changes
 
-- `[ ]` **Component 4: WebSockets & Auto-Forecasting**
-  - `[ ]` Create `backend/app/services/websocket_manager.py` ConnectionManager class
-  - `[ ]` Add WebSocket router `/api/v1/alerts/ws/{client_id}` in `backend/app/routers/alerts.py`
-  - `[ ]` Setup background task ticker in `backend/app/main.py` that automatically runs forecasts and broadcasts alerts
-  - `[ ]` Establish WebSocket receiver in `frontend/src/components/layout/navbar.tsx` to slide in alert toasts
-  - `[ ]` Verify live alert broadcasting and commit changes
+- `[x]` **Component 4: WebSockets & Auto-Forecasting**
+  - `[x]` Create `backend/app/services/websocket_manager.py` ConnectionManager class
+  - `[x]` Add WebSocket router `/api/v1/alerts/ws/{client_id}` in `backend/app/routers/alerts.py`
+  - `[x]` Setup background task ticker in `backend/app/main.py` that automatically runs forecasts and broadcasts alerts
+  - `[x]` Establish WebSocket receiver in `frontend/src/components/layout/navbar.tsx` to slide in alert toasts
+  - `[x]` Verify live alert broadcasting and commit changes
