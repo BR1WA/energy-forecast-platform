@@ -12,13 +12,17 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Database
-    DATABASE_URL: str = "postgresql://pfe:pfe_password@localhost:5432/energy_forecast"
+    DATABASE_URL: str = "sqlite:///./energy_forecast.db"
 
     # JWT
-    JWT_SECRET_KEY: str = "super-secret-key-change-in-production-2024"
+    JWT_SECRET_KEY: str = "dev-secret-key-for-local-testing-only"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Admin Seeding
+    ADMIN_EMAIL: str = "admin@energyforecast.com"
+    ADMIN_PASSWORD: str = "admin123"
 
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"

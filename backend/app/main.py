@@ -78,15 +78,15 @@ async def lifespan(app: FastAPI):
         admin_user = db.query(User).filter(User.role == "admin").first()
         if not admin_user:
             admin = User(
-                email="admin@energyforecast.com",
-                password_hash=hash_password("admin123"),
+                email=settings.ADMIN_EMAIL,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
                 full_name="System Administrator",
                 role="admin",
                 is_active=True,
             )
             db.add(admin)
             db.commit()
-            print("[DB] Default admin user created: admin@energyforecast.com / admin123")
+            print(f"[DB] Default admin user created: {settings.ADMIN_EMAIL}")
     finally:
         db.close()
 

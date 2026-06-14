@@ -5,15 +5,15 @@ services:
     image: postgres:16-alpine
     container_name: energy_db
     environment:
-      POSTGRES_DB: energy_forecast
-      POSTGRES_USER: pfe
-      POSTGRES_PASSWORD: pfe_password
+      POSTGRES_DB: ${POSTGRES_DB:-energy_forecast}
+      POSTGRES_USER: ${POSTGRES_USER:-pfe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pfe_password}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pfe -d energy_forecast"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pfe} -d ${POSTGRES_DB:-energy_forecast}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -27,10 +27,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://pfe:pfe_password@db:5432/energy_forecast
-      JWT_SECRET_KEY: super-secret-key-change-in-production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:-pfe_password}@db:5432/${POSTGRES_DB:-energy_forecast}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-super-secret-key-change-in-production}
       FRONTEND_URL: http://localhost:3000
       MODELS_DIR: /app/models
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@energyforecast.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     volumes:
       - ./backend:/app
       - ./models:/app/models
