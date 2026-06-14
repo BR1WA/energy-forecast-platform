@@ -1,7 +1,7 @@
 """
 Forecast router — model inference, history, samples.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import numpy as np
@@ -564,3 +564,20 @@ def get_history(
         ))
 
     return result
+
+
+@router.websocket("/smart-meter/live-ws")
+async def live_smart_meter_websocket(websocket: WebSocket):
+    import asyncio
+    from app.services.smart_meter_service import get_smart_meter_service
+    await websocket.accept()
+    print("[WS-LIVE] Client connected to live smart meter telemetry.")
+    meter_service = get_smart_meter_service()
+    try:
+        while True:
+            reading = meter_service.fetch_single_live_reading()
+            await websocket.send_json(reading)
+            await asyncio.sleep(2.0)
+    except Exception as e:
+        print(f"[WS-LIVE] Telemetry stream ended: {e}")
+

@@ -17,6 +17,7 @@ const translations: Record<Language, Translations> = {
     'nav.admin': 'Admin Panel',
     'nav.profile': 'Profile',
     'nav.logout': 'Sign Out',
+    'nav.telemetry': 'Live Telemetry',
 
     // Dashboard
     'dashboard.title': 'Energy Forecast Dashboard',
@@ -118,6 +119,7 @@ const translations: Record<Language, Translations> = {
     'nav.admin': 'Panel Admin',
     'nav.profile': 'Profil',
     'nav.logout': 'Déconnexion',
+    'nav.telemetry': 'Télémesure Live',
 
     // Dashboard
     'dashboard.title': 'Tableau de bord énergétique',
@@ -219,6 +221,7 @@ const translations: Record<Language, Translations> = {
     'nav.admin': 'لوحة المشرف',
     'nav.profile': 'الملف الشخصي',
     'nav.logout': 'تسجيل الخروج',
+    'nav.telemetry': 'القياس المباشر',
 
     // Dashboard
     'dashboard.title': 'لوحة التنبؤ بالطاقة',

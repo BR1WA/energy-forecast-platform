@@ -78,6 +78,41 @@ class SmartMeterService:
             
         return np.array(readings)
 
+    def fetch_single_live_reading(self) -> dict:
+        import random
+        now = datetime.datetime.now(timezone.utc)
+        hour = now.hour
+        is_weekend = now.weekday() in [5, 6]
+        
+        # Base active power (kW)
+        if 7 <= hour <= 9 or 18 <= hour <= 22:
+            base_power = 2.8 + random.uniform(-0.5, 0.5)
+            if is_weekend:
+                base_power += 0.4
+        else:
+            base_power = 0.9 + random.uniform(-0.15, 0.15)
+        
+        gap = max(0.15, base_power)
+        grp = max(0.02, gap * 0.08 + random.uniform(-0.01, 0.01))
+        voltage = 232.0 + random.uniform(-2.0, 2.0) - (gap * 1.0)
+        gi = (gap * 1000.0) / voltage
+        
+        # Sub-meterings (Wh equivalents, active load)
+        sub1 = max(0.0, gap * 6.2 + random.uniform(-0.5, 0.5)) if (11 <= hour <= 13 or 18 <= hour <= 20) else max(0.0, random.uniform(0.0, 0.2))
+        sub2 = max(0.0, gap * 5.5 + random.uniform(-0.5, 0.5)) if (is_weekend and 9 <= hour <= 15) else max(0.0, random.uniform(0.0, 0.1))
+        sub3 = max(0.0, gap * 14.2 + random.uniform(-1.0, 1.0))
+        
+        return {
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
+            "gap": round(gap, 3),
+            "grp": round(grp, 3),
+            "voltage": round(voltage, 1),
+            "intensity": round(gi, 2),
+            "sub_metering_1": round(sub1, 1),
+            "sub_metering_2": round(sub2, 1),
+            "sub_metering_3": round(sub3, 1)
+        }
+
 _service = None
 
 def get_smart_meter_service() -> SmartMeterService:

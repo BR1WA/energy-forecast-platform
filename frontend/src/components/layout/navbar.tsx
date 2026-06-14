@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { alertsApi } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon } from 'lucide-react';
+import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Activity } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -25,7 +25,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { t, isRTL } = useI18n();
+  const { t, isRTL, language } = useI18n();
 
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -38,6 +38,7 @@ export default function Navbar() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef<HTMLDivElement>(null);
+  const lastToastTimes = useRef<Record<string, number>>({});
 
   const getPageTitle = () => {
     switch (pathname) {
@@ -53,6 +54,8 @@ export default function Navbar() {
         return t('admin.title');
       case '/settings':
         return t('settings.title');
+      case '/smart-meter':
+        return t('nav.telemetry');
       case '/profile':
         return t('nav.profile');
       default:
@@ -76,6 +79,8 @@ export default function Navbar() {
         return t('settings.subtitle');
       case '/profile':
         return t('settings.subtitle');
+      case '/smart-meter':
+        return language === 'ar' ? 'بيانات القياس والتحميل المباشر للعداد الذكي' : language === 'fr' ? 'Télémesures et puissances du compteur en temps réel' : 'Real-time smart meter telemetry and load rates';
       default:
         return '';
     }
@@ -125,15 +130,21 @@ export default function Navbar() {
             setAlerts((prev) => [payload, ...prev].slice(0, 8));
             setUnreadCount((prev) => prev + 1);
             
-            // Show sonner toast
-            toast.warning(payload.title, {
-              description: payload.message,
-              duration: 8000,
-              action: {
-                label: 'View',
-                onClick: () => router.push('/alerts')
-              }
-            });
+            // Deduplicate toasts (cooldown of 8 seconds per unique message body)
+            const now = Date.now();
+            const lastTime = lastToastTimes.current[payload.message] || 0;
+            if (now - lastTime > 8000) {
+              lastToastTimes.current[payload.message] = now;
+              // Show sonner toast
+              toast.warning(payload.title, {
+                description: payload.message,
+                duration: 8000,
+                action: {
+                  label: 'View',
+                  onClick: () => router.push('/alerts')
+                }
+              });
+            }
           }
         } catch (err) {
           console.error('[WS] Error parsing message:', err);
@@ -198,6 +209,7 @@ export default function Navbar() {
     { name: t('nav.forecast'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
     { name: t('nav.analytics'), path: '/analytics', icon: BarChart3, description: t('analytics.subtitle') },
     { name: t('nav.alerts'), path: '/alerts', icon: AlertTriangle, description: t('alerts.subtitle') },
+    { name: t('nav.telemetry'), path: '/smart-meter', icon: Activity, description: 'Real-time power consumption' },
     { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle') },
     { name: t('nav.settings'), path: '/settings', icon: SettingsIcon, description: t('settings.subtitle') },
   ];

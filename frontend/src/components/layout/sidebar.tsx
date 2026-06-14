@@ -18,6 +18,7 @@ import {
   LogOut,
   Settings,
   User,
+  Activity,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -54,6 +55,12 @@ const navItems = [
     translationKey: 'nav.alerts',
     href: '/alerts',
     icon: Bell,
+  },
+  {
+    label: 'Live Telemetry',
+    translationKey: 'nav.telemetry',
+    href: '/smart-meter',
+    icon: Activity,
   },
   {
     label: 'Admin',
