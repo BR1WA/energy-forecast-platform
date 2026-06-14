@@ -238,10 +238,10 @@ export default function DashboardPage() {
   // Scrolling chart data mapping: past actual consumption + future predicted consumption
   const buildChartData = () => {
     // 1. Map past telemetry entries
-    const dataPoints = history.map((h) => ({
+    const dataPoints: Array<{ time: string, consumption: number | null, predicted: number | null }> = history.map((h) => ({
       time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       consumption: h.gap,
-      predicted: null as number | null,
+      predicted: null,
     }));
 
     // 2. Append future predictions if available
