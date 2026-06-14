@@ -57,12 +57,6 @@ const navItems = [
     icon: Bell,
   },
   {
-    label: 'Live Telemetry',
-    translationKey: 'nav.telemetry',
-    href: '/smart-meter',
-    icon: Activity,
-  },
-  {
     label: 'Admin',
     translationKey: 'nav.admin',
     href: '/admin',

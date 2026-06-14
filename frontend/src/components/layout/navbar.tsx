@@ -54,8 +54,6 @@ export default function Navbar() {
         return t('admin.title');
       case '/settings':
         return t('settings.title');
-      case '/smart-meter':
-        return t('nav.telemetry');
       case '/profile':
         return t('nav.profile');
       default:
@@ -79,8 +77,6 @@ export default function Navbar() {
         return t('settings.subtitle');
       case '/profile':
         return t('settings.subtitle');
-      case '/smart-meter':
-        return language === 'ar' ? 'بيانات القياس والتحميل المباشر للعداد الذكي' : language === 'fr' ? 'Télémesures et puissances du compteur en temps réel' : 'Real-time smart meter telemetry and load rates';
       default:
         return '';
     }
@@ -205,11 +201,10 @@ export default function Navbar() {
   }, []);
 
   const searchPages = [
-    { name: t('nav.dashboard'), path: '/dashboard', icon: LayoutDashboard, description: t('dashboard.subtitle') },
+    { name: t('nav.dashboard'), path: '/dashboard', icon: LayoutDashboard, description: language === 'ar' ? 'بيانات القياس والتحميل المباشر للعداد الذكي' : language === 'fr' ? 'Télémesures et puissances du compteur en temps réel' : 'Real-time smart meter telemetry and load rates' },
     { name: t('nav.forecast'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
     { name: t('nav.analytics'), path: '/analytics', icon: BarChart3, description: t('analytics.subtitle') },
     { name: t('nav.alerts'), path: '/alerts', icon: AlertTriangle, description: t('alerts.subtitle') },
-    { name: t('nav.telemetry'), path: '/smart-meter', icon: Activity, description: 'Real-time power consumption' },
     { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle') },
     { name: t('nav.settings'), path: '/settings', icon: SettingsIcon, description: t('settings.subtitle') },
   ];
