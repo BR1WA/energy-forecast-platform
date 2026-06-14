@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User } from 'lucide-react';
 
+const globalLastToastTimes: Record<string, number> = {};
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -128,9 +130,9 @@ export default function Navbar() {
             
             // Deduplicate toasts (cooldown of 8 seconds per unique message body)
             const now = Date.now();
-            const lastTime = lastToastTimes.current[payload.message] || 0;
+            const lastTime = globalLastToastTimes[payload.message] || 0;
             if (now - lastTime > 8000) {
-              lastToastTimes.current[payload.message] = now;
+              globalLastToastTimes[payload.message] = now;
               // Show sonner toast
               toast.warning(payload.title, {
                 description: payload.message,
@@ -156,7 +158,11 @@ export default function Navbar() {
     connect();
     
     return () => {
-      if (ws) ws.close();
+      if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
       clearTimeout(reconnectTimer);
     };
   }, [user, router]);
