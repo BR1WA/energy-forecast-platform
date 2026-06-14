@@ -219,6 +219,17 @@ export const forecastApi = {
     });
   },
 
+  predictSmartMeter: (modelName: string): Promise<ForecastResult> =>
+    apiFetch('/api/v1/forecast/smart-meter/sync', {
+      method: 'POST',
+      body: JSON.stringify({ model_name: modelName }),
+    }),
+
+  compareSmartMeter: (): Promise<Record<string, unknown>> =>
+    apiFetch('/api/v1/forecast/smart-meter/compare', {
+      method: 'POST',
+    }),
+
   getHistory: (): Promise<ForecastHistory[]> =>
     apiFetch('/api/v1/forecast/history'),
 

@@ -83,6 +83,8 @@ export default function ForecastPage() {
   const [activeTab, setActiveTab] = useState('single');
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [useSmartMeter, setUseSmartMeter] = useState(false);
+  const [inputMethod, setInputMethod] = useState<'upload' | 'sample' | 'meter'>('upload');
 
   // Fetch models and samples from API on mount
   useEffect(() => {
@@ -138,8 +140,8 @@ export default function ForecastPage() {
       setError('Please select a model');
       return;
     }
-    if (!uploadedFile && !selectedSample) {
-      setError('Please upload data or select a sample dataset');
+    if (!uploadedFile && !selectedSample && !useSmartMeter) {
+      setError('Please upload data, select a sample dataset, or sync Smart Meter');
       return;
     }
 
@@ -148,7 +150,9 @@ export default function ForecastPage() {
 
     try {
       if (activeTab === 'single') {
-        const result = await forecastApi.predict(selectedModel, uploadedFile || selectedSample) as unknown as Record<string, unknown>;
+        const result = useSmartMeter
+          ? await forecastApi.predictSmartMeter(selectedModel)
+          : await forecastApi.predict(selectedModel, uploadedFile || selectedSample) as unknown as Record<string, unknown>;
         const predictions = result.predictions as number[][] | undefined;
         const inputData = result.input_data as number[] | undefined;
         
@@ -184,7 +188,9 @@ export default function ForecastPage() {
         }
       } else {
         // Comparison mode
-        const result = await forecastApi.compare(uploadedFile || selectedSample);
+        const result = useSmartMeter
+          ? await forecastApi.compareSmartMeter()
+          : await forecastApi.compare(uploadedFile || selectedSample);
         const modelsData = result.models as Record<string, number[][]>;
         const inputData = result.input_data as number[] | undefined;
         
@@ -366,75 +372,141 @@ export default function ForecastPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* File Upload */}
-                <div>
-                  <label
-                    htmlFor="file-upload"
-                    onDragEnter={handleDrag}
-                    onDragOver={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDrop={handleDrop}
-                    className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
-                      isDragging
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-white/[0.08] hover:border-blue-500/30 hover:bg-blue-500/5'
+                {/* Input Method Switcher */}
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <button
+                    onClick={() => {
+                      setInputMethod('upload');
+                      setUseSmartMeter(false);
+                      setSelectedSample('');
+                    }}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      inputMethod === 'upload'
+                        ? 'bg-blue-500/15 text-blue-400'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
                     }`}
                   >
-                    <Upload className="w-8 h-8 text-slate-500 mb-2" />
-                    <p className="text-sm font-medium text-white">
-                      {uploadedFile ? uploadedFile.name : 'Upload CSV / JSON'}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Drag & drop or click to browse
-                    </p>
-                  </label>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    accept=".csv,.json"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-px bg-white/[0.06]" />
-                  <span className="text-xs text-slate-500">or</span>
-                  <div className="flex-1 h-px bg-white/[0.06]" />
-                </div>
-
-                {/* Sample Dataset */}
-                <Select
-                  value={selectedSample}
-                  onValueChange={(v) => {
-                    setSelectedSample(v ?? '');
-                    setUploadedFile(null);
-                    setError('');
-                  }}
-                >
-                  <SelectTrigger
-                    id="sample-dataset-select"
-                    className="bg-white/[0.04] border-white/[0.08] text-white"
+                    Upload File
+                  </button>
+                  <button
+                    onClick={() => {
+                      setInputMethod('sample');
+                      setUseSmartMeter(false);
+                      setUploadedFile(null);
+                    }}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      inputMethod === 'sample'
+                        ? 'bg-blue-500/15 text-blue-400'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
+                    }`}
                   >
-                    <SelectValue placeholder="Choose sample dataset" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#111827] border-white/10">
-                    {sampleDatasets.map((ds) => (
-                      <SelectItem
-                        key={ds.name}
-                        value={ds.name}
-                        className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
-                      >
-                        <div>
-                          <span className="font-medium">{ds.name.replace(/_/g, ' ')}</span>
-                          <span className="text-xs text-slate-500 ml-2">
-                            ({ds.season} — {ds.date_range})
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    Samples
+                  </button>
+                  <button
+                    onClick={() => {
+                      setInputMethod('meter');
+                      setUseSmartMeter(true);
+                      setUploadedFile(null);
+                      setSelectedSample('');
+                    }}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      inputMethod === 'meter'
+                        ? 'bg-blue-500/15 text-blue-400'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    Smart Meter
+                  </button>
+                </div>
+
+                {inputMethod === 'upload' && (
+                  <div>
+                    <label
+                      htmlFor="file-upload"
+                      onDragEnter={handleDrag}
+                      onDragOver={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDrop={handleDrop}
+                      className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
+                        isDragging
+                          ? 'border-blue-500 bg-blue-500/10'
+                          : 'border-white/[0.08] hover:border-blue-500/30 hover:bg-blue-500/5'
+                      }`}
+                    >
+                      <Upload className="w-8 h-8 text-slate-500 mb-2" />
+                      <p className="text-sm font-medium text-white">
+                        {uploadedFile ? uploadedFile.name : 'Upload CSV / JSON'}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Drag & drop or click to browse
+                      </p>
+                    </label>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      accept=".csv,.json"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                  </div>
+                )}
+
+                {inputMethod === 'sample' && (
+                  <Select
+                    value={selectedSample}
+                    onValueChange={(v) => {
+                      setSelectedSample(v ?? '');
+                      setUploadedFile(null);
+                      setError('');
+                    }}
+                  >
+                    <SelectTrigger
+                      id="sample-dataset-select"
+                      className="bg-white/[0.04] border-white/[0.08] text-white"
+                    >
+                      <SelectValue placeholder="Choose sample dataset" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#111827] border-white/10">
+                      {sampleDatasets.map((ds) => (
+                        <SelectItem
+                          key={ds.name}
+                          value={ds.name}
+                          className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
+                        >
+                          <div>
+                            <span className="font-medium">{ds.name.replace(/_/g, ' ')}</span>
+                            <span className="text-xs text-slate-500 ml-2">
+                              ({ds.season} — {ds.date_range})
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {inputMethod === 'meter' && (
+                  <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Meter Provider</span>
+                      <span className="text-xs font-semibold text-white">Enedis Linky</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Meter Serial</span>
+                      <span className="text-xs font-mono font-medium text-white">LNK-4829-1092</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Connection</span>
+                      <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Live Online
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 text-center border-t border-white/[0.04] pt-2">
+                      Will fetch the last 96 hours of real-time electricity consumption readings.
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

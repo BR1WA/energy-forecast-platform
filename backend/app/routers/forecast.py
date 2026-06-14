@@ -372,6 +372,168 @@ def compare_upload(
     }
 
 
+@router.post("/smart-meter/sync", response_model=ForecastResponse)
+def sync_smart_meter_forecast(
+    payload: ForecastRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Sync live readings from the simulated Enedis Linky smart meter,
+    run the selected forecast model, and save the forecast to the database.
+    """
+    import datetime
+    from datetime import timezone
+    from app.services.smart_meter_service import get_smart_meter_service
+    
+    model_name = payload.model_name or 'sota'
+    if model_name not in ['sota', 'patchtst', 'cnn_bilstm']:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid model name: {model_name}")
+
+    # Fetch live 96-hour readings
+    meter_service = get_smart_meter_service()
+    targets = meter_service.fetch_live_readings() # Shape (96, 7)
+    
+    # Generate cyclical calendar features for the 96 hours
+    now = datetime.datetime.now(timezone.utc)
+    hours = []
+    days = []
+    months = []
+    for h in range(96):
+        step_time = now - datetime.timedelta(hours=(95 - h))
+        hours.append(step_time.hour)
+        days.append(step_time.weekday())
+        months.append(step_time.month - 1)
+        
+    hours = np.array(hours)
+    days = np.array(days)
+    months = np.array(months)
+    
+    calendar = np.stack([
+        np.sin(2 * np.pi * hours / 24.0), np.cos(2 * np.pi * hours / 24.0),
+        np.sin(2 * np.pi * days / 7.0), np.cos(2 * np.pi * days / 7.0),
+        np.sin(2 * np.pi * months / 12.0), np.cos(2 * np.pi * months / 12.0),
+    ], axis=1).astype(np.float32)
+
+    # Get user alert threshold config
+    alert_config = db.query(AlertConfig).filter(AlertConfig.user_id == current_user.id).first()
+    threshold = alert_config.threshold_kw if alert_config else 3.0
+
+    service = get_forecast_service()
+    start_hour = (now + datetime.timedelta(hours=1)).hour # Start of forecast horizon
+    
+    try:
+        predictions, alerts_data = service.predict(
+            model_name, targets, calendar, threshold_kw=threshold, start_hour=start_hour
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Smart meter forecast execution failed: {str(e)}",
+        )
+
+    # Save to DB
+    forecast = Forecast(
+        user_id=current_user.id,
+        model_name=model_name,
+        predictions=predictions.tolist(),
+    )
+    db.add(forecast)
+    db.flush()
+
+    # Save alerts
+    email_enabled = alert_config.email_enabled if alert_config else True
+    for alert_data in alerts_data:
+        alert = Alert(
+            user_id=current_user.id,
+            forecast_id=forecast.id,
+            alert_type=alert_data['alert_type'],
+            severity=alert_data['severity'],
+            message=alert_data['message'],
+            peak_kw=alert_data.get('peak_kw'),
+        )
+        db.add(alert)
+        
+        if email_enabled and current_user.email:
+            try:
+                from app.services.alert_service import send_alert_email
+                send_alert_email(
+                    email_to=current_user.email,
+                    alert_type=alert_data['alert_type'],
+                    severity=alert_data['severity'],
+                    message=alert_data['message'],
+                )
+            except Exception as email_err:
+                print(f"[Smart Meter Sync] Failed to dispatch alert email: {email_err}")
+
+    db.commit()
+    db.refresh(forecast)
+
+    return ForecastResponse(
+        id=forecast.id,
+        model_name=model_name,
+        predictions=predictions.tolist(),
+        prediction_labels=TARGET_COLS,
+        created_at=forecast.created_at,
+        alerts=[
+            {
+                "alert_type": a['alert_type'],
+                "severity": a['severity'],
+                "message": a['message'],
+                "peak_kw": a.get('peak_kw')
+            } for a in alerts_data
+        ],
+        input_data=targets[:, 0].tolist(),
+    )
+
+
+@router.post("/smart-meter/compare")
+def compare_smart_meter_forecasts(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sync live readings from the simulated Enedis Linky smart meter,
+    run all three forecast models for comparison, and return the results.
+    """
+    import datetime
+    from datetime import timezone
+    from app.services.smart_meter_service import get_smart_meter_service
+    
+    # Fetch live 96-hour readings
+    meter_service = get_smart_meter_service()
+    targets = meter_service.fetch_live_readings() # Shape (96, 7)
+    
+    # Generate cyclical calendar features for the 96 hours
+    now = datetime.datetime.now(timezone.utc)
+    hours = []
+    days = []
+    months = []
+    for h in range(96):
+        step_time = now - datetime.timedelta(hours=(95 - h))
+        hours.append(step_time.hour)
+        days.append(step_time.weekday())
+        months.append(step_time.month - 1)
+        
+    hours = np.array(hours)
+    days = np.array(days)
+    months = np.array(months)
+    
+    calendar = np.stack([
+        np.sin(2 * np.pi * hours / 24.0), np.cos(2 * np.pi * hours / 24.0),
+        np.sin(2 * np.pi * days / 7.0), np.cos(2 * np.pi * days / 7.0),
+        np.sin(2 * np.pi * months / 12.0), np.cos(2 * np.pi * months / 12.0),
+    ], axis=1).astype(np.float32)
+
+    service = get_forecast_service()
+    results = service.predict_comparison(targets, calendar)
+
+    return {
+        'models': {name: preds.tolist() for name, preds in results.items()},
+        'labels': TARGET_COLS,
+        'input_data': targets[:, 0].tolist(),
+    }
+
+
 @router.get("/history", response_model=List[ForecastHistoryItem])
 def get_history(
     limit: int = 20,
