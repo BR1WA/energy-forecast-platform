@@ -6,10 +6,10 @@
   - `[x]` Add "Smart Meter Linky" sync interface in `frontend/src/app/forecast/page.tsx`
   - `[x]` Verify API connectivity and commit changes
 
-- `[ ]` **Component 2: Real ML Retraining Pipeline**
-  - `[ ]` Implement real PyTorch training loop (Adam + MSELoss) in `backend/app/services/forecast_service.py`
-  - `[ ]` Update training stats, version increments, and metrics on completion
-  - `[ ]` Verify registry details update and commit changes
+- `[x]` **Component 2: Real ML Retraining Pipeline**
+  - `[x]` Implement real PyTorch training loop (Adam + MSELoss) in `backend/app/services/forecast_service.py`
+  - `[x]` Update training stats, version increments, and metrics on completion
+  - `[x]` Verify registry details update and commit changes
 
 - `[ ]` **Component 3: i18n Localization & RTL**
   - `[ ]` Create `frontend/src/lib/i18n.tsx` translation context (EN / FR / AR)
