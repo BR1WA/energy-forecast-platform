@@ -31,39 +31,24 @@ async def lifespan(app: FastAPI):
     print(f"  {settings.APP_NAME} v{settings.APP_VERSION}")
     print("=" * 60)
 
-    # Create database tables
-    Base.metadata.create_all(bind=engine)
-    print("[DB] Database tables created/verified")
-
     # Ensure static/avatars directory exists
     os.makedirs("static/avatars", exist_ok=True)
 
-    # Auto-migration: check if users table contains avatar_url
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        try:
-            conn.execute(text("SELECT avatar_url FROM users LIMIT 1"))
-        except Exception:
-            print("[DB] Adding avatar_url column to users table...")
-            try:
-                conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)"))
-                conn.commit()
-                print("[DB] Column avatar_url added successfully.")
-            except Exception as ex:
-                print(f"[DB] Error adding avatar_url column: {ex}")
+    # Create database tables via migrations
+    # Programmatic Database Migrations via Alembic
+    from alembic.config import Config
+    from alembic import command
 
-    # Auto-migration: check if users table contains last_activity
-    with engine.connect() as conn:
-        try:
-            conn.execute(text("SELECT last_activity FROM users LIMIT 1"))
-        except Exception:
-            print("[DB] Adding last_activity column to users table...")
-            try:
-                conn.execute(text("ALTER TABLE users ADD COLUMN last_activity DATETIME"))
-                conn.commit()
-                print("[DB] Column last_activity added successfully.")
-            except Exception as ex:
-                print(f"[DB] Error adding last_activity column: {ex}")
+    try:
+        print("[DB] Running database migrations...")
+        backend_dir = os.path.dirname(os.path.dirname(__file__))
+        alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
+        alembic_cfg = Config(alembic_ini_path)
+        alembic_cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
+        command.upgrade(alembic_cfg, "head")
+        print("[DB] Database migrations completed successfully.")
+    except Exception as e:
+        print(f"[DB] Migration warning on startup (can be ignored if database is already at head): {e}")
 
     # Pre-load ML models
     service = get_forecast_service()
