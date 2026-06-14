@@ -77,3 +77,18 @@ class Alert(Base):
     user = relationship("User", back_populates="alerts")
     forecast = relationship("Forecast", back_populates="alerts")
 
+
+class SmartMeterReading(Base):
+    __tablename__ = "smart_meter_readings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    gap = Column(Float, nullable=False)       # Global Active Power (kW)
+    grp = Column(Float, nullable=False)       # Global Reactive Power (kW)
+    voltage = Column(Float, nullable=False)
+    intensity = Column(Float, nullable=False)
+    sub_metering_1 = Column(Float, nullable=False)
+    sub_metering_2 = Column(Float, nullable=False)
+    sub_metering_3 = Column(Float, nullable=False)
+
+

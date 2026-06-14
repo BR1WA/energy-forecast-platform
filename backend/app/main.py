@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
 
     try:
         print("[DB] Running database migrations...")
+        Base.metadata.create_all(bind=engine)
         backend_dir = os.path.dirname(os.path.dirname(__file__))
         alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
         alembic_cfg = Config(alembic_ini_path)

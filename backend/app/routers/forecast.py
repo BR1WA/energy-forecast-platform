@@ -570,13 +570,55 @@ def get_history(
 async def live_smart_meter_websocket(websocket: WebSocket):
     import asyncio
     from app.services.smart_meter_service import get_smart_meter_service
+    from app.services.forecast_service import get_forecast_service
+    from app.database import SessionLocal
+    from app.models import SmartMeterReading
+    from datetime import datetime, timezone
+
     await websocket.accept()
     print("[WS-LIVE] Client connected to live smart meter telemetry.")
+    
     meter_service = get_smart_meter_service()
+    forecast_service = get_forecast_service()
+    
     try:
         while True:
+            # 1. Fetch live reading
             reading = meter_service.fetch_single_live_reading()
+            
+            # 2. Save reading to database
+            db_session = SessionLocal()
+            try:
+                db_reading = SmartMeterReading(
+                    gap=reading["gap"],
+                    grp=reading["grp"],
+                    voltage=reading["voltage"],
+                    intensity=reading["intensity"],
+                    sub_metering_1=reading["sub_metering_1"],
+                    sub_metering_2=reading["sub_metering_2"],
+                    sub_metering_3=reading["sub_metering_3"],
+                    timestamp=datetime.now(timezone.utc)
+                )
+                db_session.add(db_reading)
+                db_session.commit()
+            except Exception as db_err:
+                print(f"[WS-LIVE] Error saving reading to database: {db_err}")
+            finally:
+                db_session.close()
+            
+            # 3. Generate 96h lookback and run model prediction
+            try:
+                targets = meter_service.fetch_live_readings() # returns [96, 7]
+                preds, _ = forecast_service.predict(model_name='sota', targets=targets)
+                gap_predictions = [round(float(p), 3) for p in preds[:, 0]]
+            except Exception as pred_err:
+                print(f"[WS-LIVE] Forecast prediction error: {pred_err}")
+                gap_predictions = []
+                
+            # 4. Attach predictions to payload and send
+            reading["predictions"] = gap_predictions
             await websocket.send_json(reading)
+            
             await asyncio.sleep(2.0)
     except Exception as e:
         print(f"[WS-LIVE] Telemetry stream ended: {e}")
