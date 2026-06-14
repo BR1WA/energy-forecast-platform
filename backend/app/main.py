@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
                             if first_user:
                                 db_alert = Alert(
                                     user_id=first_user.id,
-                                    title=alert_payload["title"],
+                                    alert_type="peak_demand",
                                     message=alert_payload["message"],
                                     severity=alert_payload["severity"],
                                     is_acknowledged=False

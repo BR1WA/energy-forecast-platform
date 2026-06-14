@@ -33,6 +33,7 @@ services:
       MODELS_DIR: /app/models
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@energyforecast.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      PYTHONUNBUFFERED: "1"
     volumes:
       - ./backend:/app
       - ./models:/app/models
