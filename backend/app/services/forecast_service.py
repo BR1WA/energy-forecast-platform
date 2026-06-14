@@ -254,20 +254,70 @@ class ForecastService:
             optimizer = optim.Adam(model.parameters(), lr=0.001)
             criterion = nn.MSELoss()
             
+            # Fetch real database smart meter readings if available
+            from app.database import SessionLocal
+            from app.models import SmartMeterReading
+            from app.services.smart_meter_service import get_smart_meter_service
+            
+            db_session = SessionLocal()
+            db_readings = []
+            try:
+                # Query last 1000 smart meter records
+                records = db_session.query(SmartMeterReading).order_by(SmartMeterReading.timestamp.desc()).limit(1000).all()
+                if records:
+                    records.reverse() # Keep chronological order
+                    db_readings = [
+                        [r.gap, r.grp, r.voltage, r.intensity, r.sub_metering_1, r.sub_metering_2, r.sub_metering_3]
+                        for r in records
+                    ]
+            except Exception as read_err:
+                print(f"[ML-RETRAIN] Error fetching DB readings: {read_err}")
+            finally:
+                db_session.close()
+
+            # Helper to generate training batches
+            def get_training_batch(batch_size=4):
+                import random
+                # If we have gathered enough database records, construct inputs and targets from them
+                if len(db_readings) >= 120:
+                    x_batch = []
+                    y_batch = []
+                    for _ in range(batch_size):
+                        # Pick a random starting point in the historical data
+                        start_idx = random.randint(0, len(db_readings) - 120)
+                        # Slice 96 lookback hours
+                        x_seq = db_readings[start_idx : start_idx + 96]
+                        # Slice 24 target hours
+                        y_seq = db_readings[start_idx + 96 : start_idx + 120]
+                        x_batch.append(x_seq)
+                        y_batch.append(y_seq)
+                    return torch.FloatTensor(x_batch).to(self.device), torch.FloatTensor(y_batch).to(self.device)
+                else:
+                    # Fallback: use simulated readings from the Linky service
+                    meter_service = get_smart_meter_service()
+                    x_batch = []
+                    y_batch = []
+                    for _ in range(batch_size):
+                        sim_lookback = meter_service.fetch_live_readings()
+                        # Simulate predictions targets by running another realistic sequence
+                        sim_targets = meter_service.fetch_live_readings()[:24]
+                        x_batch.append(sim_lookback)
+                        y_batch.append(sim_targets)
+                    return torch.FloatTensor(x_batch).to(self.device), torch.FloatTensor(y_batch).to(self.device)
+
             # Run 5 epochs of real optimization steps
             for epoch in range(5):
-                # Generate random training inputs/targets matching model shapes
-                inputs = torch.randn(4, 96, 7).to(self.device)
+                # Fetch realistic/DB training inputs and targets
+                inputs, targets_real = get_training_batch(batch_size=4)
                 
                 if model_name == 'cnn_bilstm':
-                    targets_dummy = torch.randn(4, 24, 7).to(self.device)
                     outputs = model(inputs)
-                    loss = criterion(outputs, targets_dummy)
+                    loss = criterion(outputs, targets_real)
                 else:
-                    calendar_dummy = torch.randn(4, 96, 6).to(self.device)
-                    targets_dummy = torch.randn(4, 24, 7).to(self.device)
+                    # Calendar features (shape [4, 96, 6])
+                    calendar_dummy = torch.randn(inputs.shape[0], 96, 6).to(self.device)
                     outputs = model(inputs, calendar_dummy)
-                    loss = criterion(outputs, targets_dummy)
+                    loss = criterion(outputs, targets_real)
                 
                 optimizer.zero_grad()
                 loss.backward()
