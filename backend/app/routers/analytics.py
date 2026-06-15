@@ -356,6 +356,21 @@ def export_pdf_report(
     total_forecasts = db.query(Forecast).filter(Forecast.user_id == current_user.id).count()
     total_alerts = db.query(Alert).filter(Alert.user_id == current_user.id).count()
 
+    # Fetch system settings for localization and tariffs
+    from app.models.settings import SystemSettings
+    settings = db.query(SystemSettings).first()
+    if not settings:
+        class FallbackSettings:
+            country = "Morocco"
+            region = "Casablanca-Settat"
+            electricity_provider = "Lydec"
+            currency = "MAD"
+            peak_rate = 1.50
+            off_peak_rate = 0.85
+            peak_start_hour = 18
+            peak_end_hour = 23
+        settings = FallbackSettings()
+
     # Create memory buffer
     buffer = io.BytesIO()
 
@@ -493,8 +508,14 @@ def export_pdf_report(
 
         # Calculate cost
         total_cost = 0.0
+        peak_start = settings.peak_start_hour
+        peak_end = settings.peak_end_hour
         for h_idx, val in enumerate(gap_values):
-            rate = 0.2460 if 6 <= h_idx < 22 else 0.1828
+            is_peak = (
+                peak_start <= h_idx < peak_end if peak_start < peak_end
+                else h_idx >= peak_start or h_idx < peak_end
+            )
+            rate = settings.peak_rate if is_peak else settings.off_peak_rate
             total_cost += val * rate
 
         story.append(Paragraph(f"Latest Forecast Details (ID: #{forecast.id})", section_heading))
@@ -509,7 +530,7 @@ def export_pdf_report(
                 Paragraph("Peak Demand:", body_style), Paragraph(f"{peak_val:.3f} kW", bold_body_style)
             ],
             [
-                Paragraph("Estimated 24h Cost:", body_style), Paragraph(f"Euro {total_cost:.3f}", bold_body_style),
+                Paragraph("Estimated 24h Cost:", body_style), Paragraph(f"{settings.currency} {total_cost:.3f}", bold_body_style),
                 Paragraph("", body_style), Paragraph("", body_style)
             ]
         ]
@@ -540,21 +561,30 @@ def export_pdf_report(
         # Populate rows (12 rows, splitting 24 values side-by-side)
         for h in range(12):
             val1 = gap_values[h] if h < len(gap_values) else 0.0
-            rate1 = 0.2460 if 6 <= h < 22 else 0.1828
+            is_peak1 = (
+                peak_start <= h < peak_end if peak_start < peak_end 
+                else h >= peak_start or h < peak_end
+            )
+            rate1 = settings.peak_rate if is_peak1 else settings.off_peak_rate
             cost1 = val1 * rate1
 
-            val2 = gap_values[h + 12] if (h + 12) < len(gap_values) else 0.0
-            rate2 = 0.2460 if 6 <= (h + 12) < 22 else 0.1828
+            h2 = h + 12
+            val2 = gap_values[h2] if h2 < len(gap_values) else 0.0
+            is_peak2 = (
+                peak_start <= h2 < peak_end if peak_start < peak_end 
+                else h2 >= peak_start or h2 < peak_end
+            )
+            rate2 = settings.peak_rate if is_peak2 else settings.off_peak_rate
             cost2 = val2 * rate2
 
             table_data.append([
                 Paragraph(f"{h:02d}:00", table_cell_style),
                 Paragraph(f"{val1:.3f} kW", table_cell_style),
-                Paragraph(f"Euro {cost1:.3f}", table_cell_style),
+                Paragraph(f"{settings.currency} {cost1:.3f}", table_cell_style),
                 "",
-                Paragraph(f"{(h+12):02d}:00", table_cell_style),
+                Paragraph(f"{h2:02d}:00", table_cell_style),
                 Paragraph(f"{val2:.3f} kW", table_cell_style),
-                Paragraph(f"Euro {cost2:.3f}", table_cell_style),
+                Paragraph(f"{settings.currency} {cost2:.3f}", table_cell_style),
             ])
 
         preds_table = Table(table_data, colWidths=[60, 95, 80, 10, 60, 95, 80])

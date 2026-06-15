@@ -53,6 +53,13 @@ export default function SettingsPage() {
   // Hidden state to preserve alert threshold
   const [threshold, setThreshold] = useState(3.0);
 
+  // Simulated billing date state
+  const [nextBillingDate, setNextBillingDate] = useState('');
+
+  useEffect(() => {
+    setNextBillingDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString());
+  }, [user?.subscription_tier]);
+
   // Load alert config
   useEffect(() => {
     const loadConfig = async () => {
@@ -410,7 +417,7 @@ export default function SettingsPage() {
                     <div className="flex justify-between">
                       <span>Estimated Next Billing Date:</span>
                       <span className="font-medium text-white">
-                        {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                        {nextBillingDate}
                       </span>
                     </div>
                     <div className="flex justify-between">
