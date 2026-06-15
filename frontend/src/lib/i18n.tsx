@@ -330,15 +330,6 @@ const I18nContext = React.createContext<I18nContextType | undefined>(undefined);
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
 
-  // Load saved language on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('pfe_language') as Language;
-    if (saved && ['en', 'fr', 'ar'].includes(saved)) {
-      setLanguageState(saved);
-      updateDirection(saved);
-    }
-  }, []);
-
   const updateDirection = (lang: Language) => {
     const dir = lang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.dir = dir;
@@ -348,6 +339,15 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
       document.documentElement.classList.remove('rtl-active');
     }
   };
+
+  // Load saved language on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('pfe_language') as Language;
+    if (saved && ['en', 'fr', 'ar'].includes(saved)) {
+      setLanguageState(saved);
+      updateDirection(saved);
+    }
+  }, []);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
