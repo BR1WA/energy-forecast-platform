@@ -1,19 +1,22 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth';
+import { toast } from 'sonner';
 import {
   BarChart3,
   TrendingUp,
   Activity,
-  Target,
   Calendar,
-  Layers,
   FileText,
+  Lock,
+  Loader2,
 } from 'lucide-react';
 import {
   BarChart,
@@ -23,25 +26,16 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
   AreaChart,
   Area,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
   Legend,
 } from 'recharts';
 import { analyticsApi } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
 
 interface AnalyticsData {
   total_forecasts: number;
   total_alerts: number;
   unacknowledged_alerts: number;
-  models_used: Record<string, number>;
   avg_peak_power: number | null;
   weekly_consumption?: Array<{
     week: string;
@@ -54,33 +48,12 @@ interface AnalyticsData {
     weekday: number;
     weekend: number;
   }>;
-  monthly_accuracy?: Array<{
-    month: string;
-    cnn_bilstm: number;
-    sota_hybrid: number;
-    patchtst: number;
-  }>;
-  model_performance?: Array<{
-    metric: string;
-    cnn_bilstm: number;
-    sota_hybrid: number;
-    patchtst: number;
-  }>;
   heatmap_data?: Array<{
     day: string;
     hour: number;
     value: number;
   }>;
 }
-
-const monthlyAccuracy = [
-  { month: 'Jul', cnn_bilstm: 0.651, sota_hybrid: 0.825, patchtst: 0.798 },
-  { month: 'Aug', cnn_bilstm: 0.662, sota_hybrid: 0.831, patchtst: 0.802 },
-  { month: 'Sep', cnn_bilstm: 0.674, sota_hybrid: 0.835, patchtst: 0.807 },
-  { month: 'Oct', cnn_bilstm: 0.681, sota_hybrid: 0.838, patchtst: 0.811 },
-  { month: 'Nov', cnn_bilstm: 0.687, sota_hybrid: 0.840, patchtst: 0.813 },
-  { month: 'Dec', cnn_bilstm: 0.691, sota_hybrid: 0.841, patchtst: 0.814 },
-];
 
 // Seeded pseudo-random number generator for deterministic demo data
 function seededRandom(seed: number): number {
@@ -93,15 +66,6 @@ const consumptionByHour = Array.from({ length: 24 }, (_, i) => ({
   weekday: Math.round(2000 + Math.sin((i - 6) * (Math.PI / 12)) * 2500 + (seededRandom(i * 3 + 1) - 0.5) * 300),
   weekend: Math.round(1500 + Math.sin((i - 8) * (Math.PI / 12)) * 1800 + (seededRandom(i * 3 + 2) - 0.5) * 200),
 }));
-
-const modelPerformance = [
-  { metric: 'MAE', cnn_bilstm: 85, sota_hybrid: 80, patchtst: 90 },
-  { metric: 'RMSE', cnn_bilstm: 82, sota_hybrid: 78, patchtst: 88 },
-  { metric: 'MAPE', cnn_bilstm: 88, sota_hybrid: 84, patchtst: 92 },
-  { metric: 'R² Score', cnn_bilstm: 90, sota_hybrid: 87, patchtst: 94 },
-  { metric: 'Speed', cnn_bilstm: 75, sota_hybrid: 70, patchtst: 85 },
-  { metric: 'Stability', cnn_bilstm: 87, sota_hybrid: 83, patchtst: 91 },
-];
 
 const weeklyConsumption = [
   { week: 'W1', actual: 28500, predicted: 28200, savings: 300 },
@@ -144,24 +108,41 @@ function getHeatColor(value: number): string {
   return 'bg-emerald-500/50';
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
 export default function AnalyticsPage() {
+  const { user } = useAuth();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [systemSettings, setSystemSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+
+  const isFree = user?.subscription_tier === 'free';
+  const isEnterprise = user?.subscription_tier === 'enterprise';
+
   const finalHeatmapData = analytics?.heatmap_data || heatmapData;
 
   useEffect(() => {
     analyticsApi
       .getSummary()
       .then((data) => setAnalytics(data as unknown as AnalyticsData))
-      .catch(() => {})
+      .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Fetch system settings for localization and currency
+    fetch('http://localhost:8000/api/v1/settings')
+      .then((res) => res.json())
+      .then((data) => setSystemSettings(data))
+      .catch(console.error);
   }, []);
 
   const handleDownloadPDF = async () => {
+    if (user?.subscription_tier !== 'enterprise') {
+      toast.warning('PDF Report Export is an Enterprise tier feature. Please upgrade your plan.');
+      router.push('/plans');
+      return;
+    }
+
     setDownloading(true);
     try {
       const blob = await analyticsApi.downloadReportPDF();
@@ -175,14 +156,28 @@ export default function AnalyticsPage() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download error:', err);
+      toast.error('Failed to download PDF report');
     } finally {
       setDownloading(false);
     }
   };
 
-  const bestModel = analytics?.models_used
-    ? Object.entries(analytics.models_used).sort((a, b) => b[1] - a[1])[0]
-    : null;
+  const getMonthlyConsumption = () => {
+    const data = analytics?.weekly_consumption || weeklyConsumption;
+    const last4 = data.slice(-4);
+    const sumWh = last4.reduce((sum, item) => sum + item.actual, 0);
+    return sumWh / 1000; // Wh to kWh
+  };
+
+  const getBillingEstimate = (monthlyKWh: number) => {
+    const peakRate = systemSettings?.peak_rate ?? 1.1;
+    const offPeakRate = systemSettings?.off_peak_rate ?? 0.8;
+    const blendedRate = (16 * peakRate + 8 * offPeakRate) / 24;
+    return monthlyKWh * blendedRate;
+  };
+
+  const monthlyKWh = getMonthlyConsumption();
+  const billingEstimate = getBillingEstimate(monthlyKWh);
 
   return (
     <AppLayout>
@@ -195,7 +190,7 @@ export default function AnalyticsPage() {
               Analytics
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Historical trends, model performance, and consumption insights
+              Historical trends, billing estimates, and hourly consumption patterns
             </p>
           </div>
           <div>
@@ -206,6 +201,8 @@ export default function AnalyticsPage() {
             >
               {downloading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : !isEnterprise ? (
+                <Lock className="w-4 h-4 text-blue-200" />
               ) : (
                 <FileText className="w-4 h-4" />
               )}
@@ -225,24 +222,24 @@ export default function AnalyticsPage() {
               positive: true,
             },
             {
-              label: 'Most Used Model',
-              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (bestModel ? bestModel[0] : '—'),
-              trend: bestModel ? `${bestModel[1]} runs` : '—',
-              icon: Target,
+              label: 'Monthly Consumption',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : `${monthlyKWh.toFixed(1)} kWh`,
+              trend: 'Last 30 days',
+              icon: TrendingUp,
               positive: true,
             },
             {
               label: 'Active Alerts',
               value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (analytics ? analytics.unacknowledged_alerts.toString() : '—'),
               trend: analytics ? `${analytics.total_alerts} total` : '—',
-              icon: TrendingUp,
+              icon: Activity,
               positive: false,
             },
             {
-              label: 'Total Forecasts',
-              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (analytics ? analytics.total_forecasts.toString() : '—'),
-              trend: 'All time',
-              icon: Layers,
+              label: 'Billing Estimate',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : `${systemSettings?.currency || 'MAD'} ${billingEstimate.toFixed(2)}`,
+              trend: 'Estimated bill',
+              icon: FileText,
               positive: true,
             },
           ].map((stat) => (
@@ -286,17 +283,11 @@ export default function AnalyticsPage() {
               Overview
             </TabsTrigger>
             <TabsTrigger
-              id="analytics-tab-models"
-              value="models"
-              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
-            >
-              Model Performance
-            </TabsTrigger>
-            <TabsTrigger
               id="analytics-tab-heatmap"
               value="heatmap"
-              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
+              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400 flex items-center gap-1.5"
             >
+              {isFree && <Lock className="w-3.5 h-3.5 text-slate-500" />}
               Consumption Heatmap
             </TabsTrigger>
           </TabsList>
@@ -349,13 +340,13 @@ export default function AnalyticsPage() {
                           dataKey="actual"
                           fill="#3B82F6"
                           radius={[4, 4, 0, 0]}
-                          name="Actual"
+                          name="Actual (Wh)"
                         />
                         <Bar
                           dataKey="predicted"
                           fill="#06B6D4"
                           radius={[4, 4, 0, 0]}
-                          name="Predicted"
+                          name="Predicted (Wh)"
                           opacity={0.7}
                         />
                       </BarChart>
@@ -451,7 +442,7 @@ export default function AnalyticsPage() {
                           stroke="#3B82F6"
                           strokeWidth={2}
                           fill="url(#gradWeekday)"
-                          name="Weekday"
+                          name="Weekday (Wh)"
                         />
                         <Area
                           type="monotone"
@@ -459,7 +450,7 @@ export default function AnalyticsPage() {
                           stroke="#10B981"
                           strokeWidth={2}
                           fill="url(#gradWeekend)"
-                          name="Weekend"
+                          name="Weekend (Wh)"
                         />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -469,190 +460,115 @@ export default function AnalyticsPage() {
             </div>
           </TabsContent>
 
-          {/* Model Performance Tab */}
-          <TabsContent value="models" className="space-y-6 mt-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Accuracy Over Time */}
-              <Card className="glass-card border-white/[0.06]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
-                    <span>Model R² Score Over Time</span>
-                    <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[320px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analytics?.monthly_accuracy || monthlyAccuracy}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="rgba(59,130,246,0.06)"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="month"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fill: '#64748B', fontSize: 12 }}
-                        />
-                        <YAxis
-                          domain={[0.6, 0.9]}
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fill: '#64748B', fontSize: 12 }}
-                          width={40}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#111827',
-                            border: '1px solid rgba(59,130,246,0.15)',
-                            borderRadius: '12px',
-                            color: '#E2E8F0',
-                          }}
-                        />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="cnn_bilstm"
-                          stroke="#3B82F6"
-                          strokeWidth={2}
-                          dot={{ r: 4, fill: '#3B82F6' }}
-                          name="CNN-BiLSTM"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="sota_hybrid"
-                          stroke="#06B6D4"
-                          strokeWidth={2}
-                          dot={{ r: 4, fill: '#06B6D4' }}
-                          name="SOTA Hybrid"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="patchtst"
-                          stroke="#10B981"
-                          strokeWidth={2}
-                          dot={{ r: 4, fill: '#10B981' }}
-                          name="PatchTST"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Radar Chart */}
-              <Card className="glass-card border-white/[0.06]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
-                    <span>Model Comparison Radar</span>
-                    <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[320px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart data={analytics?.model_performance || modelPerformance}>
-                        <PolarGrid stroke="rgba(59,130,246,0.1)" />
-                        <PolarAngleAxis
-                          dataKey="metric"
-                          tick={{ fill: '#64748B', fontSize: 11 }}
-                        />
-                        <PolarRadiusAxis
-                          tick={{ fill: '#64748B', fontSize: 10 }}
-                          domain={[0, 100]}
-                        />
-                        <Radar
-                          name="CNN-BiLSTM"
-                          dataKey="cnn_bilstm"
-                          stroke="#3B82F6"
-                          fill="#3B82F6"
-                          fillOpacity={0.1}
-                        />
-                        <Radar
-                          name="SOTA Hybrid"
-                          dataKey="sota_hybrid"
-                          stroke="#06B6D4"
-                          fill="#06B6D4"
-                          fillOpacity={0.1}
-                        />
-                        <Radar
-                          name="PatchTST"
-                          dataKey="patchtst"
-                          stroke="#10B981"
-                          fill="#10B981"
-                          fillOpacity={0.1}
-                        />
-                        <Legend />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
           {/* Heatmap Tab */}
           <TabsContent value="heatmap" className="space-y-6 mt-6">
-            <Card className="glass-card border-white/[0.06]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
-                  <span>Weekly Consumption Heatmap</span>
-                  <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  {/* Hour labels */}
-                  <div className="flex mb-1">
-                    <div className="w-12 shrink-0" />
-                    {Array.from({ length: 24 }, (_, i) => (
-                      <div
-                        key={i}
-                        className="flex-1 min-w-[28px] text-center text-[10px] text-slate-500"
-                      >
-                        {i % 3 === 0 ? `${String(i).padStart(2, '0')}` : ''}
-                      </div>
-                    ))}
+            {isFree ? (
+              <Card className="glass-card border-white/[0.06] relative overflow-hidden h-[380px] flex items-center justify-center">
+                <div className="absolute inset-0 bg-[#0A0F1C]/80 backdrop-blur-[6px] z-10 flex flex-col items-center justify-center p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
+                    <Lock className="w-6 h-6 text-blue-400" />
                   </div>
-                  {/* Rows */}
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(
-                    (day) => (
+                  <h3 className="text-lg font-bold text-white mb-2">Unlock Consumption Heatmap with Pro</h3>
+                  <p className="text-sm text-slate-400 max-w-md mb-6">
+                    Get hourly breakdowns across the week to discover peak usage hours, optimize your home's schedule, and save on your electricity bill.
+                  </p>
+                  <Button
+                    onClick={() => router.push('/plans')}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 shadow-lg shadow-blue-500/20"
+                  >
+                    Upgrade to Pro Plan
+                  </Button>
+                </div>
+                {/* Blurred mockup of heatmap underneath */}
+                <div className="w-full opacity-20 filter blur-[2px] pointer-events-none p-6 select-none">
+                  <div className="overflow-x-auto">
+                    {/* Hour labels */}
+                    <div className="flex mb-1">
+                      <div className="w-12 shrink-0" />
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <div key={i} className="flex-1 min-w-[28px] text-center text-[10px] text-slate-500">
+                          {i % 3 === 0 ? `${String(i).padStart(2, '0')}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Rows */}
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
                       <div key={day} className="flex gap-[2px] mb-[2px]">
                         <div className="w-12 shrink-0 flex items-center text-xs text-slate-400 font-medium">
                           {day}
                         </div>
-                        {finalHeatmapData
-                          .filter((d) => d.day === day)
-                          .map((cell, i) => (
-                            <div
-                              key={i}
-                              className={`flex-1 min-w-[28px] h-7 rounded-sm ${getHeatColor(
-                                cell.value
-                              )} transition-all duration-200 hover:ring-1 hover:ring-white/20 cursor-pointer`}
-                              title={`${cell.day} ${String(cell.hour).padStart(
-                                2,
-                                '0'
-                              )}:00 — ${cell.value} Wh`}
-                            />
-                          ))}
+                        {Array.from({ length: 24 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="flex-1 min-w-[28px] h-7 rounded-sm bg-blue-900/40"
+                          />
+                        ))}
                       </div>
-                    )
-                  )}
-                  {/* Legend */}
-                  <div className="flex items-center justify-end gap-2 mt-4">
-                    <span className="text-xs text-slate-500">Low</span>
-                    <div className="flex gap-[2px]">
-                      <div className="w-5 h-3 rounded-sm bg-blue-900/40" />
-                      <div className="w-5 h-3 rounded-sm bg-blue-700/40" />
-                      <div className="w-5 h-3 rounded-sm bg-cyan-500/40" />
-                      <div className="w-5 h-3 rounded-sm bg-emerald-500/50" />
-                    </div>
-                    <span className="text-xs text-slate-500">High</span>
+                    ))}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </Card>
+            ) : (
+              <Card className="glass-card border-white/[0.06]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-white flex items-center justify-between w-full">
+                    <span>Weekly Consumption Heatmap</span>
+                    <Badge variant="outline" className={`text-[10px] ${analytics ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-amber-500 border-amber-500/20 bg-amber-500/10'}`}>{analytics ? 'Live Data' : 'Demo Data'}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    {/* Hour labels */}
+                    <div className="flex mb-1">
+                      <div className="w-12 shrink-0" />
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 min-w-[28px] text-center text-[10px] text-slate-500"
+                        >
+                          {i % 3 === 0 ? `${String(i).padStart(2, '0')}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Rows */}
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(
+                      (day) => (
+                        <div key={day} className="flex gap-[2px] mb-[2px]">
+                          <div className="w-12 shrink-0 flex items-center text-xs text-slate-400 font-medium">
+                            {day}
+                          </div>
+                          {finalHeatmapData
+                            .filter((d) => d.day === day)
+                            .map((cell, i) => (
+                              <div
+                                key={i}
+                                className={`flex-1 min-w-[28px] h-7 rounded-sm ${getHeatColor(
+                                  cell.value
+                                )} transition-all duration-200 hover:ring-1 hover:ring-white/20 cursor-pointer`}
+                                title={`${cell.day} ${String(cell.hour).padStart(
+                                  2,
+                                  '0'
+                                )}:00 — ${cell.value} Wh`}
+                              />
+                            ))}
+                        </div>
+                      )
+                    )}
+                    {/* Legend */}
+                    <div className="flex items-center justify-end gap-2 mt-4">
+                      <span className="text-xs text-slate-500">Low</span>
+                      <div className="flex gap-[2px]">
+                        <div className="w-5 h-3 rounded-sm bg-blue-900/40" />
+                        <div className="w-5 h-3 rounded-sm bg-blue-700/40" />
+                        <div className="w-5 h-3 rounded-sm bg-cyan-500/40" />
+                        <div className="w-5 h-3 rounded-sm bg-emerald-500/50" />
+                      </div>
+                      <span className="text-xs text-slate-500">High</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>

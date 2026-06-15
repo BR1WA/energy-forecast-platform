@@ -26,7 +26,8 @@ import {
   Cpu,
   Thermometer,
   Flame,
-  PlayCircle
+  PlayCircle,
+  Lock
 } from 'lucide-react';
 import {
   AreaChart,
@@ -675,9 +676,25 @@ export default function DashboardPage() {
                     {language === 'ar' ? 'تفكيك أحمال الأجهزة الحية' : language === 'fr' ? 'Distribution des Charges (Sub-metering)' : 'Real-time Appliance Load Distribution'}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 relative min-h-[200px] flex flex-col justify-center">
+                  {user?.subscription_tier === 'free' ? (
+                    <div className="absolute inset-0 bg-[#0A0F1C]/90 backdrop-blur-[4px] z-10 flex flex-col items-center justify-center p-4 text-center rounded-b-xl">
+                      <Lock className="w-5 h-5 text-blue-400 mb-2" />
+                      <p className="text-xs font-bold text-white mb-1">Unlock Real-time Appliance Sub-metering</p>
+                      <p className="text-[10px] text-slate-400 max-w-xs mb-3">
+                        Track breakdown metrics for Kitchen, Laundry, and HVAC systems in real-time.
+                      </p>
+                      <Button
+                        onClick={() => router.push('/plans')}
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] h-7 px-4 shadow-md shadow-blue-500/20"
+                      >
+                        Upgrade to Pro
+                      </Button>
+                    </div>
+                  ) : null}
                   {/* kitchen sub1 */}
-                  <div>
+                  <div className={user?.subscription_tier === 'free' ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-300 font-medium flex items-center gap-1.5">
                         <Flame className="w-3.5 h-3.5 text-amber-500" />
@@ -694,7 +711,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* laundry sub2 */}
-                  <div>
+                  <div className={user?.subscription_tier === 'free' ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-300 font-medium flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-purple-400" />
@@ -711,7 +728,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* hvac sub3 */}
-                  <div>
+                  <div className={user?.subscription_tier === 'free' ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-300 font-medium flex items-center gap-1.5">
                         <Thermometer className="w-3.5 h-3.5 text-blue-400" />
