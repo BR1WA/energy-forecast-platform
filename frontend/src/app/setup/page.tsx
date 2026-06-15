@@ -16,8 +16,8 @@ export default function SetupWizard() {
   const [provider, setProvider] = useState("Lydec");
   const [currency, setCurrency] = useState("MAD");
   
-  const [peakRate, setPeakRate] = useState("1.50");
-  const [offPeakRate, setOffPeakRate] = useState("1.00");
+  const [peakRate, setPeakRate] = useState("1.10");
+  const [offPeakRate, setOffPeakRate] = useState("0.80");
   const [peakStart, setPeakStart] = useState("18");
   const [peakEnd, setPeakEnd] = useState("22");
 

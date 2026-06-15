@@ -22,8 +22,6 @@ class SmartMeterService:
         # Fetch settings for sensor_type
         from app.database import SessionLocal
         from app.models.settings import SystemSettings
-        import requests
-
         db = SessionLocal()
         try:
             settings_db = db.query(SystemSettings).first()
@@ -33,6 +31,7 @@ class SmartMeterService:
             db.close()
 
         if sensor_type == "real_api" and sensor_api_url:
+            import requests
             try:
                 response = requests.get(sensor_api_url, timeout=5)
                 if response.status_code == 200:
@@ -53,18 +52,18 @@ class SmartMeterService:
             hour = step_time.hour
             is_weekend = step_time.weekday() in [5, 6]
             
-            # Base active power (kW)
+            # Base active power (kW) - Moroccan Household Scale
             # Peak hours: 7 AM - 9 AM, 6 PM - 10 PM
             if 7 <= hour <= 9 or 18 <= hour <= 22:
-                base_power = 0.8 + np.sin(hour) * 0.4
+                base_power = 0.35 + np.sin(hour) * 0.08
                 if is_weekend:
-                    base_power += 0.2
+                    base_power += 0.05
             else:
-                base_power = 0.3 + np.cos(hour) * 0.1
+                base_power = 0.16 + np.cos(hour) * 0.03
             
             # Add some pseudo-random noise
-            noise = np.random.uniform(-0.15, 0.15)
-            gap = max(0.2, base_power + noise)
+            noise = np.random.uniform(-0.04, 0.04)
+            gap = max(0.08, base_power + noise)
             
             # Reactive power is roughly 10% of active power
             grp = max(0.05, gap * 0.1 + np.random.uniform(-0.02, 0.02))
@@ -111,15 +110,15 @@ class SmartMeterService:
         hour = now.hour
         is_weekend = now.weekday() in [5, 6]
         
-        # Base active power (kW)
+        # Base active power (kW) - Moroccan Household Scale
         if 7 <= hour <= 9 or 18 <= hour <= 22:
-            base_power = 2.8 + random.uniform(-0.5, 0.5)
+            base_power = 0.38 + random.uniform(-0.06, 0.06)
             if is_weekend:
-                base_power += 0.4
+                base_power += 0.04
         else:
-            base_power = 0.9 + random.uniform(-0.15, 0.15)
+            base_power = 0.16 + random.uniform(-0.02, 0.02)
         
-        gap = max(0.15, base_power)
+        gap = max(0.08, base_power)
         grp = max(0.02, gap * 0.08 + random.uniform(-0.01, 0.01))
         voltage = 232.0 + random.uniform(-2.0, 2.0) - (gap * 1.0)
         gi = (gap * 1000.0) / voltage

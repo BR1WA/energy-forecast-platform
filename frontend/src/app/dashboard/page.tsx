@@ -206,7 +206,7 @@ export default function DashboardPage() {
       : currentHour >= peakStart || currentHour < peakEnd;
     const isOffPeak = !isPeak;
     
-    const rate = isOffPeak ? (systemSettings?.off_peak_rate ?? 1.0) : (systemSettings?.peak_rate ?? 1.5);
+    const rate = isOffPeak ? (systemSettings?.off_peak_rate ?? 0.8) : (systemSettings?.peak_rate ?? 1.1);
     const label = isOffPeak 
       ? (language === 'ar' ? 'ساعات خارج الذروة Creuses' : language === 'fr' ? 'Heures Creuses' : 'Off-Peak Hours')
       : (language === 'ar' ? 'ساعات الذروة Pleines' : language === 'fr' ? 'Heures Pleines' : 'Peak Hours');
@@ -228,8 +228,8 @@ export default function DashboardPage() {
       
       const peakStart = systemSettings?.peak_start_hour ?? 6;
       const peakEnd = systemSettings?.peak_end_hour ?? 22;
-      const peakRate = systemSettings?.peak_rate ?? 1.5;
-      const offPeakRate = systemSettings?.off_peak_rate ?? 1.0;
+      const peakRate = systemSettings?.peak_rate ?? 1.1;
+      const offPeakRate = systemSettings?.off_peak_rate ?? 0.8;
       
       liveData.predictions.forEach((predKw, idx) => {
         const hour = (startHour + idx + 1) % 24;

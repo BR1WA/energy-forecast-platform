@@ -14,8 +14,8 @@ class SystemSettings(Base):
     currency = Column(String(10), default="MAD")
     
     # Tariffs
-    peak_rate = Column(Float, default=1.5)      # Example MAD rate
-    off_peak_rate = Column(Float, default=1.0)  # Example MAD rate
+    peak_rate = Column(Float, default=1.1)      # Example MAD rate
+    off_peak_rate = Column(Float, default=0.8)  # Example MAD rate
     peak_start_hour = Column(Integer, default=6)
     peak_end_hour = Column(Integer, default=22)
     

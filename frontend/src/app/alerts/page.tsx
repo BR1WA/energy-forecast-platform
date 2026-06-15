@@ -440,11 +440,11 @@ export default function AlertsPage() {
                   <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
                     <div className="flex justify-between font-medium text-emerald-400 mb-1">
                       <span>Off-Peak:</span>
-                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.off_peak_rate || '1.0'}/kWh</span>
+                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.off_peak_rate || '0.8'}/kWh</span>
                     </div>
                     <div className="flex justify-between font-medium text-amber-400">
                       <span>Peak Hours:</span>
-                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.peak_rate || '1.5'}/kWh</span>
+                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.peak_rate || '1.1'}/kWh</span>
                     </div>
                   </div>
 
