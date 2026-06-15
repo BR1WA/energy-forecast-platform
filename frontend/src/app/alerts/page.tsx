@@ -74,6 +74,7 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<any>(null);
 
   useEffect(() => {
     const fetchAlertsAndConfig = async () => {
@@ -90,6 +91,13 @@ export default function AlertsPage() {
           setSensitivity(config.anomaly_sensitivity);
           setEmailEnabled(config.notification_email);
           setPushEnabled(config.notification_push);
+        }
+        
+        // Fetch SystemSettings
+        const settingsRes = await fetch("http://localhost:8000/api/v1/settings");
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          setSystemSettings(settingsData);
         }
       } catch (err) {
         console.error('Failed to fetch alerts and config', err);
@@ -424,19 +432,19 @@ export default function AlertsPage() {
                     Load-Shifting Advice
                   </h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    Optimize appliance schedules for EDF French tariffs
+                    Optimize appliance schedules based on your local tariffs
                   </p>
                 </div>
                 
                 <div className="space-y-3">
                   <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
                     <div className="flex justify-between font-medium text-emerald-400 mb-1">
-                      <span>Off-Peak (Heures Creuses):</span>
-                      <span>22h-6h (€0.1828/kWh)</span>
+                      <span>Off-Peak:</span>
+                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.off_peak_rate || '1.0'}/kWh</span>
                     </div>
                     <div className="flex justify-between font-medium text-amber-400">
-                      <span>Peak Hours (Heures Pleines):</span>
-                      <span>6h-22h (€0.2460/kWh)</span>
+                      <span>Peak Hours:</span>
+                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.peak_rate || '1.5'}/kWh</span>
                     </div>
                   </div>
 

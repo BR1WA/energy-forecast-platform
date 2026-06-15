@@ -97,6 +97,16 @@ export default function DashboardPage() {
   // Historical / Overview data
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Settings data
+  const [systemSettings, setSystemSettings] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('http://localhost:8000/api/v1/settings')
+      .then(res => res.json())
+      .then(data => setSystemSettings(data))
+      .catch(console.error);
+  }, []);
 
   // Live Telemetry data
   const [liveData, setLiveData] = useState<TelemetryFrame | null>(null);
@@ -186,11 +196,17 @@ export default function DashboardPage() {
     }
   }, [framesLog, activeTab]);
 
-  // Calculations for tariffs (EDF Peak: 6h-22h (€0.2460/kWh), Off-Peak: 22h-6h (€0.1828/kWh))
+  // Calculations for dynamic tariffs based on system settings
   const getTariffInfo = () => {
     const currentHour = new Date().getHours();
-    const isOffPeak = currentHour >= 22 || currentHour < 6;
-    const rate = isOffPeak ? 0.1828 : 0.2460;
+    const peakStart = systemSettings?.peak_start_hour ?? 6;
+    const peakEnd = systemSettings?.peak_end_hour ?? 22;
+    const isPeak = peakStart < peakEnd 
+      ? currentHour >= peakStart && currentHour < peakEnd
+      : currentHour >= peakStart || currentHour < peakEnd;
+    const isOffPeak = !isPeak;
+    
+    const rate = isOffPeak ? (systemSettings?.off_peak_rate ?? 1.0) : (systemSettings?.peak_rate ?? 1.5);
     const label = isOffPeak 
       ? (language === 'ar' ? 'ساعات خارج الذروة Creuses' : language === 'fr' ? 'Heures Creuses' : 'Off-Peak Hours')
       : (language === 'ar' ? 'ساعات الذروة Pleines' : language === 'fr' ? 'Heures Pleines' : 'Peak Hours');
@@ -209,10 +225,18 @@ export default function DashboardPage() {
     if (liveData?.predictions && liveData.predictions.length === 24) {
       let totalCost = 0;
       const startHour = new Date().getHours();
+      
+      const peakStart = systemSettings?.peak_start_hour ?? 6;
+      const peakEnd = systemSettings?.peak_end_hour ?? 22;
+      const peakRate = systemSettings?.peak_rate ?? 1.5;
+      const offPeakRate = systemSettings?.off_peak_rate ?? 1.0;
+      
       liveData.predictions.forEach((predKw, idx) => {
         const hour = (startHour + idx + 1) % 24;
-        const isOffPeak = hour >= 22 || hour < 6;
-        const rate = isOffPeak ? 0.1828 : 0.2460;
+        const isPeak = peakStart < peakEnd 
+          ? hour >= peakStart && hour < peakEnd
+          : hour >= peakStart || hour < peakEnd;
+        const rate = isPeak ? peakRate : offPeakRate;
         totalCost += predKw * rate;
       });
       return totalCost;
@@ -602,28 +626,28 @@ export default function DashboardPage() {
                     </Badge>
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-400">
-                    EDF Tarif Bleu: €{tariff.rate}/kWh
+                    {systemSettings?.electricity_provider || 'Provider'} Tarif: {systemSettings?.currency || 'MAD'} {tariff.rate}/kWh
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Cost/Hour */}
                   <div className="p-3.5 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/80">
                     <p className="text-[10px] text-slate-500 font-bold uppercase">{language === 'ar' ? 'التكلفة في الساعة' : language === 'fr' ? 'Coût Horaire' : 'Cost Per Hour'}</p>
-                    <p className="text-xl font-bold text-white mt-1 font-mono">€ {costPerHour.toFixed(4)}</p>
+                    <p className="text-xl font-bold text-white mt-1 font-mono">{systemSettings?.currency || 'MAD'} {costPerHour.toFixed(4)}</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">Based on active power: {activePower.toFixed(3)} kW</p>
                   </div>
 
                   {/* Projected Day */}
                   <div className="p-3.5 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/80">
                     <p className="text-[10px] text-slate-500 font-bold uppercase">{language === 'ar' ? 'التكلفة اليومية المتوقعة' : language === 'fr' ? 'Projection Journalière' : 'Projected Daily Cost'}</p>
-                    <p className="text-xl font-bold text-emerald-400 mt-1 font-mono">€ {projectedDailyCost.toFixed(2)}</p>
+                    <p className="text-xl font-bold text-emerald-400 mt-1 font-mono">{systemSettings?.currency || 'MAD'} {projectedDailyCost.toFixed(2)}</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">If current usage holds for 24 hours</p>
                   </div>
 
                   {/* Projected Month */}
                   <div className="p-3.5 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/80">
                     <p className="text-[10px] text-slate-500 font-bold uppercase">{language === 'ar' ? 'التكلفة الشهرية المتوقعة' : language === 'fr' ? 'Projection Mensuelle' : 'Projected Monthly Cost'}</p>
-                    <p className="text-xl font-black text-cyan-400 mt-1 font-mono">€ {projectedMonthlyCost.toFixed(2)}</p>
+                    <p className="text-xl font-black text-cyan-400 mt-1 font-mono">{systemSettings?.currency || 'MAD'} {projectedMonthlyCost.toFixed(2)}</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">Projected billing cycle forecast</p>
                   </div>
                 </CardContent>

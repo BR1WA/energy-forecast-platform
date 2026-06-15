@@ -18,11 +18,6 @@ TARGET_COLS = [
     'Global_intensity', 'Sub_metering_1', 'Sub_metering_2', 'Sub_metering_3'
 ]
 
-# French EDF tariffs (EUR/kWh)
-EDF_TARIFFS = {
-    'heures_creuses': 0.1828,   # Off-peak (22h-6h)
-    'heures_pleines': 0.2460,   # Peak hours
-}
 
 
 class ForecastService:
@@ -465,25 +460,53 @@ class ForecastService:
                 'peak_kw': peak_power,
             })
 
-        # Cost alert for high-consumption periods using time-of-use (EDF heures pleines / heures creuses) tariffs
+        # Cost alert for high-consumption periods using custom tariffs
         if start_hour is None:
             from datetime import datetime
             start_hour = datetime.utcnow().hour
+
+        # Fetch custom settings from database
+        from app.database import SessionLocal
+        from app.models.settings import SystemSettings
+        
+        db = SessionLocal()
+        try:
+            settings_db = db.query(SystemSettings).first()
+            if settings_db:
+                currency = settings_db.currency
+                off_peak = settings_db.off_peak_rate
+                peak = settings_db.peak_rate
+                peak_start = settings_db.peak_start_hour
+                peak_end = settings_db.peak_end_hour
+            else:
+                # Default fallback
+                currency = "MAD"
+                off_peak = 1.0
+                peak = 1.5
+                peak_start = 6
+                peak_end = 22
+        finally:
+            db.close()
 
         estimated_cost = 0.0
         total_kwh = float(np.sum(gap_predictions))
         for i, val in enumerate(gap_predictions):
             hour = (start_hour + i) % 24
-            if 22 <= hour or hour < 6:
-                estimated_cost += float(val) * EDF_TARIFFS['heures_creuses']
+            # Determine if hour is peak
+            is_peak = peak_start <= hour < peak_end
+            if peak_start > peak_end:  # wraps around midnight
+                is_peak = hour >= peak_start or hour < peak_end
+                
+            if is_peak:
+                estimated_cost += float(val) * peak
             else:
-                estimated_cost += float(val) * EDF_TARIFFS['heures_pleines']
+                estimated_cost += float(val) * off_peak
 
-        if estimated_cost > 2.0:  # More than 2 EUR in 24h
+        if estimated_cost > 10.0:  # More than 10 MAD in 24h as arbitrary threshold
             alerts.append({
                 'alert_type': 'cost_threshold',
                 'severity': 'medium',
-                'message': f'Estimated 24h energy cost: €{estimated_cost:.2f} ({total_kwh:.1f} kWh)',
+                'message': f'Estimated 24h energy cost: {currency}{estimated_cost:.2f} ({total_kwh:.1f} kWh)',
                 'peak_kw': peak_power,
             })
 

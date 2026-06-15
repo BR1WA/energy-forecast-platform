@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { SetupGuard } from "@/components/SetupGuard";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,17 +39,19 @@ export default function RootLayout({
         >
           <I18nProvider>
             <AuthProvider>
-              {children}
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  style: {
-                    background: "#111827",
-                    border: "1px solid rgba(59, 130, 246, 0.1)",
-                    color: "#E2E8F0",
-                  },
-                }}
-              />
+              <SetupGuard>
+                {children}
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
+                    style: {
+                      background: "#111827",
+                      border: "1px solid rgba(59, 130, 246, 0.1)",
+                      color: "#E2E8F0",
+                    },
+                  }}
+                />
+              </SetupGuard>
             </AuthProvider>
           </I18nProvider>
         </ThemeProvider>

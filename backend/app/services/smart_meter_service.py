@@ -6,7 +6,7 @@ import datetime
 from datetime import timezone
 
 class SmartMeterService:
-    """Simulates smart meter readings fetched from utility API (e.g., Enedis Linky)."""
+    """Simulates smart meter readings fetched from utility API or real API."""
 
     def fetch_live_readings(self, meter_id: str = "LNK-4829-1092") -> np.ndarray:
         """
@@ -19,6 +19,33 @@ class SmartMeterService:
         # Diurnal pattern generation based on current time
         now = datetime.datetime.now(timezone.utc)
         
+        # Fetch settings for sensor_type
+        from app.database import SessionLocal
+        from app.models.settings import SystemSettings
+        import requests
+
+        db = SessionLocal()
+        try:
+            settings_db = db.query(SystemSettings).first()
+            sensor_type = settings_db.sensor_type if settings_db else "simulator"
+            sensor_api_url = settings_db.sensor_api_url if settings_db else None
+        finally:
+            db.close()
+
+        if sensor_type == "real_api" and sensor_api_url:
+            try:
+                response = requests.get(sensor_api_url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    # Expecting data format matching our numpy array or similar. 
+                    # If it's a real API, parse it here. For now, fallback to simulator if error.
+                    if 'readings' in data:
+                        return np.array(data['readings'], dtype=float)
+            except Exception as e:
+                print(f"[SmartMeterService] Failed to fetch from real API, falling back to simulator: {e}")
+
+        # Simulator (Normalized for Moroccan average households)
+        # Moroccan homes use significantly less electricity.
         readings = []
         for h in range(96):
             # Hour of day for this step
@@ -29,11 +56,11 @@ class SmartMeterService:
             # Base active power (kW)
             # Peak hours: 7 AM - 9 AM, 6 PM - 10 PM
             if 7 <= hour <= 9 or 18 <= hour <= 22:
-                base_power = 2.5 + np.sin(hour) * 0.5
+                base_power = 0.8 + np.sin(hour) * 0.4
                 if is_weekend:
-                    base_power += 0.5
+                    base_power += 0.2
             else:
-                base_power = 0.8 + np.cos(hour) * 0.2
+                base_power = 0.3 + np.cos(hour) * 0.1
             
             # Add some pseudo-random noise
             noise = np.random.uniform(-0.15, 0.15)
