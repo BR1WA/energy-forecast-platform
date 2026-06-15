@@ -14,8 +14,6 @@ import {
   Activity,
   Zap,
   Cpu,
-  Flame,
-  Thermometer,
   Grid,
   CheckCircle2,
   AlertTriangle,
@@ -109,6 +107,7 @@ export default function MultiSitePage() {
   const [selectedSiteId, setSelectedSiteId] = useState('site-casablanca');
   const [isBatteryBackupActive, setIsBatteryBackupActive] = useState(false);
   const [demandResponseStatus, setDemandResponseStatus] = useState<'connected' | 'shedding'>('connected');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [systemSettings, setSystemSettings] = useState<any>(null);
 
   const isEnterprise = user?.subscription_tier === 'enterprise';

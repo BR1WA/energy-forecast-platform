@@ -113,6 +113,7 @@ export default function AnalyticsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -470,7 +471,7 @@ export default function AnalyticsPage() {
                   </div>
                   <h3 className="text-lg font-bold text-white mb-2">Unlock Consumption Heatmap with Pro</h3>
                   <p className="text-sm text-slate-400 max-w-md mb-6">
-                    Get hourly breakdowns across the week to discover peak usage hours, optimize your home's schedule, and save on your electricity bill.
+                    Get hourly breakdowns across the week to discover peak usage hours, optimize your home&apos;s schedule, and save on your electricity bill.
                   </p>
                   <Button
                     onClick={() => router.push('/plans')}
