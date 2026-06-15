@@ -7,6 +7,23 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { authApi } from "@/lib/api";
 
+const providerTariffs: Record<string, {
+  peakRate: number;
+  offPeakRate: number;
+  peakStartHour: number;
+  peakEndHour: number;
+}> = {
+  "Lydec": { peakRate: 1.50, offPeakRate: 0.85, peakStartHour: 18, peakEndHour: 23 },
+  "Redal": { peakRate: 1.52, offPeakRate: 0.88, peakStartHour: 18, peakEndHour: 23 },
+  "Amendis": { peakRate: 1.55, offPeakRate: 0.90, peakStartHour: 18, peakEndHour: 23 },
+  "RADEEMA": { peakRate: 1.48, offPeakRate: 0.82, peakStartHour: 18, peakEndHour: 23 },
+  "RAMSA": { peakRate: 1.46, offPeakRate: 0.81, peakStartHour: 18, peakEndHour: 23 },
+  "RADEEF": { peakRate: 1.50, offPeakRate: 0.83, peakStartHour: 18, peakEndHour: 23 },
+  "RADEEJ": { peakRate: 1.45, offPeakRate: 0.80, peakStartHour: 18, peakEndHour: 23 },
+  "RADEECO": { peakRate: 1.42, offPeakRate: 0.79, peakStartHour: 18, peakEndHour: 23 },
+  "ONEE": { peakRate: 1.45, offPeakRate: 0.80, peakStartHour: 18, peakEndHour: 23 }
+};
+
 export default function SetupWizard() {
   const router = useRouter();
   const { refreshUser } = useAuth();
@@ -14,26 +31,43 @@ export default function SetupWizard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
-  const [country, setCountry] = useState("Morocco");
+  const [country] = useState("Morocco");
   const [region, setRegion] = useState("Casablanca-Settat");
   const [provider, setProvider] = useState("Lydec");
-  const [currency, setCurrency] = useState("MAD");
+  const [currency] = useState("MAD");
   
-  const [peakRate, setPeakRate] = useState("1.10");
-  const [offPeakRate, setOffPeakRate] = useState("0.80");
+  const [peakRate, setPeakRate] = useState("1.50");
+  const [offPeakRate, setOffPeakRate] = useState("0.85");
   const [peakStart, setPeakStart] = useState("18");
-  const [peakEnd, setPeakEnd] = useState("22");
+  const [peakEnd, setPeakEnd] = useState("23");
 
   const [sensorType, setSensorType] = useState("simulator");
   const [sensorApiUrl, setSensorApiUrl] = useState("");
   const [plan, setPlan] = useState("free");
 
+  const handleProviderChange = (newProvider: string) => {
+    setProvider(newProvider);
+    const tariff = providerTariffs[newProvider];
+    if (tariff) {
+      setPeakRate(tariff.peakRate.toFixed(2));
+      setOffPeakRate(tariff.offPeakRate.toFixed(2));
+      setPeakStart(String(tariff.peakStartHour));
+      setPeakEnd(String(tariff.peakEndHour));
+    }
+  };
+
   const handleRegionChange = (newRegion: string) => {
     setRegion(newRegion);
-    // Auto provider selection based on region
-    if (newRegion.includes("Casablanca")) setProvider("Lydec");
-    else if (newRegion.includes("Rabat")) setProvider("Redal");
-    else setProvider("ONEE");
+    let defaultProvider = "ONEE";
+    if (newRegion === "Casablanca-Settat") defaultProvider = "Lydec";
+    else if (newRegion === "Rabat-Salé-Kénitra") defaultProvider = "Redal";
+    else if (newRegion === "Tanger-Tétouan-Al Hoceïma") defaultProvider = "Amendis";
+    else if (newRegion === "Marrakech-Safi") defaultProvider = "RADEEMA";
+    else if (newRegion === "Souss-Massa") defaultProvider = "RAMSA";
+    else if (newRegion === "Fès-Meknès") defaultProvider = "RADEEF";
+    else if (newRegion === "L'Oriental") defaultProvider = "RADEECO";
+    
+    handleProviderChange(defaultProvider);
   };
 
   const handleComplete = async () => {
@@ -107,51 +141,62 @@ export default function SetupWizard() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-400 mb-2">Country</label>
-                  <select 
-                    value={country} 
-                    onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-[#1A2333] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
-                  >
-                    <option value="Morocco">Morocco</option>
-                    <option value="France">France</option>
-                    <option value="USA">United States</option>
-                  </select>
+                  <input 
+                    type="text" 
+                    value="Morocco" 
+                    disabled 
+                    className="w-full bg-[#1A2333]/50 border border-white/10 rounded-xl px-4 py-3 text-slate-400 cursor-not-allowed outline-none"
+                  />
                 </div>
 
-                {country === "Morocco" && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-2">Region</label>
-                    <select 
-                      value={region} 
-                      onChange={(e) => handleRegionChange(e.target.value)}
-                      className="w-full bg-[#1A2333] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
-                    >
-                      <option value="Casablanca-Settat">Casablanca-Settat</option>
-                      <option value="Rabat-Salé-Kénitra">Rabat-Salé-Kénitra</option>
-                      <option value="Marrakech-Safi">Marrakech-Safi</option>
-                      <option value="Tanger-Tétouan-Al Hoceïma">Tanger-Tétouan-Al Hoceïma</option>
-                      <option value="Other">Other Region</option>
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Region</label>
+                  <select 
+                    value={region} 
+                    onChange={(e) => handleRegionChange(e.target.value)}
+                    className="w-full bg-[#1A2333] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="Tanger-Tétouan-Al Hoceïma">Tanger-Tétouan-Al Hoceïma</option>
+                    <option value="L'Oriental">L&apos;Oriental</option>
+                    <option value="Fès-Meknès">Fès-Meknès</option>
+                    <option value="Rabat-Salé-Kénitra">Rabat-Salé-Kénitra</option>
+                    <option value="Béni Mellal-Khénifra">Béni Mellal-Khénifra</option>
+                    <option value="Casablanca-Settat">Casablanca-Settat</option>
+                    <option value="Marrakech-Safi">Marrakech-Safi</option>
+                    <option value="Drâa-Tafilalet">Drâa-Tafilalet</option>
+                    <option value="Souss-Massa">Souss-Massa</option>
+                    <option value="Guelmim-Oued Noun">Guelmim-Oued Noun</option>
+                    <option value="Laâyoune-Sakia El Hamra">Laâyoune-Sakia El Hamra</option>
+                    <option value="Dakhla-Oued Ed-Dahab">Dakhla-Oued Ed-Dahab</option>
+                  </select>
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-400 mb-2">Electricity Provider</label>
-                    <input 
-                      type="text" 
+                    <select 
                       value={provider} 
-                      onChange={(e) => setProvider(e.target.value)}
+                      onChange={(e) => handleProviderChange(e.target.value)}
                       className="w-full bg-[#1A2333] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
-                    />
+                    >
+                      <option value="Lydec">Lydec (Casablanca)</option>
+                      <option value="Redal">Redal (Rabat-Salé)</option>
+                      <option value="Amendis">Amendis (Tanger-Tétouan)</option>
+                      <option value="RADEEMA">RADEEMA (Marrakech)</option>
+                      <option value="RAMSA">RAMSA (Agadir)</option>
+                      <option value="RADEEF">RADEEF (Fès)</option>
+                      <option value="RADEEJ">RADEEJ (El Jadida)</option>
+                      <option value="RADEECO">RADEECO (Oujda)</option>
+                      <option value="ONEE">ONEE (National Office)</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-400 mb-2">Currency</label>
                     <input 
                       type="text" 
-                      value={currency} 
-                      onChange={(e) => setCurrency(e.target.value)}
-                      className="w-full bg-[#1A2333] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      value="MAD" 
+                      disabled 
+                      className="w-full bg-[#1A2333]/50 border border-white/10 rounded-xl px-4 py-3 text-slate-400 cursor-not-allowed outline-none font-mono"
                     />
                   </div>
                 </div>
