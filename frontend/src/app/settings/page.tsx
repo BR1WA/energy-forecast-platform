@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,12 +13,31 @@ import { authApi, alertsApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe } from 'lucide-react';
+import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useI18n();
+  const router = useRouter();
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancelSubscription = async () => {
+    if (!confirm("Are you sure you want to cancel your premium subscription? This will immediately downgrade you to the Free plan.")) {
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      await authApi.updateProfile({ subscription_tier: 'free' });
+      await refreshUser();
+      toast.success("Subscription cancelled. Downgraded to Free tier.");
+    } catch (err) {
+      toast.error("Failed to cancel subscription. Please try again.");
+      console.error(err);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -115,6 +135,10 @@ export default function SettingsPage() {
             <TabsTrigger value="security" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
               <Shield className="w-4 h-4 mr-2" />
               {t('settings.security')}
+            </TabsTrigger>
+            <TabsTrigger value="subscription" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
+              <CreditCard className="w-4 h-4 mr-2" />
+              Subscription
             </TabsTrigger>
           </TabsList>
 
@@ -319,6 +343,82 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                 </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Subscription Tab */}
+          <TabsContent value="subscription" className="space-y-4">
+            <Card className="bg-[#111827]/50 border-white/[0.06]">
+              <CardHeader>
+                <CardTitle className="text-lg text-white">Plan Management</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Monitor your current subscription tier, active limits, and billing cycle.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-6 rounded-2xl border border-white/[0.04] bg-[#0A0F1C]/80 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Active Plan</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <h3 className="text-xl font-bold text-white capitalize">{user?.subscription_tier || 'free'} Plan</h3>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        user?.subscription_tier === 'pro' 
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                          : user?.subscription_tier === 'enterprise'
+                          ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                          : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                      }`}>
+                        {user?.subscription_tier === 'free' || !user?.subscription_tier ? 'Free' : 'Premium'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                      {user?.subscription_tier === 'pro' 
+                        ? '99 MAD / month (Advanced AI forecasting & live Linky telemetry enabled)'
+                        : user?.subscription_tier === 'enterprise'
+                        ? '499 MAD / month (Custom ML fine-tuning & multi-site grids enabled)'
+                        : '0 MAD / month (Basic CNN-BiLSTM forecasting & 1-hour lookback)'}
+                    </p>
+                  </div>
+                  <div className="flex gap-3 shrink-0 w-full md:w-auto">
+                    {user?.subscription_tier && user?.subscription_tier !== 'free' && (
+                      <Button
+                        variant="outline"
+                        onClick={handleCancelSubscription}
+                        disabled={isCancelling}
+                        className="border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 hover:bg-red-500/5 py-5 px-5 font-bold text-xs rounded-xl flex-1 md:flex-none"
+                      >
+                        {isCancelling ? 'Processing...' : 'Cancel Subscription'}
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => router.push('/plans')}
+                      className="bg-blue-600 hover:bg-blue-500 text-white py-5 px-5 font-bold text-xs rounded-xl flex-1 md:flex-none"
+                    >
+                      {user?.subscription_tier === 'free' || !user?.subscription_tier ? 'Upgrade Plan' : 'Change Plan'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Simulated Billing Cycle */}
+                {user?.subscription_tier && user?.subscription_tier !== 'free' && (
+                  <div className="p-4 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/40 text-xs text-slate-400 space-y-2">
+                    <div className="flex justify-between">
+                      <span>Billing Frequency:</span>
+                      <span className="font-medium text-white">Monthly</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Estimated Next Billing Date:</span>
+                      <span className="font-medium text-white">
+                        {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Payment Method:</span>
+                      <span className="font-medium text-white">Simulated Billing (Stripe test key)</span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

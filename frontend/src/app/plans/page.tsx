@@ -16,11 +16,17 @@ export default function PlansPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   const handleSelectPlan = async (tier: string) => {
+    const isCurrent = currentTier === tier;
+    const targetTier = isCurrent ? "free" : tier;
     setSelectedPlan(tier);
     try {
-      await authApi.updateProfile({ subscription_tier: tier });
+      await authApi.updateProfile({ subscription_tier: targetTier });
       await refreshUser();
-      toast.success(`Plan updated successfully to ${tier.toUpperCase()}!`);
+      if (isCurrent) {
+        toast.success("Subscription cancelled. Downgraded to Free tier.");
+      } else {
+        toast.success(`Plan updated successfully to ${tier.toUpperCase()}!`);
+      }
       setTimeout(() => {
         router.push("/dashboard");
       }, 1000);
@@ -168,23 +174,32 @@ export default function PlansPage() {
 
                   <Button
                     onClick={() => handleSelectPlan(plan.id)}
-                    disabled={isCurrent || selectedPlan !== null}
+                    disabled={(isCurrent && plan.id === "free") || selectedPlan !== null}
                     className={`w-full mt-8 py-5 font-bold text-xs rounded-xl transition-all duration-200 ${
                       isCurrent
-                        ? "bg-slate-800 text-slate-500 cursor-not-allowed hover:bg-slate-800"
-                        : plan.popular
+                        ? plan.id === "free"
+                          ? "bg-slate-800 text-slate-500 cursor-not-allowed hover:bg-slate-800 border-white/5"
+                          : "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50"
+                        : plan.id === "pro"
                         ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.2)] hover:shadow-[0_0_25px_rgba(245,158,11,0.3)]"
+                        : plan.id === "enterprise"
+                        ? "bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.2)] hover:shadow-[0_0_25px_rgba(168,85,247,0.3)]"
                         : "bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20"
                     }`}
                   >
                     {isLoading ? (
                       <span className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Activating...
+                        <Loader2 className="w-4 h-4 animate-spin" /> Processing...
                       </span>
                     ) : isCurrent ? (
-                      "Active"
+                      plan.id === "free" ? "Active Free Tier" : "Cancel Subscription"
                     ) : (
-                      plan.buttonText
+                      (() => {
+                        const tierRanks: Record<string, number> = { free: 0, pro: 1, enterprise: 2 };
+                        const currentRank = tierRanks[currentTier] ?? 0;
+                        const targetRank = tierRanks[plan.id] ?? 0;
+                        return targetRank > currentRank ? plan.buttonText : `Downgrade to ${plan.name.replace(" Plan", "")}`;
+                      })()
                     )}
                   </Button>
                 </CardContent>

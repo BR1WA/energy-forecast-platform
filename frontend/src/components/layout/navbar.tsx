@@ -262,13 +262,25 @@ export default function Navbar() {
       <div className="flex items-center gap-3">
         {/* Subscription Plan Badge / Upgrade Button */}
         {user?.subscription_tier === 'pro' ? (
-          <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 border-0 text-white font-bold text-[10px] uppercase px-2 py-0.5 select-none animate-pulse">
-            Pro Plan
-          </Badge>
+          <button
+            onClick={() => router.push('/plans')}
+            className="hover:scale-105 transition-all duration-200"
+            title="Manage Subscription"
+          >
+            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 border-0 text-white font-bold text-[10px] uppercase px-2 py-0.5 select-none animate-pulse cursor-pointer">
+              Pro Plan
+            </Badge>
+          </button>
         ) : user?.subscription_tier === 'enterprise' ? (
-          <Badge className="bg-gradient-to-r from-purple-500 to-indigo-500 border-0 text-white font-bold text-[10px] uppercase px-2 py-0.5 select-none">
-            Enterprise
-          </Badge>
+          <button
+            onClick={() => router.push('/plans')}
+            className="hover:scale-105 transition-all duration-200"
+            title="Manage Subscription"
+          >
+            <Badge className="bg-gradient-to-r from-purple-500 to-indigo-500 border-0 text-white font-bold text-[10px] uppercase px-2 py-0.5 select-none cursor-pointer">
+              Enterprise
+            </Badge>
+          </button>
         ) : (
           <button
             onClick={() => router.push('/plans')}
