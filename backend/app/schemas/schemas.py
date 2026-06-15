@@ -36,6 +36,7 @@ class UserResponse(BaseModel):
     last_login: Optional[datetime] = None
     avatar_url: Optional[str] = None
     last_activity: Optional[datetime] = None
+    subscription_tier: Optional[str] = "free"
 
     class Config:
         from_attributes = True
@@ -63,9 +64,11 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    subscription_tier: Optional[str] = None
 
 class UserUpdateMe(BaseModel):
     full_name: Optional[str] = None
+    subscription_tier: Optional[str] = None
 
 class PasswordUpdate(BaseModel):
     current_password: str

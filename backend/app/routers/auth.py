@@ -126,6 +126,8 @@ def update_me(
     """Update current user's profile."""
     if data.full_name is not None:
         current_user.full_name = data.full_name
+    if data.subscription_tier is not None:
+        current_user.subscription_tier = data.subscription_tier
     db.commit()
     db.refresh(current_user)
     return UserResponse.model_validate(current_user)

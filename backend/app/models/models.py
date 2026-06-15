@@ -17,6 +17,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=True)
     role = Column(String(20), default="viewer", nullable=False)  # admin, analyst, viewer
+    subscription_tier = Column(String(50), default="free", nullable=False)  # free, pro, enterprise
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)

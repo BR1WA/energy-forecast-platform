@@ -11,6 +11,7 @@ export interface User {
   updated_at?: string;
   avatar_url?: string;
   last_activity?: string;
+  subscription_tier?: string;
 }
 
 export interface AuthTokens {

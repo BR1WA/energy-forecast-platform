@@ -149,7 +149,7 @@ export const authApi = {
 
   getMe: (): Promise<User> => apiFetch('/api/v1/auth/me'),
 
-  updateProfile: (data: { full_name: string }): Promise<User> =>
+  updateProfile: (data: { full_name?: string; subscription_tier?: string }): Promise<User> =>
     apiFetch('/api/v1/auth/me', {
       method: 'PUT',
       body: JSON.stringify(data),
