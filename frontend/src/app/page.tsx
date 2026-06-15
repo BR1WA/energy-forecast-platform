@@ -127,15 +127,30 @@ export default function MarketingLandingPage() {
             Energy<span className="gradient-text">AI</span>
           </span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Badge className="hidden md:inline-flex bg-emerald-500/10 text-emerald-400 border-emerald-500/20 uppercase tracking-widest text-[9px] px-2 py-0.5">
             Smart Home Ready
           </Badge>
-          <Link href="/login">
-            <Button className="bg-white/5 hover:bg-white/10 text-white border border-white/10 h-9 px-4 rounded-lg cursor-pointer text-xs font-semibold">
-              {isAuthenticated ? 'Enter Dashboard' : 'Sign In'}
-            </Button>
-          </Link>
+          {isAuthenticated ? (
+            <Link href="/dashboard">
+              <Button className="bg-blue-600 hover:bg-blue-500 text-white h-9 px-4 rounded-lg cursor-pointer text-xs font-semibold shadow-lg shadow-blue-500/10">
+                Enter Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <>
+              <Link href="/login">
+                <Button className="bg-white/5 hover:bg-white/10 text-white border border-white/10 h-9 px-4 rounded-lg cursor-pointer text-xs font-semibold">
+                  Sign In
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button className="bg-blue-600 hover:bg-blue-500 text-white h-9 px-4 rounded-lg cursor-pointer text-xs font-semibold shadow-lg shadow-blue-500/10">
+                  Sign Up
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -161,7 +176,7 @@ export default function MarketingLandingPage() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-            <Link href="/login">
+            <Link href={isAuthenticated ? "/dashboard" : "/register"}>
               <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all duration-300 hover:scale-[1.02] cursor-pointer rounded-xl text-sm flex items-center gap-2">
                 {isAuthenticated ? 'Go to Dashboard' : 'Connect Smart Meter'}
                 <ArrowRight className="w-4 h-4" />

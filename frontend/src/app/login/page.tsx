@@ -160,11 +160,23 @@ export default function LoginPage() {
                 </Button>
               </form>
 
-              <div className="mt-6 text-center">
-                <p className="text-xs text-slate-400">
-                  Demo Credentials: <br />
-                  <span className="font-mono text-slate-300">admin@energyforecast.com</span> / <span className="font-mono text-slate-300">admin123</span>
+              <div className="mt-6 text-center space-y-3">
+                <p className="text-sm text-slate-400">
+                  Don't have an account?{' '}
+                  <Link
+                    href="/register"
+                    id="login-register-link"
+                    className="text-blue-400 hover:text-blue-300 font-medium transition-colors duration-200"
+                  >
+                    Sign up
+                  </Link>
                 </p>
+                <div className="border-t border-white/[0.04] pt-3">
+                  <p className="text-xs text-slate-500">
+                    Demo Credentials: <br />
+                    <span className="font-mono text-slate-400">admin@energyforecast.com</span> / <span className="font-mono text-slate-400">admin123</span>
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

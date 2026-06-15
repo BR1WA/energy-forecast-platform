@@ -8,7 +8,7 @@ import os
 import time
 
 from app.database import get_db
-from app.models import User
+from app.models import User, SystemSettings
 from app.schemas import (
     UserRegister, UserLogin, UserResponse, TokenResponse,
     RefreshRequest, TokenData, UserUpdateMe, PasswordUpdate
@@ -45,6 +45,15 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
         is_active=True,
     )
     db.add(user)
+
+    # Reset setup complete status on registration to allow testing the wizard onboarding
+    settings = db.query(SystemSettings).first()
+    if settings:
+        settings.is_setup_complete = False
+    else:
+        new_settings = SystemSettings(is_setup_complete=False)
+        db.add(new_settings)
+
     db.commit()
     db.refresh(user)
 
