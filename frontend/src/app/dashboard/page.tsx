@@ -268,9 +268,10 @@ export default function DashboardPage() {
       predicted: null,
     }));
 
-    // 2. Append future predictions if available
+    // 2. Append future predictions if available (Pro/Enterprise only)
     const lastFrame = history[history.length - 1];
-    if (lastFrame && lastFrame.predictions && lastFrame.predictions.length > 0) {
+    const hasPremiumForecast = user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise';
+    if (hasPremiumForecast && lastFrame && lastFrame.predictions && lastFrame.predictions.length > 0) {
       // Bridge coordinate at H0: connect actual line to predicted line seamlessly
       if (dataPoints.length > 0) {
         dataPoints[dataPoints.length - 1].predicted = lastFrame.gap;
@@ -478,7 +479,12 @@ export default function DashboardPage() {
             </Card>
 
             {/* Core Metrics Gauges */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={cn(
+              "grid gap-4",
+              user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise'
+                ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"
+                : "grid-cols-1 md:grid-cols-2"
+            )}>
               {/* Active Power Gauge */}
               <Card className="glass-card border-white/[0.06] overflow-hidden relative">
                 <CardContent className="p-5 flex flex-col items-center justify-center text-center">
@@ -521,38 +527,42 @@ export default function DashboardPage() {
               </Card>
 
               {/* Current draw Card */}
-              <Card className="glass-card border-white/[0.06] flex items-center justify-between p-5">
-                <div className="space-y-2">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                    {language === 'ar' ? 'التيار الإجمالي' : language === 'fr' ? 'Intensité' : 'Current draw'}
-                  </p>
-                  <p className="text-2xl font-bold text-white font-mono">
-                    {liveData ? `${liveData.intensity} A` : '—'}
-                  </p>
-                  <p className="text-[10px] text-slate-500">Live Grid Current Intensity</p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
-                  <Activity className="w-5 h-5 text-purple-400" />
-                </div>
-              </Card>
+              {(user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise') && (
+                <>
+                  <Card className="glass-card border-white/[0.06] flex items-center justify-between p-5">
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {language === 'ar' ? 'التيار الإجمالي' : language === 'fr' ? 'Intensité' : 'Current draw'}
+                      </p>
+                      <p className="text-2xl font-bold text-white font-mono">
+                        {liveData ? `${liveData.intensity} A` : '—'}
+                      </p>
+                      <p className="text-[10px] text-slate-500">Live Grid Current Intensity</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                      <Activity className="w-5 h-5 text-purple-400" />
+                    </div>
+                  </Card>
 
-              {/* Power Factor Card */}
-              <Card className="glass-card border-white/[0.06] flex items-center justify-between p-5">
-                <div className="space-y-2">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                    {language === 'ar' ? 'معامل القدرة' : language === 'fr' ? 'Facteur de Puissance' : 'Power Factor'}
-                  </p>
-                  <p className="text-2xl font-bold text-white font-mono">
-                    {powerFactor.toFixed(3)}
-                  </p>
-                  <Badge variant="outline" className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[9px] font-mono">
-                    cos φ (optimal &gt; 0.90)
-                  </Badge>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center shrink-0">
-                  <Zap className="w-5 h-5 text-cyan-400" />
-                </div>
-              </Card>
+                  {/* Power Factor Card */}
+                  <Card className="glass-card border-white/[0.06] flex items-center justify-between p-5">
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {language === 'ar' ? 'معامل القدرة' : language === 'fr' ? 'Facteur de Puissance' : 'Power Factor'}
+                      </p>
+                      <p className="text-2xl font-bold text-white font-mono">
+                        {powerFactor.toFixed(3)}
+                      </p>
+                      <Badge variant="outline" className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[9px] font-mono">
+                        cos φ (optimal &gt; 0.90)
+                      </Badge>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center shrink-0">
+                      <Zap className="w-5 h-5 text-cyan-400" />
+                    </div>
+                  </Card>
+                </>
+              )}
             </div>
 
             {/* Live Chart & Cost Estimation Grid */}
@@ -600,15 +610,17 @@ export default function DashboardPage() {
                             dot={false}
                             activeDot={{ r: 6, fill: '#10B981', stroke: '#111827', strokeWidth: 2 }}
                           />
-                          <Line
-                            type="monotone"
-                            dataKey="predicted"
-                            stroke="#06B6D4"
-                            strokeWidth={2}
-                            strokeDasharray="5 5"
-                            dot={false}
-                            activeDot={{ r: 5, fill: '#06B6D4', stroke: '#111827', strokeWidth: 2 }}
-                          />
+                          {(user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise') && (
+                            <Line
+                              type="monotone"
+                              dataKey="predicted"
+                              stroke="#06B6D4"
+                              strokeWidth={2}
+                              strokeDasharray="5 5"
+                              dot={false}
+                              activeDot={{ r: 5, fill: '#06B6D4', stroke: '#111827', strokeWidth: 2 }}
+                            />
+                          )}
                         </LineChart>
                       </ResponsiveContainer>
                     )}
