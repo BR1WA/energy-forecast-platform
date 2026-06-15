@@ -10,7 +10,8 @@ const translations: Record<Language, Translations> = {
   en: {
     // Nav & Sidebar
     'nav.dashboard': 'Dashboard',
-    'nav.forecast': 'Forecaster',
+    'nav.forecast': 'ML Sandbox',
+    'nav.multi_site': 'Multi-Site Grid',
     'nav.analytics': 'Analytics',
     'nav.alerts': 'Alerts',
     'nav.settings': 'Settings',
@@ -112,7 +113,8 @@ const translations: Record<Language, Translations> = {
   fr: {
     // Nav & Sidebar
     'nav.dashboard': 'Tableau de bord',
-    'nav.forecast': 'Prévisions',
+    'nav.forecast': 'Bac à sable ML',
+    'nav.multi_site': 'Réseau Multi-Sites',
     'nav.analytics': 'Analyses',
     'nav.alerts': 'Alertes',
     'nav.settings': 'Paramètres',
@@ -214,7 +216,8 @@ const translations: Record<Language, Translations> = {
   ar: {
     // Nav & Sidebar
     'nav.dashboard': 'لوحة التحكم',
-    'nav.forecast': 'التنبؤات',
+    'nav.forecast': 'بيئة اختبار ML',
+    'nav.multi_site': 'شبكة مواقع متعددة',
     'nav.analytics': 'التحليلات',
     'nav.alerts': 'التنبيهات',
     'nav.settings': 'الإعدادات',

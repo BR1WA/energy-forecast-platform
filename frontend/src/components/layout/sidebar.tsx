@@ -19,6 +19,7 @@ import {
   Settings,
   User,
   Activity,
+  Building,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -39,10 +40,18 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    label: 'Forecaster',
+    label: 'ML Sandbox',
     translationKey: 'nav.forecast',
     href: '/forecast',
     icon: LineChart,
+    analystOrAdminOnly: true,
+  },
+  {
+    label: 'Multi-Site',
+    translationKey: 'nav.multi_site',
+    href: '/multi-site',
+    icon: Building,
+    enterpriseOnly: true,
   },
   {
     label: 'Analytics',
@@ -114,9 +123,12 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems
-          .filter(
-            (item) => !item.adminOnly || user?.role === 'admin'
-          )
+          .filter((item) => {
+            if (item.adminOnly && user?.role !== 'admin') return false;
+            if (item.analystOrAdminOnly && user?.role !== 'analyst' && user?.role !== 'admin') return false;
+            if (item.enterpriseOnly && user?.subscription_tier !== 'enterprise') return false;
+            return true;
+          })
           .map((item) => {
             const isActive = pathname === item.href;
             return (
