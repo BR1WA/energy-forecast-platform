@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.settings import SystemSettings
 
-router = APIRouter(prefix="/settings", tags=["settings"])
+router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 class SetupPayload(BaseModel):
     country: str
