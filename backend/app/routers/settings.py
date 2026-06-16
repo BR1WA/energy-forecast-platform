@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.models.settings import SystemSettings
+from app.models.models import User
+from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -18,18 +20,23 @@ class SetupPayload(BaseModel):
     sensor_type: str
     sensor_api_url: str | None = None
 
+class PreferencesPayload(BaseModel):
+    theme: str | None = None
+    language: str | None = None
+    email_alerts: bool | None = None
+    push_alerts: bool | None = None
+
 @router.get("/setup-status")
-def get_setup_status(db: Session = Depends(get_db)):
-    settings = db.query(SystemSettings).first()
-    if not settings:
-        return {"is_setup_complete": False}
-    return {"is_setup_complete": settings.is_setup_complete}
+def get_setup_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return {"is_setup_complete": current_user.is_setup_complete}
 
 @router.get("")
 def get_settings(db: Session = Depends(get_db)):
     settings = db.query(SystemSettings).first()
     if not settings:
-        # Return default if not setup
         return {
             "country": "Morocco",
             "region": "Casablanca-Settat",
@@ -45,7 +52,11 @@ def get_settings(db: Session = Depends(get_db)):
     return settings
 
 @router.post("/setup")
-def save_setup(payload: SetupPayload, db: Session = Depends(get_db)):
+def save_setup(
+    payload: SetupPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     settings = db.query(SystemSettings).first()
     if not settings:
         settings = SystemSettings()
@@ -63,6 +74,34 @@ def save_setup(payload: SetupPayload, db: Session = Depends(get_db)):
     settings.sensor_type = payload.sensor_type
     settings.sensor_api_url = payload.sensor_api_url
     
+    # Also update the user's specific setup complete status
+    current_user.is_setup_complete = True
+    
     db.commit()
     db.refresh(settings)
+    db.refresh(current_user)
     return {"message": "Setup completed successfully", "settings": settings}
+
+@router.put("/preferences")
+def update_preferences(
+    payload: PreferencesPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.preferences is None:
+        current_user.preferences = {}
+        
+    prefs = dict(current_user.preferences)
+    if payload.theme is not None:
+        prefs["theme"] = payload.theme
+    if payload.language is not None:
+        prefs["language"] = payload.language
+    if payload.email_alerts is not None:
+        prefs["email_alerts"] = payload.email_alerts
+    if payload.push_alerts is not None:
+        prefs["push_alerts"] = payload.push_alerts
+        
+    current_user.preferences = prefs
+    db.commit()
+    db.refresh(current_user)
+    return {"message": "Preferences updated successfully", "preferences": current_user.preferences}
