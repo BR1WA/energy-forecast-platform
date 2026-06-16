@@ -174,12 +174,16 @@ export interface ModelRegistry {
 }
 
 export interface SystemHealth {
-  status: 'healthy' | 'degraded' | 'down';
+  status: string;
   uptime_seconds: number;
   cpu_usage: number;
   memory_usage: number;
-  active_users: number;
-  requests_today: number;
+  active_models?: number;
+  total_users?: number;
+  total_forecasts?: number;
+  database_status?: string;
+  active_users?: number;
+  requests_today?: number;
 }
 
 // ============================================================
