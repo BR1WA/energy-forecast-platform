@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.database import engine, Base
-from app.routers import auth, forecast, alerts, analytics, admin, settings as settings_router
+from app.routers import auth, forecast, alerts, analytics, admin, settings as settings_router, multi_site
 from app.services.forecast_service import get_forecast_service
 from app.limiter import limiter
 
@@ -179,6 +179,7 @@ app.include_router(alerts.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
 app.include_router(settings_router.router)
+app.include_router(multi_site.router)
 
 
 @app.get("/", tags=["Health"])
