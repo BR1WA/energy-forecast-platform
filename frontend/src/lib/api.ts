@@ -329,5 +329,21 @@ export const adminApi = {
     }),
 };
 
+// ============================================================
+// Settings API
+// ============================================================
+export const settingsApi = {
+  updatePreferences: (data: {
+    theme?: string;
+    language?: string;
+    email_alerts?: boolean;
+    push_alerts?: boolean;
+  }): Promise<{ message: string; preferences: any }> =>
+    apiFetch('/api/v1/settings/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
 // Export helpers for use in auth context
 export { setTokens, clearTokens, getAccessToken };
