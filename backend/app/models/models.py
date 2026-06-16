@@ -23,6 +23,8 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     last_activity = Column(DateTime(timezone=True), nullable=True)
+    is_setup_complete = Column(Boolean, default=False, nullable=False)
+    preferences = Column(JSON, nullable=True, default=dict)
 
     # Relationships
     forecasts = relationship("Forecast", back_populates="user", cascade="all, delete-orphan")

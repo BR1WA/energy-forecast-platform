@@ -43,15 +43,14 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
         full_name=data.full_name,
         role="viewer",  # Default role
         is_active=True,
+        is_setup_complete=False,
     )
     db.add(user)
 
-    # Reset setup complete status on registration to allow testing the wizard onboarding
+    # Ensure global SystemSettings exists
     settings = db.query(SystemSettings).first()
-    if settings:
-        settings.is_setup_complete = False
-    else:
-        new_settings = SystemSettings(is_setup_complete=False)
+    if not settings:
+        new_settings = SystemSettings(is_setup_complete=True)
         db.add(new_settings)
 
     db.commit()

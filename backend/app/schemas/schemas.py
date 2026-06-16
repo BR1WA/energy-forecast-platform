@@ -37,6 +37,8 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     last_activity: Optional[datetime] = None
     subscription_tier: Optional[str] = "free"
+    is_setup_complete: bool = False
+    preferences: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
