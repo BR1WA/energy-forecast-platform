@@ -95,3 +95,21 @@ class SmartMeterReading(Base):
     sub_metering_3 = Column(Float, nullable=False)
 
 
+class ModelRegistry(Base):
+    __tablename__ = "model_registry"
+
+    id = Column(String(50), primary_key=True, index=True)
+    name = Column(String(50), nullable=False)
+    display_name = Column(String(100), nullable=True)
+    architecture_type = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    training_metrics = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    version = Column(String(20), default="1.0.0", nullable=False)
+    accuracy = Column(Float, nullable=False)
+    last_trained = Column(String(50), nullable=True)
+    parameters = Column(JSON, nullable=True)
+    status = Column(String(20), default="active", nullable=False)
+
+
+
