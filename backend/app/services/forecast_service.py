@@ -106,6 +106,41 @@ class ForecastService:
         self._load_models()
         self._load_scaler()
         self._load_samples()
+        self._seed_model_registry_db()
+
+    def _seed_model_registry_db(self):
+        """Seed ModelRegistry database table if empty."""
+        from app.database import SessionLocal
+        from app.models.models import ModelRegistry
+
+        db = SessionLocal()
+        try:
+            existing_count = db.query(ModelRegistry).count()
+            if existing_count == 0:
+                print("[ML] Seeding ModelRegistry database table...")
+                for name, info in self.available_models_metadata.items():
+                    db_model = ModelRegistry(
+                        id=info['id'],
+                        name=info['name'],
+                        display_name=info['display_name'],
+                        architecture_type=info['architecture_type'],
+                        description=info['description'],
+                        training_metrics=info['training_metrics'],
+                        is_active=True,
+                        version=info['version'],
+                        accuracy=info['accuracy'],
+                        last_trained=info['last_trained'],
+                        parameters=info['parameters'],
+                        status='active'
+                    )
+                    db.add(db_model)
+                db.commit()
+                print("[ML] Seeding completed.")
+        except Exception as e:
+            print(f"[ML] Error seeding ModelRegistry: {e}")
+            db.rollback()
+        finally:
+            db.close()
 
     def _resolve_path(self, relative: str) -> str:
         """Resolve path relative to the models directory."""
@@ -207,20 +242,45 @@ class ForecastService:
             print(f"[ML] Loaded {len(self.samples)} sample datasets")
 
     def get_available_models(self) -> List[dict]:
-        """Return list of available models with metadata."""
-        result = []
-        for name, info in self.available_models_metadata.items():
-            is_active = name in self.models
-            status = self.model_statuses.get(name)
-            if not status:
-                status = 'active' if is_active else 'inactive'
-            
-            result.append({
-                **info,
-                'is_active': is_active,
-                'status': status
-            })
-        return result
+        """Return list of available models with metadata from the database."""
+        from app.database import SessionLocal
+        from app.models.models import ModelRegistry
+
+        db = SessionLocal()
+        try:
+            db_models = db.query(ModelRegistry).all()
+            result = []
+            for m in db_models:
+                result.append({
+                    'id': m.id,
+                    'name': m.name,
+                    'display_name': m.display_name,
+                    'architecture_type': m.architecture_type,
+                    'description': m.description,
+                    'training_metrics': m.training_metrics or {},
+                    'is_active': m.is_active and (m.id in self.models),
+                    'version': m.version,
+                    'accuracy': m.accuracy,
+                    'last_trained': m.last_trained,
+                    'parameters': m.parameters or {},
+                    'status': m.status
+                })
+            return result
+        except Exception as e:
+            print(f"[ML] Error fetching available models from DB: {e}")
+            # Fallback to local dict metadata if DB fails
+            result = []
+            for name, info in self.available_models_metadata.items():
+                is_active = name in self.models
+                status = self.model_statuses.get(name) or ('active' if is_active else 'inactive')
+                result.append({
+                    **info,
+                    'is_active': is_active,
+                    'status': status
+                })
+            return result
+        finally:
+            db.close()
 
     def retrain_model(self, model_name: str, background_tasks) -> None:
         """Retrain the specified model asynchronously using a real PyTorch backprop loop."""
@@ -234,15 +294,38 @@ class ForecastService:
             import torch
             import torch.nn as nn
             import torch.optim as optim
+            from app.database import SessionLocal
+            from app.models.models import ModelRegistry
             
             model = self.models.get(model_name)
             if model is None:
                 print(f"[ML-RETRAIN] Model {model_name} is not loaded. Skipping training loop.")
                 self.model_statuses[model_name] = 'inactive'
+                db_sess = SessionLocal()
+                try:
+                    db_model = db_sess.query(ModelRegistry).filter(ModelRegistry.id == model_name).first()
+                    if db_model:
+                        db_model.status = 'inactive'
+                        db_sess.commit()
+                except Exception as db_err:
+                    print(f"[ML-RETRAIN] Error: {db_err}")
+                finally:
+                    db_sess.close()
                 return
                 
             print(f"[ML-RETRAIN] Starting backpropagation training loop for {model_name}...")
             self.model_statuses[model_name] = 'training (Epoch 0/5, Loss: Starting)'
+            
+            db_sess = SessionLocal()
+            try:
+                db_model = db_sess.query(ModelRegistry).filter(ModelRegistry.id == model_name).first()
+                if db_model:
+                    db_model.status = 'training (Epoch 0/5, Loss: Starting)'
+                    db_sess.commit()
+            except Exception as db_err:
+                print(f"[ML-RETRAIN] Error setting initial status: {db_err}")
+            finally:
+                db_sess.close()
             
             # Setup optimizer and loss function
             model.train()
@@ -321,6 +404,18 @@ class ForecastService:
                 loss_val = float(loss.item())
                 print(f"[ML-RETRAIN] {model_name} | Epoch {epoch+1}/5 | Loss: {loss_val:.4f}")
                 self.model_statuses[model_name] = f"training (Epoch {epoch+1}/5, Loss: {loss_val:.4f})"
+                
+                db_sess = SessionLocal()
+                try:
+                    db_model = db_sess.query(ModelRegistry).filter(ModelRegistry.id == model_name).first()
+                    if db_model:
+                        db_model.status = f"training (Epoch {epoch+1}/5, Loss: {loss_val:.4f})"
+                        db_sess.commit()
+                except Exception as db_err:
+                    print(f"[ML-RETRAIN] Error updating status: {db_err}")
+                finally:
+                    db_sess.close()
+                    
                 time.sleep(1.0)  # Sleep so the user can easily observe the progress in the UI
                 
             model.eval()
@@ -358,6 +453,22 @@ class ForecastService:
 
             self.model_statuses[model_name] = 'active'
             print(f"[ML-RETRAIN] Completed training for {model_name} successfully.")
+            
+            db_sess = SessionLocal()
+            try:
+                db_model = db_sess.query(ModelRegistry).filter(ModelRegistry.id == model_name).first()
+                if db_model:
+                    db_model.status = 'active'
+                    if metadata:
+                        db_model.version = metadata['version']
+                        db_model.accuracy = metadata['accuracy']
+                        db_model.last_trained = metadata['last_trained']
+                        db_model.training_metrics = metadata['training_metrics']
+                    db_sess.commit()
+            except Exception as db_err:
+                print(f"[ML-RETRAIN] Error updating final stats in DB: {db_err}")
+            finally:
+                db_sess.close()
             
         background_tasks.add_task(train_loop)
 
