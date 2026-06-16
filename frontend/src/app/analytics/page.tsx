@@ -546,10 +546,11 @@ export default function AnalyticsPage() {
                                 className={`flex-1 min-w-[28px] h-7 rounded-sm ${getHeatColor(
                                   cell.value
                                 )} transition-all duration-200 hover:ring-1 hover:ring-white/20 cursor-pointer`}
-                                title={`${cell.day} ${String(cell.hour).padStart(
-                                  2,
-                                  '0'
-                                )}:00 — ${cell.value} Wh`}
+                                title={`${cell.day} ${String(cell.hour).padStart(2, '0')}:00 — ${cell.value} Wh (${(() => {
+                                  const isPeak = cell.hour >= (systemSettings?.peak_start_hour ?? 6) && cell.hour < (systemSettings?.peak_end_hour ?? 22);
+                                  const rate = isPeak ? (systemSettings?.peak_rate ?? 1.1) : (systemSettings?.off_peak_rate ?? 0.8);
+                                  return `${systemSettings?.currency || 'MAD'} ${((cell.value / 1000) * rate).toFixed(2)}`;
+                                })()})`}
                               />
                             ))}
                         </div>
