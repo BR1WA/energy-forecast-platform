@@ -12,6 +12,8 @@ export interface User {
   avatar_url?: string;
   last_activity?: string;
   subscription_tier?: string;
+  is_setup_complete?: boolean;
+  preferences?: Record<string, any>;
 }
 
 export interface AuthTokens {
