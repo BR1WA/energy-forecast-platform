@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Globe, Zap, Settings, ArrowRight, Loader2, Database, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { authApi } from "@/lib/api";
+import { authApi, getAccessToken } from "@/lib/api";
 
 const providerTariffs: Record<string, {
   peakRate: number;
@@ -86,9 +86,15 @@ export default function SetupWizard() {
         sensor_api_url: sensorType === "real_api" ? sensorApiUrl : null
       };
 
+      const token = getAccessToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const res = await fetch("http://localhost:8000/api/v1/settings/setup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload)
       });
 
