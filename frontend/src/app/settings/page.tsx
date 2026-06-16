@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
-import { authApi, alertsApi } from '@/lib/api';
+import { authApi, alertsApi, settingsApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
@@ -59,6 +59,18 @@ export default function SettingsPage() {
   useEffect(() => {
     setNextBillingDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString());
   }, [user?.subscription_tier]);
+
+  // Load user database preferences
+  useEffect(() => {
+    if (user?.preferences) {
+      if (user.preferences.theme) {
+        setTheme(user.preferences.theme);
+      }
+      if (user.preferences.language) {
+        setLanguage(user.preferences.language as Language);
+      }
+    }
+  }, [user, setTheme, setLanguage]);
 
   // Load alert config
   useEffect(() => {
@@ -115,6 +127,15 @@ export default function SettingsPage() {
         notification_email: criticalAlerts,
         notification_push: weeklySummary,
       });
+
+      await settingsApi.updatePreferences({
+        theme,
+        language,
+        email_alerts: criticalAlerts,
+        push_alerts: weeklySummary,
+      });
+
+      await refreshUser();
       toast.success(t('settings.save') + ' ' + (language === 'en' ? 'successful' : language === 'fr' ? 'réussie' : 'بنجاح'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save preferences');
