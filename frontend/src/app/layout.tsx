@@ -43,6 +43,7 @@ export default function RootLayout({
                 {children}
                 <Toaster
                   position="top-right"
+                  closeButton
                   toastOptions={{
                     style: {
                       background: "#111827",
