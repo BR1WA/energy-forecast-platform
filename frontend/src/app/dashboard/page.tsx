@@ -198,21 +198,47 @@ export default function DashboardPage() {
     }
   }, [framesLog, activeTab]);
 
-  // Calculations for dynamic tariffs based on system settings
+  // Calculations for dynamic tariffs based on Moroccan National Tiered Pricing (ONEE)
   const getTariffInfo = () => {
-    const currentHour = new Date().getHours();
-    const peakStart = systemSettings?.peak_start_hour ?? 6;
-    const peakEnd = systemSettings?.peak_end_hour ?? 22;
-    const isPeak = peakStart < peakEnd 
-      ? currentHour >= peakStart && currentHour < peakEnd
-      : currentHour >= peakStart || currentHour < peakEnd;
-    const isOffPeak = !isPeak;
+    // 1. Calculate projected monthly consumption in kWh
+    // Daily active consumption is approximately (activePower * 24)
+    // Monthly consumption is (daily consumption * 30.5)
+    const projectedDailyKwh = liveData?.predictions 
+      ? liveData.predictions.reduce((a, b) => a + b, 0) 
+      : (liveData?.gap || 2.8) * 24;
+    const projectedMonthlyKwh = projectedDailyKwh * 30.5;
+
+    let rate = 0.9010;
+    let label = "";
     
-    const rate = isOffPeak ? (systemSettings?.off_peak_rate ?? 0.8) : (systemSettings?.peak_rate ?? 1.1);
-    const label = isOffPeak 
-      ? (language === 'ar' ? 'ساعات خارج الذروة Creuses' : language === 'fr' ? 'Heures Creuses' : 'Off-Peak Hours')
-      : (language === 'ar' ? 'ساعات الذروة Pleines' : language === 'fr' ? 'Heures Pleines' : 'Peak Hours');
-    return { rate, label, isOffPeak };
+    if (projectedMonthlyKwh <= 150) {
+      // Progressive Billing
+      if (projectedMonthlyKwh <= 100) {
+        rate = 0.9010;
+        label = language === 'ar' ? 'الشطر 1 (تدريجي)' : language === 'fr' ? 'Tranche 1 (Progressive)' : 'Tranche 1 (Progressive)';
+      } else {
+        const cost = (100 * 0.9010) + ((projectedMonthlyKwh - 100) * 1.0735);
+        rate = cost / projectedMonthlyKwh;
+        label = language === 'ar' ? 'الشطر 2 (تدريجي)' : language === 'fr' ? 'Tranche 2 (Progressive)' : 'Tranche 2 (Progressive)';
+      }
+    } else {
+      // Selective Billing
+      if (projectedMonthlyKwh <= 200) {
+        rate = 1.0735;
+        label = language === 'ar' ? 'الشطر 3 (انتقائي)' : language === 'fr' ? 'Tranche 3 (Sélective)' : 'Tranche 3 (Selective)';
+      } else if (projectedMonthlyKwh <= 300) {
+        rate = 1.1601;
+        label = language === 'ar' ? 'الشطر 4 (انتقائي)' : language === 'fr' ? 'Tranche 4 (Sélective)' : 'Tranche 4 (Selective)';
+      } else if (projectedMonthlyKwh <= 500) {
+        rate = 1.3817;
+        label = language === 'ar' ? 'الشطر 5 (انتقائي)' : language === 'fr' ? 'Tranche 5 (Sélective)' : 'Tranche 5 (Selective)';
+      } else {
+        rate = 1.5958;
+        label = language === 'ar' ? 'الشطر 6 (انتقائي)' : language === 'fr' ? 'Tranche 6 (Sélective)' : 'Tranche 6 (Selective)';
+      }
+    }
+
+    return { rate, label, isOffPeak: false };
   };
 
   const tariff = getTariffInfo();
@@ -222,29 +248,14 @@ export default function DashboardPage() {
   const costPerHour = activePower * tariff.rate;
   
   // Calculate projected daily cost dynamically by summing predicted values for the next 24 hours
-  // and multiplying them by hourly EDF peak/off-peak tariff rates.
+  // and multiplying them by the Moroccan ONEE tariff rate.
   const calculateProjectedDailyCost = () => {
     if (liveData?.predictions && liveData.predictions.length === 24) {
-      let totalCost = 0;
-      const startHour = new Date().getHours();
-      
-      const peakStart = systemSettings?.peak_start_hour ?? 6;
-      const peakEnd = systemSettings?.peak_end_hour ?? 22;
-      const peakRate = systemSettings?.peak_rate ?? 1.1;
-      const offPeakRate = systemSettings?.off_peak_rate ?? 0.8;
-      
-      liveData.predictions.forEach((predKw, idx) => {
-        const hour = (startHour + idx + 1) % 24;
-        const isPeak = peakStart < peakEnd 
-          ? hour >= peakStart && hour < peakEnd
-          : hour >= peakStart || hour < peakEnd;
-        const rate = isPeak ? peakRate : offPeakRate;
-        totalCost += predKw * rate;
-      });
-      return totalCost;
+      const dailyKwh = liveData.predictions.reduce((a, b) => a + b, 0);
+      return dailyKwh * tariff.rate;
     }
-    // Fallback: use current cost scaled dynamically but realistically
-    return 1.15 * tariff.rate * 24;
+    // Fallback: use current cost scaled dynamically
+    return activePower * 24 * tariff.rate;
   };
 
   const projectedDailyCost = calculateProjectedDailyCost();
@@ -635,12 +646,12 @@ export default function DashboardPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base font-semibold text-white flex items-center justify-between">
                     <span>{language === 'ar' ? 'تقدير التكاليف الفورية' : language === 'fr' ? 'Estimation Financière' : 'Live Cost Estimation'}</span>
-                    <Badge variant="outline" className={tariff.isOffPeak ? "border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[9px]" : "border-amber-500/20 text-amber-400 bg-amber-500/10 text-[9px]"}>
+                    <Badge variant="outline" className={tariff.label.includes("Progressive") || tariff.label.includes("تدريجي") ? "border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[9px]" : "border-amber-500/20 text-amber-400 bg-amber-500/10 text-[9px]"}>
                       {tariff.label}
                     </Badge>
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-400">
-                    {systemSettings?.electricity_provider || 'Provider'} Tarif: {systemSettings?.currency || 'MAD'} {tariff.rate}/kWh
+                    Moroccan ONEE National Tarif: {tariff.rate.toFixed(4)} MAD/kWh
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
