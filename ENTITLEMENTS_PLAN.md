@@ -46,24 +46,24 @@ returning a consistent `403`. Applied on:
   yet; the curve is currently gated only in the UI. `Feature.PRO_FORECAST_CURVE` is defined in
   the catalog so it can be wired when that endpoint is added.
 
-### Phase 3 — Controlled tier changes (C1)
+### Phase 3 — Controlled tier changes (C1) ✅
 Remove the open `POST /auth/subscription` self-grant. Two legitimate paths:
 1. **Admin grant** — wire `PUT /admin/users/{id}` to apply `subscription_tier`.
 2. **Self-service checkout (honest simulation)** — `POST /billing/checkout` creates a
    `pending` subscription; `POST /billing/confirm` (simulated webhook) activates it and updates
    the tier. Downgrade to `free` (cancel) is allowed immediately.
 
-### Phase 4 — Subscription persistence & audit trail
+### Phase 4 — Subscription persistence & audit trail ✅
 `Subscription` model (`tier`, `status`, `source`, `started_at`, `current_period_end`,
 `cancelled_at`). `user.subscription_tier` becomes a denormalized cache updated only by the
 billing/admin service. Alembic migration.
 
-### Phase 5 — Frontend alignment
+### Phase 5 — Frontend alignment ✅
 Replace `changeSubscription` with `billing.checkout` / `billing.cancel`. Add an
 `entitlements.ts` mirror (or fetch `GET /entitlements/me`) and a single `can(feature)` helper.
 Treat UI gating as cosmetic; handle `403` in `apiFetch` with an upgrade prompt.
 
-### Phase 6 — Tests
+### Phase 6 — Tests ✅
 `backend/tests/test_entitlements.py`: free user → `403` on analytics/PDF/multi-site;
 pro user passes pro features, `403` on enterprise; admin grant changes entitlement;
 the self-grant route no longer escalates.
@@ -71,9 +71,9 @@ the self-grant route no longer escalates.
 ## Execution order
 
 1. Phase 1 + 2 — catalog + `require_feature` (closes C2, lowest risk). **(done)**
-2. Phase 3 — remove self-grant, wire admin path (closes C1).
-3. Phase 4 — Subscription model + migration.
-4. Phase 5 + 6 — frontend + tests.
+2. Phase 3 — remove self-grant, wire admin path (closes C1). **(done)**
+3. Phase 4 — Subscription model + migration. **(done)**
+4. Phase 5 + 6 — frontend + tests. **(done)**
 
 ## Scope notes
 
