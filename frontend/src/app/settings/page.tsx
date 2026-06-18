@@ -13,7 +13,7 @@ import { authApi, alertsApi, settingsApi, billingApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard } from 'lucide-react';
+import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard, AlertCircle } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -21,11 +21,14 @@ export default function SettingsPage() {
   const { language, setLanguage, t } = useI18n();
   const router = useRouter();
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const handleCancelSubscription = async () => {
-    if (!confirm("Are you sure you want to cancel your premium subscription? This will immediately downgrade you to the Free plan.")) {
-      return;
-    }
+  const handleCancelSubscription = () => {
+    setShowCancelModal(true);
+  };
+
+  const confirmCancellation = async () => {
+    setShowCancelModal(false);
     setIsCancelling(true);
     try {
       await billingApi.cancelSubscription();
@@ -452,6 +455,51 @@ export default function SettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Cancellation Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="relative w-full max-w-sm bg-[#0b0f19] border border-white/[0.08] rounded-3xl overflow-hidden shadow-2xl shadow-black/85 p-6 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowCancelModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 hover:bg-white/5 rounded-full transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="flex flex-col items-center justify-center text-center space-y-4 pt-2">
+              <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shadow-lg shadow-red-500/10">
+                <AlertCircle className="w-6 h-6 text-red-400" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white">Cancel Subscription?</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Are you sure you want to cancel your premium subscription? You will immediately lose access to premium AI forecasting, WebSocket telemetry, and multi-site grids.
+                </p>
+              </div>
+
+              <div className="w-full pt-4 flex flex-col gap-2">
+                <Button
+                  onClick={confirmCancellation}
+                  className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 text-xs rounded-xl"
+                >
+                  Yes, Cancel Subscription
+                </Button>
+                <Button
+                  onClick={() => setShowCancelModal(false)}
+                  variant="outline"
+                  className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20 font-bold py-2.5 text-xs rounded-xl"
+                >
+                  No, Keep Premium Access
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
