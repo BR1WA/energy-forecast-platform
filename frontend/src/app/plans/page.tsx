@@ -7,38 +7,109 @@ import { useAuth } from "@/lib/auth";
 import { authApi, billingApi } from "@/lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, Zap, Building, Loader2 } from "lucide-react";
+import { Check, Sparkles, Zap, Building, Loader2, CreditCard, Lock, ShieldCheck, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export default function PlansPage() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
+  // Checkout Modal State
+  const [checkoutPlan, setCheckoutPlan] = useState<any | null>(null);
+  const [checkoutStep, setCheckoutStep] = useState<'details' | 'processing' | 'confirming' | 'success'>('details');
+  const [checkoutRef, setCheckoutRef] = useState<string>('');
+  const [cardHolder, setCardHolder] = useState(user?.full_name || '');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
   const handleSelectPlan = async (tier: string) => {
     const isCurrent = currentTier === tier;
-    setSelectedPlan(tier);
-    try {
-      if (isCurrent || tier === "free") {
+    if (isCurrent || tier === "free") {
+      // Direct immediate cancellation flow (no checkout needed for downgrade to free)
+      if (!confirm("Are you sure you want to cancel your premium subscription? This will immediately downgrade you to the Free plan.")) {
+        return;
+      }
+      setSelectedPlan(tier);
+      try {
         await billingApi.cancelSubscription();
         toast.success("Subscription cancelled. Downgraded to Free tier.");
-      } else {
-        // Honest two-step checkout:
-        // 1. Create a checkout intent
-        const checkoutRes = await billingApi.checkout(tier as 'pro' | 'enterprise');
-        // 2. Confirm the checkout (simulated webhook/callback)
-        await billingApi.confirmCheckout(checkoutRes.checkout_ref);
-        toast.success(`Plan updated successfully to ${tier.toUpperCase()}!`);
+        await refreshUser();
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 1000);
+      } catch (err) {
+        toast.error("Failed to cancel subscription. Please try again.");
+        console.error(err);
+      } finally {
+        setSelectedPlan(null);
       }
+    } else {
+      // Find the plan object
+      const targetPlan = plans.find(p => p.id === tier);
+      if (targetPlan) {
+        setCheckoutPlan(targetPlan);
+        setCheckoutStep('details');
+        setCheckoutError(null);
+        setCardNumber('');
+        setCardExpiry('');
+        setCardCvv('');
+        setCardHolder(user?.full_name || '');
+      }
+    }
+  };
+
+  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '');
+    const formatted = value.match(/.{1,4}/g)?.join(' ') || '';
+    setCardNumber(formatted.substring(0, 19));
+  };
+
+  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '');
+    let formatted = value;
+    if (value.length > 2) {
+      formatted = `${value.substring(0, 2)}/${value.substring(2, 4)}`;
+    }
+    setCardExpiry(formatted.substring(0, 5));
+  };
+
+  const handleCvvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '');
+    setCardCvv(value.substring(0, 3));
+  };
+
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cardHolder || cardNumber.length < 19 || cardExpiry.length < 5 || cardCvv.length < 3) {
+      setCheckoutError("Please fill in valid payment details.");
+      return;
+    }
+    setCheckoutError(null);
+    setCheckoutStep('processing');
+
+    try {
+      // Step 1: Create checkout intent
+      const checkoutRes = await billingApi.checkout(checkoutPlan.id as 'pro' | 'enterprise');
+      setCheckoutRef(checkoutRes.checkout_ref);
+
+      // Transition to confirming state (webhook simulation)
+      setCheckoutStep('confirming');
+
+      // Add a small delay to simulate asynchronous webhook delivery
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Step 2: Confirm checkout
+      await billingApi.confirmCheckout(checkoutRes.checkout_ref);
       await refreshUser();
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1000);
-    } catch (err) {
-      toast.error("Failed to update subscription plan. Please try again.");
-      console.error(err);
-    } finally {
-      setSelectedPlan(null);
+      
+      setCheckoutStep('success');
+    } catch (err: any) {
+      setCheckoutError(err.message || "Payment processing failed. Please try again.");
+      setCheckoutStep('details');
     }
   };
 
@@ -212,6 +283,221 @@ export default function PlansPage() {
           })}
         </div>
       </div>
+
+      {/* Checkout Modal */}
+      {checkoutPlan && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="relative w-full max-w-md bg-[#0b0f19] border border-white/[0.08] rounded-3xl overflow-hidden shadow-2xl shadow-black/85 flex flex-col animate-in zoom-in-95 duration-200">
+            
+            {/* Close Button */}
+            {checkoutStep !== 'processing' && checkoutStep !== 'confirming' && checkoutStep !== 'success' && (
+              <button
+                onClick={() => setCheckoutPlan(null)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 hover:bg-white/5 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+
+            {/* Progress Stepper */}
+            <div className="px-6 pt-6 pb-2 border-b border-white/[0.04]">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                <span>Checkout Progress</span>
+                <span>
+                  {checkoutStep === 'details' && 'Step 1 of 3'}
+                  {(checkoutStep === 'processing' || checkoutStep === 'confirming') && 'Step 2 of 3'}
+                  {checkoutStep === 'success' && 'Step 3 of 3'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className={`h-1.5 rounded-full ${checkoutStep === 'details' ? 'bg-blue-500' : 'bg-emerald-500'}`} />
+                <div className={`h-1.5 rounded-full ${
+                  checkoutStep === 'details' ? 'bg-white/5' :
+                  checkoutStep === 'processing' ? 'bg-blue-500/50 animate-pulse' :
+                  checkoutStep === 'confirming' ? 'bg-blue-500' : 'bg-emerald-500'
+                }`} />
+                <div className={`h-1.5 rounded-full ${checkoutStep === 'success' ? 'bg-emerald-500' : 'bg-white/5'}`} />
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6">
+              {checkoutStep === 'details' && (
+                <form onSubmit={handleCheckoutSubmit} className="space-y-4">
+                  {/* Header info */}
+                  <div className="flex justify-between items-center bg-white/[0.02] border border-white/[0.04] p-4 rounded-2xl mb-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Subscription Tier</span>
+                      <h4 className="text-sm font-extrabold text-white">{checkoutPlan.name}</h4>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total price</span>
+                      <p className="text-sm font-extrabold text-white font-mono">{checkoutPlan.price} MAD <span className="text-[10px] text-slate-400 font-normal">/mo</span></p>
+                    </div>
+                  </div>
+
+                  <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-blue-400" /> Payment Details
+                  </h3>
+
+                  {/* Inputs */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">Cardholder Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={cardHolder}
+                        onChange={(e) => setCardHolder(e.target.value)}
+                        placeholder="John Doe"
+                        className="w-full bg-white/[0.02] border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">Card Number</label>
+                      <input
+                        type="text"
+                        required
+                        value={cardNumber}
+                        onChange={handleCardNumberChange}
+                        placeholder="4000 1234 5678 9010"
+                        className="w-full bg-white/[0.02] border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 outline-none transition-all font-mono"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">Expiration Date</label>
+                        <input
+                          type="text"
+                          required
+                          value={cardExpiry}
+                          onChange={handleExpiryChange}
+                          placeholder="MM/YY"
+                          className="w-full bg-white/[0.02] border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 outline-none transition-all font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">CVV</label>
+                        <input
+                          type="password"
+                          required
+                          value={cardCvv}
+                          onChange={handleCvvChange}
+                          placeholder="•••"
+                          className="w-full bg-white/[0.02] border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 outline-none transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {checkoutError && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs mt-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{checkoutError}</span>
+                    </div>
+                  )}
+
+                  {/* Notice block */}
+                  <div className="flex gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-400 text-[10px] leading-relaxed mt-4">
+                    <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>This is a simulated sandbox checkout. No actual charges will be processed, but an auditable subscription record will be registered in the backend.</span>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-3 mt-4 text-xs rounded-xl shadow-lg shadow-blue-500/20"
+                  >
+                    Process Payment (MAD {checkoutPlan.price})
+                  </Button>
+                </form>
+              )}
+
+              {/* Processing States */}
+              {(checkoutStep === 'processing' || checkoutStep === 'confirming') && (
+                <div className="py-12 flex flex-col items-center justify-center text-center space-y-6">
+                  <div className="relative w-16 h-16 flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border-4 border-white/5" />
+                    <div className="absolute inset-0 rounded-full border-4 border-t-blue-500 border-r-blue-500/30 animate-spin" />
+                    <Lock className="w-6 h-6 text-blue-400" />
+                  </div>
+                  
+                  <div className="space-y-2 max-w-xs">
+                    <h4 className="text-sm font-bold text-white">
+                      {checkoutStep === 'processing' ? 'Initializing secure checkout session...' : 'Awaiting payment confirmation webhook...'}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {checkoutStep === 'processing' 
+                        ? 'Opening checkout intent & creating database transaction...'
+                        : 'Stripe API webhook received. Resolving status changes.'}
+                    </p>
+                  </div>
+
+                  {/* Simulated Webhook status bar */}
+                  <div className="w-full bg-white/5 border border-white/[0.04] p-4 rounded-2xl flex flex-col items-start space-y-2 mt-4">
+                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+                      <span className={`w-2.5 h-2.5 rounded-full ${checkoutStep === 'confirming' ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'}`} />
+                      <span className="text-white">API Response status</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 text-left font-mono">
+                      {checkoutStep === 'processing'
+                        ? `POST /api/v1/billing/checkout -> 200 OK (pending)`
+                        : `POST /api/v1/billing/checkout/confirm -> Processing...`}
+                    </p>
+                    {checkoutRef && (
+                      <p className="text-[9px] text-slate-500 text-left font-mono truncate w-full">
+                        Reference: {checkoutRef}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Success State */}
+              {checkoutStep === 'success' && (
+                <div className="py-10 flex flex-col items-center justify-center text-center space-y-6">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-lg shadow-emerald-500/10 animate-bounce">
+                    <ShieldCheck className="w-8 h-8 text-emerald-400" />
+                  </div>
+
+                  <div className="space-y-2 max-w-xs">
+                    <h4 className="text-lg font-bold text-white">Payment Successful!</h4>
+                    <p className="text-xs text-slate-400">
+                      Your subscription has been activated successfully. All features in the <span className="text-white font-semibold">{checkoutPlan?.name}</span> are now unlocked.
+                    </p>
+                  </div>
+
+                  <div className="w-full bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl space-y-1 mt-4">
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>New Tier</span>
+                      <span className="text-white font-bold uppercase text-[10px] font-mono tracking-wider">{checkoutPlan?.name}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>Status</span>
+                      <span className="text-emerald-400 font-bold uppercase text-[10px] font-mono tracking-wider">Active</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => {
+                      setCheckoutPlan(null);
+                      router.push("/dashboard");
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 mt-4 text-xs rounded-xl shadow-lg shadow-emerald-500/20"
+                  >
+                    Proceed to Dashboard
+                  </Button>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
+
