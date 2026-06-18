@@ -13,6 +13,7 @@ from fastapi.security import OAuth2PasswordBearer
 from app.config import get_settings
 from app.database import get_db
 from app.models import User
+from app.entitlements import Feature, FEATURE_MIN_TIER, tier_allows
 
 settings = get_settings()
 
@@ -140,6 +141,24 @@ def require_role(allowed_roles: list[str]):
             )
         return current_user
     return role_checker
+
+
+def require_feature(feature: Feature):
+    """FastAPI dependency factory: require a subscription that unlocks `feature`.
+
+    Server-side counterpart to the UI's tier gating. Authorization must be
+    enforced here (not just in React); the UI is cosmetic. Returns a consistent
+    403 when the user's tier is too low. See audit C1/C2.
+    """
+    def feature_checker(current_user: User = Depends(get_current_user)) -> User:
+        if not tier_allows(current_user.subscription_tier, feature):
+            required = FEATURE_MIN_TIER[feature]
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This feature requires the '{required.name}' subscription tier or higher.",
+            )
+        return current_user
+    return feature_checker
 
 
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:

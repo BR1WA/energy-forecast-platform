@@ -28,7 +28,7 @@ export default function SettingsPage() {
     }
     setIsCancelling(true);
     try {
-      await authApi.updateProfile({ subscription_tier: 'free' });
+      await authApi.changeSubscription('free');
       await refreshUser();
       toast.success("Subscription cancelled. Downgraded to Free tier.");
     } catch (err) {

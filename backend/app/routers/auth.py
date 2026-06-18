@@ -11,12 +11,14 @@ from app.database import get_db
 from app.models import User, SystemSettings
 from app.schemas import (
     UserRegister, UserLogin, UserResponse, TokenResponse,
-    RefreshRequest, TokenData, UserUpdateMe, PasswordUpdate
+    RefreshRequest, TokenData, UserUpdateMe, PasswordUpdate,
+    SubscriptionUpdate
 )
 from app.services.auth_service import (
     hash_password, verify_password, authenticate_user, create_access_token,
     create_refresh_token, decode_token, get_current_user
 )
+from app.entitlements import Tier
 from app.limiter import limiter
 from app.config import get_settings
 
@@ -131,13 +133,53 @@ def update_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update current user's profile."""
+    """Update current user's profile.
+
+    Subscription tier is deliberately not editable here; it is an entitlement
+    controlled by admins/billing, not by the user. See audit C1.
+    """
     if data.full_name is not None:
         current_user.full_name = data.full_name
-    if data.subscription_tier is not None:
-        current_user.subscription_tier = data.subscription_tier
     db.commit()
     db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
+@router.post("/subscription", response_model=UserResponse)
+def change_subscription(
+    data: SubscriptionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Self-service subscription changes.
+
+    Only *downgrades* are permitted here: a user may cancel a paid plan and
+    return to the free tier at any time, since that strictly removes
+    entitlement and carries no fraud risk. *Upgrades* to a paid tier are NOT
+    self-service; they must go through an entitlement flow (billing checkout
+    or an admin grant). Allowing arbitrary self-upgrades was the core of audit
+    finding C1, where any user could grant themselves Enterprise for free.
+    """
+    target = Tier.from_str(data.subscription_tier.value)
+    current = Tier.from_str(current_user.subscription_tier)
+
+    # Free tier is the only self-assignable target (cancel / downgrade).
+    if target != Tier.free:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Upgrading to a paid tier is not available through self-service. "
+                "Complete checkout or contact an administrator. You can only "
+                "cancel (downgrade to 'free') here."
+            ),
+        )
+
+    # No-op if already free; otherwise apply the downgrade.
+    if current != Tier.free:
+        current_user.subscription_tier = Tier.free.name
+        db.commit()
+        db.refresh(current_user)
+
     return UserResponse.model_validate(current_user)
 
 

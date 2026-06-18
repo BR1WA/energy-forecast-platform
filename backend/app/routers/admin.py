@@ -11,6 +11,8 @@ from app.database import get_db
 from app.models import User, Forecast, Alert
 from app.schemas import UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role, get_current_user
+from app.services import billing_service
+from app.entitlements import Tier
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
@@ -35,7 +37,7 @@ def update_user(
     current_user: User = Depends(require_role(["admin"])),
     db: Session = Depends(get_db),
 ):
-    """Update a user's role or status (admin only)."""
+    """Update a user's role, status, or subscription tier (admin only)."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -46,8 +48,22 @@ def update_user(
         user.role = data.role.value
     if data.is_active is not None:
         user.is_active = data.is_active
-
     db.commit()
+
+    if data.subscription_tier is not None:
+        # Admin grant is the sanctioned path for changing a user's tier
+        # (self-service upgrades are blocked; see audit C1). Validate against
+        # the entitlement catalog, then route through billing_service so the
+        # change is recorded in the subscription audit trail (source=admin_grant).
+        normalized = data.subscription_tier.strip().lower()
+        if normalized not in Tier.__members__:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid subscription tier: {data.subscription_tier!r}. "
+                       f"Valid tiers: {', '.join(t.name for t in Tier)}.",
+            )
+        billing_service.grant(db, user, Tier[normalized], source="admin_grant")
+
     db.refresh(user)
     return UserResponse.model_validate(user)
 

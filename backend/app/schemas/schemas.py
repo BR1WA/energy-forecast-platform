@@ -70,11 +70,70 @@ class UserUpdate(BaseModel):
 
 class UserUpdateMe(BaseModel):
     full_name: Optional[str] = None
-    subscription_tier: Optional[str] = None
+    # NOTE: subscription_tier is intentionally NOT updatable here.
+    # Tier changes are an entitlement/billing concern and must go through an
+    # admin endpoint or a real payment flow, never self-service. See audit C1.
 
 class PasswordUpdate(BaseModel):
     current_password: str
     new_password: str = Field(min_length=6, max_length=100)
+
+
+class SubscriptionTier(str, Enum):
+    free = "free"
+    pro = "pro"
+    enterprise = "enterprise"
+
+
+class SubscriptionUpdate(BaseModel):
+    """Dedicated, validated payload for changing subscription tier.
+
+    Kept separate from generic profile updates so tier changes go through a
+    single, auditable entitlement endpoint. See audit C1.
+    """
+    subscription_tier: SubscriptionTier
+
+
+# ======================== BILLING ========================
+
+class PaidTier(str, Enum):
+    """Tiers that can be purchased via checkout (free is not purchasable)."""
+    pro = "pro"
+    enterprise = "enterprise"
+
+
+class CheckoutRequest(BaseModel):
+    tier: PaidTier
+
+
+class CheckoutResponse(BaseModel):
+    """Returned when a checkout is opened; mimics a payment-provider intent."""
+    checkout_ref: str
+    tier: str
+    status: str
+
+
+class CheckoutConfirmRequest(BaseModel):
+    checkout_ref: str
+
+
+class SubscriptionResponse(BaseModel):
+    id: int
+    tier: str
+    status: str
+    source: str
+    started_at: Optional[datetime] = None
+    current_period_end: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class EntitlementsResponse(BaseModel):
+    """Current user's tier and unlocked feature keys (UI gates from this)."""
+    subscription_tier: str
+    features: List[str]
 
 
 # ======================== FORECAST ========================

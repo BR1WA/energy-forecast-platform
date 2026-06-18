@@ -12,14 +12,15 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models import User, Forecast, Alert
 from app.schemas import AnalyticsSummary, ForecastHistoryItem
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_feature
+from app.entitlements import Feature
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics"])
 
 
 @router.get("/summary", response_model=AnalyticsSummary)
 def get_summary(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_feature(Feature.ANALYTICS_SUMMARY)),
     db: Session = Depends(get_db),
 ):
     """Get analytics summary for the current user."""
@@ -322,7 +323,7 @@ def get_summary(
 @router.get("/report/pdf")
 def export_pdf_report(
     forecast_id: Optional[int] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_feature(Feature.PDF_EXPORT)),
     db: Session = Depends(get_db),
 ):
     """Generate and export a professional PDF energy report for the user."""

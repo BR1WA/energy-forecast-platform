@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import require_feature
+from app.entitlements import Feature
 
 router = APIRouter(prefix="/api/v1/multi-site", tags=["multi-site"])
 
@@ -77,13 +78,12 @@ SITES_DATA = [
 @router.get("")
 def get_multi_site_data(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_feature(Feature.MULTI_SITE)),
 ):
     """
     Returns the multi-site telemetry data.
-    Only accessible to Enterprise users.
+
+    Enterprise-only: enforced server-side via `require_feature`, which returns a
+    consistent 403 (instead of the previous 200-with-error body). See audit C2.
     """
-    if current_user.subscription_tier != "enterprise":
-        return {"error": "Enterprise subscription required", "data": []}
-    
     return {"data": SITES_DATA}

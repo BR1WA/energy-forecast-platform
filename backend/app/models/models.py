@@ -30,6 +30,35 @@ class User(Base):
     forecasts = relationship("Forecast", back_populates="user", cascade="all, delete-orphan")
     alert_configs = relationship("AlertConfig", back_populates="user", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
+    subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
+
+
+class Subscription(Base):
+    """Audit trail / provenance for a user's subscription tier.
+
+    `User.subscription_tier` remains a denormalized cache of the currently
+    active subscription's tier (kept for fast reads and existing code). The
+    canonical history lives here: each row records why and how a tier was
+    granted (admin grant, checkout, trial) and its lifecycle status.
+    See ENTITLEMENTS_PLAN.md (Phase 4) and audit C1.
+    """
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tier = Column(String(50), nullable=False)          # pro, enterprise (free = absence of active sub)
+    status = Column(String(20), nullable=False, default="pending")  # pending, active, cancelled, expired
+    source = Column(String(20), nullable=False, default="checkout")  # admin_grant, checkout, trial
+    # Opaque reference returned by the (simulated) payment provider at checkout.
+    checkout_ref = Column(String(100), nullable=True, index=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    current_period_end = Column(DateTime(timezone=True), nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="subscriptions")
 
 
 class Forecast(Base):

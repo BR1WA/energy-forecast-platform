@@ -102,7 +102,7 @@ export default function SetupWizard() {
 
       // Save user's selected subscription plan
       try {
-        await authApi.updateProfile({ subscription_tier: plan });
+        await authApi.changeSubscription(plan);
         await refreshUser();
       } catch (authErr) {
         console.error("Failed to update subscription tier during setup:", authErr);

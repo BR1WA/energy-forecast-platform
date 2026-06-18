@@ -20,7 +20,7 @@ export default function PlansPage() {
     const targetTier = isCurrent ? "free" : tier;
     setSelectedPlan(tier);
     try {
-      await authApi.updateProfile({ subscription_tier: targetTier });
+      await authApi.changeSubscription(targetTier);
       await refreshUser();
       if (isCurrent) {
         toast.success("Subscription cancelled. Downgraded to Free tier.");
