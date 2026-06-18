@@ -201,3 +201,36 @@ export interface ApiError {
   detail: string;
   status_code: number;
 }
+
+// ============================================================
+// Billing Types
+// ============================================================
+export interface CheckoutRequest {
+  tier: 'pro' | 'enterprise';
+}
+
+export interface CheckoutResponse {
+  checkout_ref: string;
+  tier: string;
+  status: string;
+}
+
+export interface CheckoutConfirmRequest {
+  checkout_ref: string;
+}
+
+export interface SubscriptionResponse {
+  id: number;
+  tier: string;
+  status: string;
+  source: string;
+  started_at?: string;
+  current_period_end?: string;
+  cancelled_at?: string;
+}
+
+export interface EntitlementsResponse {
+  subscription_tier: string;
+  features: string[];
+}
+

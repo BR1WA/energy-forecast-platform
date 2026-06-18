@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
-import { authApi, alertsApi, settingsApi } from '@/lib/api';
+import { authApi, alertsApi, settingsApi, billingApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
@@ -28,7 +28,7 @@ export default function SettingsPage() {
     }
     setIsCancelling(true);
     try {
-      await authApi.changeSubscription('free');
+      await billingApi.cancelSubscription();
       await refreshUser();
       toast.success("Subscription cancelled. Downgraded to Free tier.");
     } catch (err) {

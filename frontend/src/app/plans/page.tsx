@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/app-layout";
 import { useAuth } from "@/lib/auth";
-import { authApi } from "@/lib/api";
+import { authApi, billingApi } from "@/lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, Sparkles, Zap, Building, Loader2 } from "lucide-react";
@@ -17,16 +17,20 @@ export default function PlansPage() {
 
   const handleSelectPlan = async (tier: string) => {
     const isCurrent = currentTier === tier;
-    const targetTier = isCurrent ? "free" : tier;
     setSelectedPlan(tier);
     try {
-      await authApi.changeSubscription(targetTier);
-      await refreshUser();
-      if (isCurrent) {
+      if (isCurrent || tier === "free") {
+        await billingApi.cancelSubscription();
         toast.success("Subscription cancelled. Downgraded to Free tier.");
       } else {
+        // Honest two-step checkout:
+        // 1. Create a checkout intent
+        const checkoutRes = await billingApi.checkout(tier as 'pro' | 'enterprise');
+        // 2. Confirm the checkout (simulated webhook/callback)
+        await billingApi.confirmCheckout(checkoutRes.checkout_ref);
         toast.success(`Plan updated successfully to ${tier.toUpperCase()}!`);
       }
+      await refreshUser();
       setTimeout(() => {
         router.push("/dashboard");
       }, 1000);

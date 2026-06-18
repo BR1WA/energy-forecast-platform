@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
+import { can, Feature } from '@/lib/entitlements';
 import {
   LayoutDashboard,
   LineChart,
@@ -126,7 +127,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           .filter((item) => {
             if (item.adminOnly && user?.role !== 'admin') return false;
             if (item.analystOrAdminOnly && user?.role !== 'analyst' && user?.role !== 'admin') return false;
-            if (item.enterpriseOnly && user?.subscription_tier !== 'enterprise') return false;
+            if (item.enterpriseOnly && !can(user, Feature.MULTI_SITE)) return false;
             return true;
           })
           .map((item) => {

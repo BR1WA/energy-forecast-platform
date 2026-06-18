@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
+import { can, Feature } from '@/lib/entitlements';
 import {
   BarChart3,
   TrendingUp,
@@ -118,8 +119,8 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
-  const isFree = user?.subscription_tier === 'free';
-  const isEnterprise = user?.subscription_tier === 'enterprise';
+  const isFree = !can(user, Feature.ANALYTICS_SUMMARY);
+  const isEnterprise = can(user, Feature.HEATMAP);
 
   const finalHeatmapData = analytics?.heatmap_data || heatmapData;
 
@@ -138,8 +139,8 @@ export default function AnalyticsPage() {
   }, []);
 
   const handleDownloadPDF = async () => {
-    if (user?.subscription_tier !== 'enterprise') {
-      toast.warning('PDF Report Export is an Enterprise tier feature. Please upgrade your plan.');
+    if (!can(user, Feature.PDF_EXPORT)) {
+      toast.warning('PDF Report Export is a Pro/Enterprise tier feature. Please upgrade your plan.');
       router.push('/plans');
       return;
     }

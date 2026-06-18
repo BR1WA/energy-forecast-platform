@@ -13,6 +13,9 @@ import type {
   AdminUser,
   ModelRegistry,
   SystemHealth,
+  CheckoutResponse,
+  SubscriptionResponse,
+  EntitlementsResponse,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -119,6 +122,17 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    if (res.status === 403 && typeof window !== 'undefined') {
+      import('sonner').then(({ toast }) => {
+        toast.error(errorData.detail || 'Access denied. Please upgrade your subscription plan.', {
+          action: {
+            label: 'Upgrade Plan',
+            onClick: () => { window.location.href = '/plans'; }
+          },
+          duration: 10000,
+        });
+      }).catch(err => console.error('Failed to load sonner toast', err));
+    }
     throw new Error(errorData.detail || `API error: ${res.status}`);
   }
 
@@ -155,12 +169,6 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
 
-  changeSubscription: (subscription_tier: string): Promise<User> =>
-    apiFetch('/api/v1/auth/subscription', {
-      method: 'POST',
-      body: JSON.stringify({ subscription_tier }),
-    }),
-
   updatePassword: (data: { current_password: string; new_password: string }): Promise<{ message: string }> =>
     apiFetch('/api/v1/auth/password', {
       method: 'PUT',
@@ -179,6 +187,34 @@ export const authApi = {
   deleteAvatar: (): Promise<User> =>
     apiFetch('/api/v1/auth/me/avatar', {
       method: 'DELETE',
+    }),
+};
+
+// ============================================================
+// Billing API
+// ============================================================
+export const billingApi = {
+  getEntitlements: (): Promise<EntitlementsResponse> =>
+    apiFetch('/api/v1/billing/entitlements'),
+
+  getSubscription: (): Promise<SubscriptionResponse | null> =>
+    apiFetch('/api/v1/billing/subscription'),
+
+  checkout: (tier: 'pro' | 'enterprise'): Promise<CheckoutResponse> =>
+    apiFetch('/api/v1/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ tier }),
+    }),
+
+  confirmCheckout: (checkout_ref: string): Promise<User> =>
+    apiFetch('/api/v1/billing/checkout/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ checkout_ref }),
+    }),
+
+  cancelSubscription: (): Promise<User> =>
+    apiFetch('/api/v1/billing/cancel', {
+      method: 'POST',
     }),
 };
 

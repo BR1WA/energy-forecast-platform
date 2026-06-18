@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
+import { can, Feature } from '@/lib/entitlements';
 import { analyticsApi } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import {
@@ -271,7 +272,7 @@ export default function DashboardPage() {
 
     // 2. Append future predictions if available (Pro/Enterprise only)
     const lastFrame = history[history.length - 1];
-    const hasPremiumForecast = user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise';
+    const hasPremiumForecast = can(user, Feature.PRO_FORECAST_CURVE);
     if (hasPremiumForecast && lastFrame && lastFrame.predictions && lastFrame.predictions.length > 0) {
       // Bridge coordinate at H0: connect actual line to predicted line seamlessly
       if (dataPoints.length > 0) {
@@ -482,7 +483,7 @@ export default function DashboardPage() {
             {/* Core Metrics Gauges */}
             <div className={cn(
               "grid gap-4",
-              user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise'
+              can(user, Feature.PRO_FORECAST_CURVE)
                 ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"
                 : "grid-cols-1 md:grid-cols-2"
             )}>
@@ -528,7 +529,7 @@ export default function DashboardPage() {
               </Card>
 
               {/* Current draw Card */}
-              {(user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise') && (
+              {can(user, Feature.PRO_FORECAST_CURVE) && (
                 <>
                   <Card className="glass-card border-white/[0.06] flex items-center justify-between p-5">
                     <div className="space-y-2">
@@ -611,7 +612,7 @@ export default function DashboardPage() {
                             dot={false}
                             activeDot={{ r: 6, fill: '#10B981', stroke: '#111827', strokeWidth: 2 }}
                           />
-                          {(user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise') && (
+                          {can(user, Feature.PRO_FORECAST_CURVE) && (
                             <Line
                               type="monotone"
                               dataKey="predicted"
@@ -677,7 +678,7 @@ export default function DashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 relative min-h-[200px] flex flex-col justify-center">
-                  {user?.subscription_tier === 'free' ? (
+                  {!can(user, Feature.PRO_FORECAST_CURVE) ? (
                     <div className="absolute inset-0 bg-[#0A0F1C]/90 backdrop-blur-[4px] z-10 flex flex-col items-center justify-center p-4 text-center rounded-b-xl">
                       <Lock className="w-5 h-5 text-blue-400 mb-2" />
                       <p className="text-xs font-bold text-white mb-1">Unlock Real-time Appliance Sub-metering</p>
@@ -694,7 +695,7 @@ export default function DashboardPage() {
                     </div>
                   ) : null}
                   {/* kitchen sub1 */}
-                  <div className={user?.subscription_tier === 'free' ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
+                  <div className={!can(user, Feature.PRO_FORECAST_CURVE) ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-300 font-medium flex items-center gap-1.5">
                         <Flame className="w-3.5 h-3.5 text-amber-500" />
@@ -711,7 +712,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* laundry sub2 */}
-                  <div className={user?.subscription_tier === 'free' ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
+                  <div className={!can(user, Feature.PRO_FORECAST_CURVE) ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-300 font-medium flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-purple-400" />
@@ -728,7 +729,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* hvac sub3 */}
-                  <div className={user?.subscription_tier === 'free' ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
+                  <div className={!can(user, Feature.PRO_FORECAST_CURVE) ? 'opacity-10 filter blur-[1px] select-none pointer-events-none' : ''}>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-slate-300 font-medium flex items-center gap-1.5">
                         <Thermometer className="w-3.5 h-3.5 text-blue-400" />

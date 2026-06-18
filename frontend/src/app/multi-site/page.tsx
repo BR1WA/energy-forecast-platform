@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
+import { can, Feature } from '@/lib/entitlements';
 import {
   Building2,
   Lock,
@@ -63,7 +64,7 @@ export default function MultiSitePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [systemSettings, setSystemSettings] = useState<any>(null);
 
-  const isEnterprise = user?.subscription_tier === 'enterprise';
+  const isEnterprise = can(user, Feature.MULTI_SITE);
   const [sitesData, setSitesData] = useState<SiteData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Globe, Zap, Settings, ArrowRight, Loader2, Database, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { authApi, getAccessToken } from "@/lib/api";
+import { authApi, getAccessToken, billingApi } from "@/lib/api";
 
 const providerTariffs: Record<string, {
   peakRate: number;
@@ -102,7 +102,12 @@ export default function SetupWizard() {
 
       // Save user's selected subscription plan
       try {
-        await authApi.changeSubscription(plan);
+        if (plan === "free") {
+          await billingApi.cancelSubscription();
+        } else {
+          const checkoutRes = await billingApi.checkout(plan as 'pro' | 'enterprise');
+          await billingApi.confirmCheckout(checkoutRes.checkout_ref);
+        }
         await refreshUser();
       } catch (authErr) {
         console.error("Failed to update subscription tier during setup:", authErr);
