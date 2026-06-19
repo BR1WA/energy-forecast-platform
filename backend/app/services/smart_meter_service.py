@@ -4,6 +4,33 @@ Smart Meter Service — simulates real-time telemetry from Enedis Linky.
 import numpy as np
 import datetime
 from datetime import timezone
+import socket
+import ipaddress
+from urllib.parse import urlparse
+
+def is_safe_url(url: str, allow_private: bool = False) -> bool:
+    try:
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in ("http", "https"):
+            return False
+            
+        hostname = parsed_url.hostname
+        if not hostname:
+            return False
+            
+        if allow_private:
+            return True
+            
+        addr_info = socket.getaddrinfo(hostname, None)
+        for family, _, _, _, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                return False
+        return True
+    except Exception as e:
+        print(f"[SSRF Protection] Error validating URL {url}: {e}")
+        return False
 
 class SmartMeterService:
     """Simulates smart meter readings fetched from utility API or real API."""
@@ -31,17 +58,24 @@ class SmartMeterService:
             db.close()
 
         if sensor_type == "real_api" and sensor_api_url:
-            import requests
-            try:
-                response = requests.get(sensor_api_url, timeout=5)
-                if response.status_code == 200:
-                    data = response.json()
-                    # Expecting data format matching our numpy array or similar. 
-                    # If it's a real API, parse it here. For now, fallback to simulator if error.
-                    if 'readings' in data:
-                        return np.array(data['readings'], dtype=float)
-            except Exception as e:
-                print(f"[SmartMeterService] Failed to fetch from real API, falling back to simulator: {e}")
+            from app.config import get_settings
+            app_settings = get_settings()
+            allow_private = getattr(app_settings, "DEBUG", True)
+            
+            if is_safe_url(sensor_api_url, allow_private=allow_private):
+                import requests
+                try:
+                    response = requests.get(sensor_api_url, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        # Expecting data format matching our numpy array or similar. 
+                        # If it's a real API, parse it here. For now, fallback to simulator if error.
+                        if 'readings' in data:
+                            return np.array(data['readings'], dtype=float)
+                except Exception as e:
+                    print(f"[SmartMeterService] Failed to fetch from real API, falling back to simulator: {e}")
+            else:
+                print(f"[SmartMeterService] Blocked unsafe sensor API URL: {sensor_api_url}")
 
         # Simulator (Normalized for Moroccan average households)
         # Moroccan homes use significantly less electricity.
