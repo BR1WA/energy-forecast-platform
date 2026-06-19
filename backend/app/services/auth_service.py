@@ -3,6 +3,7 @@ Authentication service — JWT token management and password hashing.
 Uses bcrypt directly (passlib has compatibility issues with bcrypt 5.x).
 """
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Optional
 from jose import jwt, JWTError
 import bcrypt
@@ -16,6 +17,8 @@ from app.models import User, RefreshToken
 from app.entitlements import Feature, FEATURE_MIN_TIER, tier_allows
 
 settings = get_settings()
+
+logger = logging.getLogger(__name__)
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -127,7 +130,7 @@ def get_current_user(
             db.commit()
         except Exception as e:
             db.rollback()
-            print(f"Failed to update last_activity: {e}")
+            logger.error(f"Failed to update last_activity: {e}")
 
     return user
 

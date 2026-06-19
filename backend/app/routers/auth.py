@@ -2,11 +2,14 @@
 Authentication router — login, register, token refresh.
 """
 from datetime import datetime, timezone
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 import os
 import time
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models import User, SystemSettings, RefreshToken
@@ -302,7 +305,7 @@ def upload_avatar(
                 try:
                     os.remove(old_path)
                 except Exception as ex:
-                    print(f"Failed to remove old avatar: {ex}")
+                    logger.error(f"Failed to remove old avatar: {ex}")
                     
         # 7. Update user's avatar_url
         current_user.avatar_url = f"/static/avatars/{new_filename}"
@@ -333,7 +336,7 @@ def delete_avatar(
                 try:
                     os.remove(old_path)
                 except Exception as ex:
-                    print(f"Failed to remove avatar file: {ex}")
+                    logger.error(f"Failed to remove avatar file: {ex}")
         
         current_user.avatar_url = None
         db.commit()

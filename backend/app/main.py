@@ -4,6 +4,7 @@ Master's PFE: Residential Energy Consumption Forecasting Platform
 """
 import time
 import os
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +17,11 @@ from app.database import engine, Base
 from app.routers import auth, forecast, alerts, analytics, admin, settings as settings_router, multi_site, billing
 from app.services.forecast_service import get_forecast_service
 from app.limiter import limiter
+from app.logging_config import configure_logging, RequestIDMiddleware
+
+# Configure logging at startup
+configure_logging()
+logger = logging.getLogger("app.main")
 
 settings = get_settings()
 
@@ -27,9 +33,9 @@ os.makedirs("static/avatars", exist_ok=True)
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
     # Startup
-    print("=" * 60)
-    print(f"  {settings.APP_NAME} v{settings.APP_VERSION}")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info(f"  {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info("=" * 60)
 
     # Ensure static/avatars directory exists
     os.makedirs("static/avatars", exist_ok=True)
@@ -40,20 +46,20 @@ async def lifespan(app: FastAPI):
     from alembic import command
 
     try:
-        print("[DB] Running database migrations...")
+        logger.info("[DB] Running database migrations...")
         Base.metadata.create_all(bind=engine)
         backend_dir = os.path.dirname(os.path.dirname(__file__))
         alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
         alembic_cfg = Config(alembic_ini_path)
         alembic_cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
         command.upgrade(alembic_cfg, "head")
-        print("[DB] Database migrations completed successfully.")
+        logger.info("[DB] Database migrations completed successfully.")
     except Exception as e:
-        print(f"[DB] Migration warning on startup (can be ignored if database is already at head): {e}")
+        logger.warning(f"[DB] Migration warning on startup (can be ignored if database is already at head): {e}")
 
     # Pre-load ML models
     service = get_forecast_service()
-    print(f"[ML] Models ready: {list(service.models.keys())}")
+    logger.info(f"[ML] Models ready: {list(service.models.keys())}")
 
     # Seed admin user if none exists
     from app.database import SessionLocal
@@ -72,7 +78,7 @@ async def lifespan(app: FastAPI):
             )
             db.add(admin)
             db.commit()
-            print(f"[DB] Default admin user created: {settings.ADMIN_EMAIL}")
+            logger.info(f"[DB] Default admin user created: {settings.ADMIN_EMAIL}")
     finally:
         db.close()
 
@@ -81,7 +87,7 @@ async def lifespan(app: FastAPI):
     from app.services.websocket_manager import manager
 
     async def auto_forecast_loop():
-        print("[AUTO-FORECAST] Starting background loop...")
+        logger.info("[AUTO-FORECAST] Starting background loop...")
         await asyncio.sleep(5)  # Wait for startup to complete fully
         while True:
             try:
@@ -90,7 +96,7 @@ async def lifespan(app: FastAPI):
                 if manager.active_connections:
                     val = round(random.uniform(2.5, 5.2), 2)
                     threshold = 4.0
-                    print(f"[AUTO-FORECAST] Simulating load check: current usage {val} kW (threshold {threshold} kW)")
+                    logger.info(f"[AUTO-FORECAST] Simulating load check: current usage {val} kW (threshold {threshold} kW)")
                     
                     if val > threshold:
                         alert_payload = {
@@ -115,7 +121,7 @@ async def lifespan(app: FastAPI):
                                         message=alert_payload["message"],
                                         severity=alert_payload["severity"],
                                         is_acknowledged=False
-                                    )
+                                     )
                                     db_session.add(db_alert)
                                     db_session.commit()
                                     db_session.refresh(db_alert)
@@ -123,28 +129,28 @@ async def lifespan(app: FastAPI):
                                     personal_payload = alert_payload.copy()
                                     personal_payload["id"] = str(db_alert.id)
                                     
-                                    print(f"[AUTO-FORECAST] Broadcasting alert to user {uid}: {personal_payload['message']}")
+                                    logger.info(f"[AUTO-FORECAST] Broadcasting alert to user {uid}: {personal_payload['message']}")
                                     await manager.broadcast_to_client(user_id_str, personal_payload)
                                 except Exception as inner_err:
-                                    print(f"[AUTO-FORECAST] Failed to save/send alert to user {user_id_str}: {inner_err}")
+                                    logger.error(f"[AUTO-FORECAST] Failed to save/send alert to user {user_id_str}: {inner_err}")
                                     db_session.rollback()
                         except Exception as db_err:
-                            print(f"[AUTO-FORECAST] DB log error: {db_err}")
+                            logger.error(f"[AUTO-FORECAST] DB log error: {db_err}")
                         finally:
                             db_session.close()
             except Exception as e:
-                print(f"[AUTO-FORECAST] Loop exception: {e}")
+                logger.error(f"[AUTO-FORECAST] Loop exception: {e}")
             await asyncio.sleep(30)
 
     loop_task = asyncio.create_task(auto_forecast_loop())
 
-    print("[APP] Server ready!")
-    print("=" * 60)
+    logger.info("[APP] Server ready!")
+    logger.info("=" * 60)
 
     yield
 
     # Shutdown
-    print("[APP] Shutting down...")
+    logger.info("[APP] Shutting down...")
     loop_task.cancel()
 
 
@@ -161,6 +167,9 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Register RequestIDMiddleware early in middleware stack
+app.add_middleware(RequestIDMiddleware)
 
 # Rate limiter
 app.state.limiter = limiter
