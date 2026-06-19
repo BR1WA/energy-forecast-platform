@@ -14,9 +14,9 @@ This task list tracks the resolution of open improvements and hygiene tasks.
   - [x] Update report generation in `analytics.py` to calculate costs using the start hour and ONEE tiered preset brackets
 - [x] **ML-4: Label Synthetic/Simulated Analytics Data (1.4)**
   - [x] Add explicit "Demo / Simulated Data" indicators to frontend analytics charts
-- [ ] **ML-5: Sandbox Retrain Flow (1.5)**
-  - [ ] Write new model weights to a candidate directory instead of overwriting production `.pth` files
-  - [ ] Remove the synthetic accuracy increment of `+0.0035`
+- [x] **ML-5: Sandbox Retrain Flow (1.5)**
+  - [x] Write new model weights to a candidate directory instead of overwriting production `.pth` files
+  - [x] Remove the synthetic accuracy increment of `+0.0035`
 
 ## Phase 2: Security & Quality
 - [ ] **SEC-1: Refresh Token Rotation (3.2)**
