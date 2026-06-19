@@ -12,8 +12,8 @@ This task list tracks the resolution of open improvements and hygiene tasks.
   - [x] Save `input_start` and `input_end` datetimes during new predictions
 - [x] **ML-3: Moroccan ONEE Pricing Wiring (1.3)**
   - [x] Update report generation in `analytics.py` to calculate costs using the start hour and ONEE tiered preset brackets
-- [ ] **ML-4: Label Synthetic/Simulated Analytics Data (1.4)**
-  - [ ] Add explicit "Demo / Simulated Data" indicators to frontend analytics charts
+- [x] **ML-4: Label Synthetic/Simulated Analytics Data (1.4)**
+  - [x] Add explicit "Demo / Simulated Data" indicators to frontend analytics charts
 - [ ] **ML-5: Sandbox Retrain Flow (1.5)**
   - [ ] Write new model weights to a candidate directory instead of overwriting production `.pth` files
   - [ ] Remove the synthetic accuracy increment of `+0.0035`
