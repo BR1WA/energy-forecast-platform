@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { getAccessToken } from "@/lib/api";
+import { settingsApi } from "@/lib/api";
 
 export function SetupGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,21 +13,11 @@ export function SetupGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkSetupStatus = async () => {
       try {
-        const token = getAccessToken();
-        const headers: Record<string, string> = {};
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-        const res = await fetch("http://localhost:8000/api/v1/settings/setup-status", {
-          headers,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (!data.is_setup_complete && pathname !== "/setup" && pathname !== "/login" && pathname !== "/register") {
-            router.push("/setup");
-          } else if (data.is_setup_complete && pathname === "/setup") {
-            router.push("/dashboard");
-          }
+        const data = await settingsApi.getSetupStatus();
+        if (!data.is_setup_complete && pathname !== "/setup" && pathname !== "/login" && pathname !== "/register") {
+          router.push("/setup");
+        } else if (data.is_setup_complete && pathname === "/setup") {
+          router.push("/dashboard");
         }
       } catch (err) {
         console.error("Failed to check setup status", err);

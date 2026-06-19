@@ -34,7 +34,10 @@ def get_setup_status(
     return {"is_setup_complete": current_user.is_setup_complete}
 
 @router.get("")
-def get_settings(db: Session = Depends(get_db)):
+def get_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     settings = db.query(SystemSettings).first()
     if not settings:
         return {
@@ -58,27 +61,37 @@ def save_setup(
     current_user: User = Depends(get_current_user)
 ):
     settings = db.query(SystemSettings).first()
+    settings_created_or_updated = False
+    
     if not settings:
         settings = SystemSettings()
         db.add(settings)
-    
-    settings.is_setup_complete = True
-    settings.country = payload.country
-    settings.region = payload.region
-    settings.electricity_provider = payload.electricity_provider
-    settings.currency = payload.currency
-    settings.peak_rate = payload.peak_rate
-    settings.off_peak_rate = payload.off_peak_rate
-    settings.peak_start_hour = payload.peak_start_hour
-    settings.peak_end_hour = payload.peak_end_hour
-    settings.sensor_type = payload.sensor_type
-    settings.sensor_api_url = payload.sensor_api_url
+        settings_created_or_updated = True
+    elif current_user.role == "admin":
+        settings_created_or_updated = True
+        
+    if settings_created_or_updated:
+        settings.is_setup_complete = True
+        settings.country = payload.country
+        settings.region = payload.region
+        settings.electricity_provider = payload.electricity_provider
+        settings.currency = payload.currency
+        settings.peak_rate = payload.peak_rate
+        settings.off_peak_rate = payload.off_peak_rate
+        settings.peak_start_hour = payload.peak_start_hour
+        settings.peak_end_hour = payload.peak_end_hour
+        settings.sensor_type = payload.sensor_type
+        settings.sensor_api_url = payload.sensor_api_url
     
     # Also update the user's specific setup complete status
     current_user.is_setup_complete = True
     
     db.commit()
-    db.refresh(settings)
+    if settings_created_or_updated:
+        db.refresh(settings)
+    else:
+        settings = db.query(SystemSettings).first()
+        
     db.refresh(current_user)
     return {"message": "Setup completed successfully", "settings": settings}
 

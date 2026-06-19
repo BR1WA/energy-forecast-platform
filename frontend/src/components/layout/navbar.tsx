@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { alertsApi } from '@/lib/api';
+import { alertsApi, getAccessToken } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Activity, Sparkles } from 'lucide-react';
@@ -109,7 +109,8 @@ export default function Navbar() {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
     const host = apiBase.replace(/^https?:\/\//, '');
-    const wsUrl = `${wsProto}://${host}/api/v1/alerts/ws/${user.id}`;
+    const token = getAccessToken();
+    const wsUrl = `${wsProto}://${host}/api/v1/alerts/ws/${user.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
     
     console.log(`[WS] Connecting to ${wsUrl}`);
     let ws: WebSocket;

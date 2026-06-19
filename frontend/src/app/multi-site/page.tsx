@@ -34,6 +34,7 @@ import {
   Area,
   Legend,
 } from 'recharts';
+import { multiSiteApi, settingsApi } from '@/lib/api';
 
 export interface Circuit {
   name: string;
@@ -72,14 +73,8 @@ export default function MultiSitePage() {
     // Fetch multi-site telemetry data
     const fetchSites = async () => {
       try {
-        const token = localStorage.getItem('access_token');
-        const res = await fetch('http://localhost:8000/api/v1/multi-site', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.data) setSitesData(json.data);
-        }
+        const json = await multiSiteApi.getSites();
+        if (json.data) setSitesData(json.data);
       } catch (err) {
         console.error('Failed to fetch multi-site data', err);
       } finally {
@@ -96,8 +91,7 @@ export default function MultiSitePage() {
 
   useEffect(() => {
     // Fetch system settings for localization and currency
-    fetch('http://localhost:8000/api/v1/settings')
-      .then((res) => res.json())
+    settingsApi.getSettings()
       .then((data) => setSystemSettings(data))
       .catch(console.error);
   }, []);

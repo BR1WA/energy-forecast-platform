@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { can, Feature } from '@/lib/entitlements';
-import { analyticsApi } from '@/lib/api';
+import { analyticsApi, settingsApi, getAccessToken } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import {
   BarChart3,
@@ -104,8 +104,8 @@ export default function DashboardPage() {
   const [systemSettings, setSystemSettings] = useState<any>(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/v1/settings')
-      .then(res => res.json())
+    settingsApi
+      .getSettings()
       .then(data => setSystemSettings(data))
       .catch(console.error);
   }, []);
@@ -134,7 +134,8 @@ export default function DashboardPage() {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
     const host = apiBase.replace(/^https?:\/\//, '');
-    const wsUrl = `${wsProto}://${host}/api/v1/forecast/smart-meter/live-ws`;
+    const token = getAccessToken();
+    const wsUrl = `${wsProto}://${host}/api/v1/forecast/smart-meter/live-ws${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
     console.log(`[DASHBOARD-TELEMETRY] Connecting to ${wsUrl}`);
     let ws: WebSocket;

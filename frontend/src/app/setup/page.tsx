@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Zap, Settings, ArrowRight, Loader2, Database, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { authApi, getAccessToken, billingApi } from "@/lib/api";
+import { authApi, getAccessToken, billingApi, settingsApi } from "@/lib/api";
 
 export default function SetupWizard() {
   const router = useRouter();
@@ -35,19 +35,7 @@ export default function SetupWizard() {
         sensor_api_url: sensorType === "real_api" ? sensorApiUrl : null
       };
 
-      const token = getAccessToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
-      const res = await fetch("http://localhost:8000/api/v1/settings/setup", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) throw new Error("Failed to save setup settings");
+      await settingsApi.postSetup(payload);
 
       // Save user's selected subscription plan
       try {

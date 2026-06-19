@@ -567,13 +567,42 @@ def get_history(
 
 
 @router.websocket("/smart-meter/live-ws")
-async def live_smart_meter_websocket(websocket: WebSocket):
+async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db: Session = Depends(get_db)):
     import asyncio
     from app.services.smart_meter_service import get_smart_meter_service
     from app.services.forecast_service import get_forecast_service
     from app.database import SessionLocal
-    from app.models import SmartMeterReading
+    from app.models import SmartMeterReading, User
+    from app.services.auth_service import decode_token
     from datetime import datetime, timezone
+
+    if not token:
+        await websocket.accept()
+        await websocket.close(code=1008, reason="Token is missing")
+        return
+        
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Invalid token type")
+            return
+            
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Invalid token payload")
+            return
+            
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user or not user.is_active:
+            await websocket.accept()
+            await websocket.close(code=1008, reason="User unauthorized or inactive")
+            return
+    except Exception as e:
+        await websocket.accept()
+        await websocket.close(code=1008, reason=f"Authentication failed: {str(e)}")
+        return
 
     await websocket.accept()
     print("[WS-LIVE] Client connected to live smart meter telemetry.")

@@ -25,12 +25,12 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
 
 
 class TestEntitlements(unittest.TestCase):
     def setUp(self):
+        app.dependency_overrides[get_db] = override_get_db
         # Create all tables
         Base.metadata.create_all(bind=engine)
         self.db = TestingSessionLocal()
@@ -71,6 +71,8 @@ class TestEntitlements(unittest.TestCase):
     def tearDown(self):
         self.db.close()
         Base.metadata.drop_all(bind=engine)
+        if get_db in app.dependency_overrides:
+            del app.dependency_overrides[get_db]
         import os
         if os.path.exists("./test_entitlements.db"):
             try:

@@ -291,6 +291,14 @@ export const analyticsApi = {
 };
 
 // ============================================================
+// Multi-Site API
+// ============================================================
+export const multiSiteApi = {
+  getSites: (): Promise<{ data: any[] }> =>
+    apiFetch('/api/v1/multi-site'),
+};
+
+// ============================================================
 // Alerts API
 // ============================================================
 export const alertsApi = {
@@ -375,6 +383,18 @@ export const adminApi = {
 // Settings API
 // ============================================================
 export const settingsApi = {
+  getSettings: (): Promise<any> =>
+    apiFetch('/api/v1/settings'),
+
+  getSetupStatus: (): Promise<{ is_setup_complete: boolean }> =>
+    apiFetch('/api/v1/settings/setup-status'),
+
+  postSetup: (data: any): Promise<any> =>
+    apiFetch('/api/v1/settings/setup', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   updatePreferences: (data: {
     theme?: string;
     language?: string;

@@ -29,7 +29,7 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { alertsApi } from '@/lib/api';
+import { alertsApi, settingsApi } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { Alert } from '@/types';
 import { toast } from 'sonner';
@@ -94,11 +94,8 @@ export default function AlertsPage() {
         }
         
         // Fetch SystemSettings
-        const settingsRes = await fetch("http://localhost:8000/api/v1/settings");
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json();
-          setSystemSettings(settingsData);
-        }
+        const settingsData = await settingsApi.getSettings();
+        setSystemSettings(settingsData);
       } catch (err) {
         console.error('Failed to fetch alerts and config', err);
       } finally {

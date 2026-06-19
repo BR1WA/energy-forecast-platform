@@ -31,7 +31,7 @@ import {
   Area,
   Legend,
 } from 'recharts';
-import { analyticsApi } from '@/lib/api';
+import { analyticsApi, settingsApi } from '@/lib/api';
 
 interface AnalyticsData {
   total_forecasts: number;
@@ -132,8 +132,8 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false));
 
     // Fetch system settings for localization and currency
-    fetch('http://localhost:8000/api/v1/settings')
-      .then((res) => res.json())
+    settingsApi
+      .getSettings()
       .then((data) => setSystemSettings(data))
       .catch(console.error);
   }, []);
