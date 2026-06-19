@@ -1,41 +1,38 @@
-# Audit Fix Implementation Tasks
+# Platform Improvements Tasks
 
-This task list tracks the resolution of open issues identified in the v2 Technical Audit.
+This task list tracks the resolution of open improvements and hygiene tasks.
 
-## Priority 1: Security (High Impact)
-- [x] **H1-WS: Authenticate WebSocket Connections**
-  - [x] Update `/ws/{client_id}` in `alerts.py` to require token
-  - [x] Update `/smart-meter/live-ws` in `forecast.py` to require token
-  - [x] Update frontend WebSocket instantiations to pass `token` parameter
-- [x] **H2-NEW: Secure `GET /settings`**
-  - [x] Add `get_current_user` dependency to `GET /api/v1/settings` in `settings.py`
-- [x] **H3-NEW: Secure Global Setup**
-  - [x] Restrict `POST /api/v1/settings/setup` to admin role
+## Phase 1: Machine Learning & Cost Correctness
+- [x] **ML-1: Standardize Month Encoding Inconsistency (1.1)**
+  - [x] Implement shared helper `encode_month(dt: datetime) -> float`
+  - [x] Update `predict_upload` path in `forecast.py` to use helper
+  - [x] Update `smart-meter` sync path in `forecast.py` to use helper
+  - [x] Update `_load_samples` in `forecast_service.py` to use helper
+- [ ] **ML-2: Persist Forecast Start Hour (1.2)**
+  - [ ] Save `input_start` and `input_end` datetimes during new predictions
+- [ ] **ML-3: Moroccan ONEE Pricing Wiring (1.3)**
+  - [ ] Update report generation in `analytics.py` to calculate costs using the start hour and ONEE tiered preset brackets
+- [ ] **ML-4: Label Synthetic/Simulated Analytics Data (1.4)**
+  - [ ] Add explicit "Demo / Simulated Data" indicators to frontend analytics charts
+- [ ] **ML-5: Sandbox Retrain Flow (1.5)**
+  - [ ] Write new model weights to a candidate directory instead of overwriting production `.pth` files
+  - [ ] Remove the synthetic accuracy increment of `+0.0035`
 
-## Priority 2: Correctness & Architecture (Medium Impact)
-- [x] **M1-NEW: Remove Hardcoded Localhost URLs**
-  - [x] Add `settingsApi.getSettings()` to `api.ts`
-  - [x] Add `settingsApi.getSetupStatus()` to `api.ts`
-  - [x] Add `settingsApi.postSetup()` to `api.ts`
-  - [x] Replace `fetch('http://localhost:8000/...')` in `multi-site/page.tsx`
-  - [x] Replace `fetch` in `analytics/page.tsx`
-  - [x] Replace `fetch` in `dashboard/page.tsx`
-  - [x] Replace `fetch` in `alerts/page.tsx`
-  - [x] Replace `fetch` in `setup/page.tsx`
-  - [x] Replace `fetch` in `SetupGuard.tsx`
-- [x] **M3-NEW: Fix Alert User Attribution**
-  - [x] Update `auto_forecast_loop` in `main.py` to attribute alerts correctly (or broadcast globally without saving to the first DB user)
-- [x] **M7-NEW: Fix UI Tier Checks**
-  - [x] Update PDF export lock icon in `analytics/page.tsx` to check `Feature.PDF_EXPORT` instead of Enterprise tier
-- [x] **M4-NEW: Consistent Smart-Meter Gating**
-  - [x] Align role gating on smart-meter endpoints (`smart-meter/sync`, `smart-meter/compare`) with standard forecast endpoints (require `admin` or `analyst`)
+## Phase 2: Security & Quality
+- [ ] **SEC-1: Refresh Token Rotation (3.2)**
+  - [ ] Store hashed refresh tokens in the database and invalidate them upon logout or rotation
+- [ ] **TST-1: In-Memory SQLite for Tests (5.4)**
+  - [ ] Refactor test setup to use `sqlite:///:memory:`
+- [ ] **TST-2: Expand Test Coverage (5.1)**
+  - [ ] Add `test_auth.py` and `test_billing.py`
+- [ ] **LOG-1: Structured Logging (5.2)**
+  - [ ] Implement Python logging module usage instead of `print()`
 
-## Priority 3: Robustness & Hygiene (Lower Impact)
-- [x] **M5-NEW: Prevent SSRF**
-  - [x] Validate `sensor_api_url` in `smart_meter_service.py` before making requests (block internal IPs)
-- [x] **L1-NEW: Cleanup Unused Features**
-  - [x] Resolve unused `Feature.HEATMAP` feature gate (either apply to an endpoint or remove)
-- [x] **L6-NEW: Docker Configuration**
-  - [x] Add `NEXT_PUBLIC_API_URL` ARG/ENV to frontend `Dockerfile`
-- [x] **L2-NEW: Type Safety**
-  - [x] Update `User.subscription_tier` to union type `'free' | 'pro' | 'enterprise'` in frontend types
+## Phase 3: UX & Interface Polish
+- [ ] **UX-1: Admin Subscription Management (3.4)**
+  - [ ] Add subscription tier selector dropdown in the admin user edit modal
+- [ ] **UX-2: WebSocket Reconnect with Backoff (4.1)**
+  - [ ] Implement backoff reconnect loop in frontend WebSocket consumer
+- [ ] **HYG-1: Remove Committed SQLite Database (6.1)**
+  - [ ] Add `backend/*.db` and `backend/energy_forecast.db` to `.gitignore`
+  - [ ] Create schema/seed sql for easy database seeding
