@@ -101,31 +101,37 @@ async def lifespan(app: FastAPI):
                             "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                         }
                         
-                        # Save alert to DB
+                        # Save alert to DB for each active connected user and broadcast
                         from app.database import SessionLocal
-                        from app.models import Alert, User
+                        from app.models import Alert
                         db_session = SessionLocal()
                         try:
-                            first_user = db_session.query(User).first()
-                            if first_user:
-                                db_alert = Alert(
-                                    user_id=first_user.id,
-                                    alert_type="peak_demand",
-                                    message=alert_payload["message"],
-                                    severity=alert_payload["severity"],
-                                    is_acknowledged=False
-                                )
-                                db_session.add(db_alert)
-                                db_session.commit()
-                                db_session.refresh(db_alert)
-                                alert_payload["id"] = str(db_alert.id)
+                            for user_id_str in list(manager.active_connections.keys()):
+                                try:
+                                    uid = int(user_id_str)
+                                    db_alert = Alert(
+                                        user_id=uid,
+                                        alert_type="peak_demand",
+                                        message=alert_payload["message"],
+                                        severity=alert_payload["severity"],
+                                        is_acknowledged=False
+                                    )
+                                    db_session.add(db_alert)
+                                    db_session.commit()
+                                    db_session.refresh(db_alert)
+                                    
+                                    personal_payload = alert_payload.copy()
+                                    personal_payload["id"] = str(db_alert.id)
+                                    
+                                    print(f"[AUTO-FORECAST] Broadcasting alert to user {uid}: {personal_payload['message']}")
+                                    await manager.broadcast_to_client(user_id_str, personal_payload)
+                                except Exception as inner_err:
+                                    print(f"[AUTO-FORECAST] Failed to save/send alert to user {user_id_str}: {inner_err}")
+                                    db_session.rollback()
                         except Exception as db_err:
                             print(f"[AUTO-FORECAST] DB log error: {db_err}")
                         finally:
                             db_session.close()
-
-                        print(f"[AUTO-FORECAST] Broadcasting alert: {alert_payload['message']}")
-                        await manager.broadcast_global(alert_payload)
             except Exception as e:
                 print(f"[AUTO-FORECAST] Loop exception: {e}")
             await asyncio.sleep(30)

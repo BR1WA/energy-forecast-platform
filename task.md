@@ -23,12 +23,12 @@ This task list tracks the resolution of open issues identified in the v2 Technic
   - [x] Replace `fetch` in `alerts/page.tsx`
   - [x] Replace `fetch` in `setup/page.tsx`
   - [x] Replace `fetch` in `SetupGuard.tsx`
-- [ ] **M3-NEW: Fix Alert User Attribution**
-  - [ ] Update `auto_forecast_loop` in `main.py` to attribute alerts correctly (or broadcast globally without saving to the first DB user)
-- [ ] **M7-NEW: Fix UI Tier Checks**
-  - [ ] Update PDF export lock icon in `analytics/page.tsx` to check `Feature.PDF_EXPORT` instead of Enterprise tier
-- [ ] **M4-NEW: Consistent Smart-Meter Gating**
-  - [ ] Align role gating on smart-meter endpoints (`smart-meter/sync`, `smart-meter/compare`) with standard forecast endpoints (require `admin` or `analyst`)
+- [x] **M3-NEW: Fix Alert User Attribution**
+  - [x] Update `auto_forecast_loop` in `main.py` to attribute alerts correctly (or broadcast globally without saving to the first DB user)
+- [x] **M7-NEW: Fix UI Tier Checks**
+  - [x] Update PDF export lock icon in `analytics/page.tsx` to check `Feature.PDF_EXPORT` instead of Enterprise tier
+- [x] **M4-NEW: Consistent Smart-Meter Gating**
+  - [x] Align role gating on smart-meter endpoints (`smart-meter/sync`, `smart-meter/compare`) with standard forecast endpoints (require `admin` or `analyst`)
 
 ## Priority 3: Robustness & Hygiene (Lower Impact)
 - [ ] **M5-NEW: Prevent SSRF**

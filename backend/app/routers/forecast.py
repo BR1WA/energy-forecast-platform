@@ -375,7 +375,7 @@ def compare_upload(
 @router.post("/smart-meter/sync", response_model=ForecastResponse)
 def sync_smart_meter_forecast(
     payload: ForecastRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
 ):
     """
@@ -489,7 +489,7 @@ def sync_smart_meter_forecast(
 
 @router.post("/smart-meter/compare")
 def compare_smart_meter_forecasts(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(["admin", "analyst"])),
 ):
     """
     Sync live readings from the simulated Enedis Linky smart meter,

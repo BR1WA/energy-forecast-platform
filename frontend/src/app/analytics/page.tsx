@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
             >
               {downloading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
-              ) : !isEnterprise ? (
+              ) : !can(user, Feature.PDF_EXPORT) ? (
                 <Lock className="w-4 h-4 text-blue-200" />
               ) : (
                 <FileText className="w-4 h-4" />
