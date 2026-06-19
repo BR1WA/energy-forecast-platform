@@ -236,11 +236,20 @@ class ForecastService:
                     
                     calendar = generate_calendar_features(hours, days, months)
                     
+                    import datetime
+                    start_dt = df.index[0].to_pydatetime()
+                    end_dt = df.index[-1].to_pydatetime()
+                    if start_dt.tzinfo is None:
+                        start_dt = start_dt.replace(tzinfo=datetime.timezone.utc)
+                        end_dt = end_dt.replace(tzinfo=datetime.timezone.utc)
+                        
                     name = sample_file.stem
                     self.samples[name] = {
                         'targets': targets,     # [96, 7]
                         'calendar': calendar,   # [96, 6]
                         'start_hour': int((df.index[-1].hour + 1) % 24),
+                        'input_start': start_dt,
+                        'input_end': end_dt,
                     }
                 except Exception as e:
                     print(f"[ML] Error loading sample {sample_file.name}: {e}")

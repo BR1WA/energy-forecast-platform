@@ -55,6 +55,8 @@ def predict(
 
     # Get input data
     start_hour = None
+    input_start = None
+    input_end = None
     if payload.sample_name:
         if payload.sample_name not in service.samples:
             raise HTTPException(
@@ -65,6 +67,8 @@ def predict(
         targets = sample['targets']
         calendar = sample['calendar']
         start_hour = sample.get('start_hour')
+        input_start = sample.get('input_start')
+        input_end = sample.get('input_end')
     elif payload.data:
         targets = np.array(payload.data, dtype=np.float32)
         calendar = np.array(payload.calendar, dtype=np.float32) if payload.calendar else None
@@ -73,6 +77,9 @@ def predict(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Input data must be shape [96, 7], got {targets.shape}",
             )
+        import datetime
+        input_end = datetime.datetime.now(datetime.timezone.utc)
+        input_start = input_end - datetime.timedelta(hours=95)
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -103,6 +110,8 @@ def predict(
         user_id=current_user.id,
         model_name=payload.model_name,
         predictions=predictions.tolist(),
+        input_start=input_start,
+        input_end=input_end,
     )
     db.add(forecast)
     db.flush()
@@ -261,11 +270,20 @@ def predict_upload(
             detail=f"Model inference failed: {str(e)}",
         )
 
+    import datetime
+    input_start = df.index[0].to_pydatetime()
+    input_end = df.index[-1].to_pydatetime()
+    if input_start.tzinfo is None:
+        input_start = input_start.replace(tzinfo=datetime.timezone.utc)
+        input_end = input_end.replace(tzinfo=datetime.timezone.utc)
+
     # Save forecast
     forecast = Forecast(
         user_id=current_user.id,
         model_name=model_name,
         predictions=predictions.tolist(),
+        input_start=input_start,
+        input_end=input_end,
     )
     db.add(forecast)
     db.flush()
@@ -422,10 +440,14 @@ def sync_smart_meter_forecast(
         )
 
     # Save to DB
+    input_end = now
+    input_start = now - datetime.timedelta(hours=95)
     forecast = Forecast(
         user_id=current_user.id,
         model_name=model_name,
         predictions=predictions.tolist(),
+        input_start=input_start,
+        input_end=input_end,
     )
     db.add(forecast)
     db.flush()
