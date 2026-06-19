@@ -9,8 +9,13 @@ from app.main import app
 from app.models import User
 from app.services.auth_service import hash_password, create_access_token
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_ws.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+from sqlalchemy.pool import StaticPool
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
@@ -55,12 +60,6 @@ class TestWebSocketAuth(unittest.TestCase):
         Base.metadata.drop_all(bind=engine)
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
-        import os
-        if os.path.exists("./test_ws.db"):
-            try:
-                os.remove("./test_ws.db")
-            except Exception:
-                pass
 
     def test_alerts_ws_no_token(self):
         # Connecting with no token should fail

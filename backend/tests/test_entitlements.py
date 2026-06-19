@@ -9,10 +9,12 @@ from app.models import User
 from app.services.auth_service import hash_password, create_access_token
 from app.entitlements import Tier
 
-# Setup a temporary SQLite file database for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_entitlements.db"
+from sqlalchemy.pool import StaticPool
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -73,12 +75,6 @@ class TestEntitlements(unittest.TestCase):
         Base.metadata.drop_all(bind=engine)
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
-        import os
-        if os.path.exists("./test_entitlements.db"):
-            try:
-                os.remove("./test_entitlements.db")
-            except Exception:
-                pass
 
     def test_free_user_access_denied_on_pro_and_enterprise(self):
         # Free user -> 403 on analytics summary (pro feature)

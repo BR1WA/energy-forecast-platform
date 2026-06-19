@@ -10,9 +10,12 @@ from app.main import app
 from app.models import User, RefreshToken
 from app.services.auth_service import hash_password, create_access_token
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_auth.db"
+from sqlalchemy.pool import StaticPool
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -36,11 +39,6 @@ class TestAuthAndTokens(unittest.TestCase):
         Base.metadata.drop_all(bind=engine)
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
-        if os.path.exists("./test_auth.db"):
-            try:
-                os.remove("./test_auth.db")
-            except Exception:
-                pass
 
     def test_register_flow_persists_refresh_token(self):
         payload = {

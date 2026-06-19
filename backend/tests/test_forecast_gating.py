@@ -8,8 +8,13 @@ from app.main import app
 from app.models import User
 from app.services.auth_service import hash_password, create_access_token
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_gating.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+from sqlalchemy.pool import StaticPool
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
@@ -71,12 +76,6 @@ class TestForecastGating(unittest.TestCase):
         Base.metadata.drop_all(bind=engine)
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
-        import os
-        if os.path.exists("./test_gating.db"):
-            try:
-                os.remove("./test_gating.db")
-            except Exception:
-                pass
 
     def test_viewer_gated_from_sync(self):
         payload = {"model_name": "sota"}

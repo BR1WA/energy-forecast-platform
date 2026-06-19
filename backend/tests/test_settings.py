@@ -9,9 +9,12 @@ from app.models import User
 from app.models.settings import SystemSettings
 from app.services.auth_service import hash_password, create_access_token
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_settings.db"
+from sqlalchemy.pool import StaticPool
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -66,12 +69,6 @@ class TestSettingsSecurity(unittest.TestCase):
         Base.metadata.drop_all(bind=engine)
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
-        import os
-        if os.path.exists("./test_settings.db"):
-            try:
-                os.remove("./test_settings.db")
-            except Exception:
-                pass
 
     def test_unauthenticated_get_settings_blocked(self):
         res = client.get("/api/v1/settings")
