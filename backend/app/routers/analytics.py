@@ -304,6 +304,10 @@ def get_summary(
                 "value": val
             })
 
+    from app.entitlements import tier_allows
+    if not tier_allows(current_user.subscription_tier, Feature.HEATMAP):
+        heatmap_data = []
+
     return AnalyticsSummary(
         total_forecasts=total_forecasts,
         total_alerts=total_alerts,
