@@ -2,13 +2,14 @@
 Authentication router — login, register, token refresh.
 """
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 import os
 import time
 
 from app.database import get_db
-from app.models import User, SystemSettings
+from app.models import User, SystemSettings, RefreshToken
 from app.schemas import (
     UserRegister, UserLogin, UserResponse, TokenResponse,
     RefreshRequest, TokenData, UserUpdateMe, PasswordUpdate,
@@ -16,7 +17,8 @@ from app.schemas import (
 )
 from app.services.auth_service import (
     hash_password, verify_password, authenticate_user, create_access_token,
-    create_refresh_token, decode_token, get_current_user
+    create_refresh_token, decode_token, get_current_user, store_refresh_token,
+    verify_refresh_token
 )
 from app.entitlements import Tier
 from app.limiter import limiter
@@ -63,6 +65,9 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
 
+    # Store refresh token in DB
+    store_refresh_token(db, refresh_token, user.id)
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -90,6 +95,9 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
 
+    # Store refresh token in DB
+    store_refresh_token(db, refresh_token, user.id)
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -99,13 +107,20 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/refresh", response_model=TokenData)
 def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
-    """Refresh an access token using a valid refresh token."""
+    """Refresh an access token using a valid refresh token and rotate it."""
     payload = decode_token(data.refresh_token)
 
     if payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
+        )
+
+    # Verify refresh token exists in DB and is active
+    if not verify_refresh_token(db, data.refresh_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token is invalid, expired, or revoked",
         )
 
     user_id = payload.get("sub")
@@ -116,9 +131,45 @@ def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
             detail="User not found or deactivated",
         )
 
-    # Issue new access token
-    new_access = create_access_token({"sub": str(user.id), "role": user.role})
-    return TokenData(access_token=new_access)
+    # Invalidate old refresh token (rotation)
+    import hashlib
+    old_hash = hashlib.sha256(data.refresh_token.encode('utf-8')).hexdigest()
+    db.query(RefreshToken).filter(RefreshToken.token_hash == old_hash).update({"is_revoked": True})
+
+    # Issue new access token and new rotated refresh token
+    token_data = {"sub": str(user.id), "role": user.role}
+    new_access = create_access_token(token_data)
+    new_refresh = create_refresh_token(token_data)
+
+    # Store new refresh token
+    store_refresh_token(db, new_refresh, user.id)
+
+    return TokenData(access_token=new_access, refresh_token=new_refresh)
+
+
+@router.post("/logout")
+def logout(
+    data: Optional[RefreshRequest] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Log out a user by invalidating their refresh token(s)."""
+    import hashlib
+    if data and data.refresh_token:
+        # Invalidate the specific token
+        token_hash = hashlib.sha256(data.refresh_token.encode('utf-8')).hexdigest()
+        db_token = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
+        if db_token:
+            db_token.is_revoked = True
+            db.commit()
+    else:
+        # Invalidate all active tokens for this user
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == current_user.id,
+            RefreshToken.is_revoked == False
+        ).update({"is_revoked": True})
+        db.commit()
+    return {"message": "Logged out successfully"}
 
 
 @router.get("/me", response_model=UserResponse)

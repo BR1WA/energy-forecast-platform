@@ -12,7 +12,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import User
+from app.models import User, RefreshToken
 from app.entitlements import Feature, FEATURE_MIN_TIER, tier_allows
 
 settings = get_settings()
@@ -46,9 +46,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def create_refresh_token(data: dict) -> str:
     """Create a JWT refresh token."""
+    import uuid
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({"exp": expire, "type": "refresh", "jti": str(uuid.uuid4())})
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
@@ -169,3 +170,45 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     if not verify_password(password, user.password_hash):
         return None
     return user
+
+
+def store_refresh_token(db: Session, token: str, user_id: int):
+    """Store the refresh token hash in the database and clean up expired tokens."""
+    import hashlib
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    
+    # Extract expiration from JWT payload
+    payload = decode_token(token)
+    exp_ts = payload.get("exp")
+    expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+    
+    # Store the new token
+    db_token = RefreshToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        is_revoked=False
+    )
+    db.add(db_token)
+    
+    # Clean up expired tokens for this user
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.expires_at < datetime.now(timezone.utc)
+    ).delete()
+    
+    db.commit()
+
+
+def verify_refresh_token(db: Session, token: str) -> bool:
+    """Verify if a refresh token is valid and exists in the database."""
+    import hashlib
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    
+    db_token = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == token_hash,
+        RefreshToken.is_revoked == False,
+        RefreshToken.expires_at > datetime.now(timezone.utc)
+    ).first()
+    
+    return db_token is not None
