@@ -92,6 +92,7 @@ export default function AdminPage() {
   
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [editRole, setEditRole] = useState('');
+  const [editTier, setEditTier] = useState('');
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
@@ -137,13 +138,14 @@ export default function AdminPage() {
     try {
       const updatedUser = await adminApi.updateUser(editUser.id, {
         role: editRole as any,
+        subscription_tier: editTier as any,
       });
       setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
       setIsDialogOpen(false);
-      toast.success(`Role updated to ${editRole}`);
+      toast.success(`User updated successfully`);
     } catch (err) {
       console.error('Failed to update user', err);
-      toast.error('Failed to update user role');
+      toast.error('Failed to update user');
     } finally {
       setIsSavingUser(false);
     }
@@ -366,6 +368,9 @@ export default function AdminPage() {
                       Role
                     </TableHead>
                     <TableHead className="text-slate-400 font-medium">
+                      Subscription
+                    </TableHead>
+                    <TableHead className="text-slate-400 font-medium">
                       Status
                     </TableHead>
                     <TableHead className="text-slate-400 font-medium">
@@ -379,7 +384,7 @@ export default function AdminPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
+                      <TableCell colSpan={6} className="h-24 text-center">
                         <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
                       </TableCell>
                     </TableRow>
@@ -427,6 +432,20 @@ export default function AdminPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] uppercase ${
+                            u.subscription_tier === 'enterprise'
+                              ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/10'
+                              : u.subscription_tier === 'pro'
+                              ? 'border-blue-500/20 text-blue-400 bg-blue-500/10'
+                              : 'border-slate-500/20 text-slate-400 bg-slate-500/10'
+                          }`}
+                        >
+                          {u.subscription_tier || 'free'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1.5">
                           {isOnline(u.last_activity) ? (
                             <>
@@ -454,6 +473,7 @@ export default function AdminPage() {
                           else {
                             setEditUser(u);
                             setEditRole(u.role);
+                            setEditTier(u.subscription_tier || 'free');
                             setIsDialogOpen(true);
                           }
                         }}>
@@ -520,6 +540,39 @@ export default function AdminPage() {
                                         className="text-slate-300"
                                       >
                                         Admin
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs text-slate-300">
+                                    Subscription Tier
+                                  </Label>
+                                  <Select
+                                    value={editTier}
+                                    onValueChange={(v) => setEditTier(v ?? 'free')}
+                                  >
+                                    <SelectTrigger className="bg-white/[0.04] border-white/[0.08] text-white">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-[#111827] border-white/10">
+                                      <SelectItem
+                                        value="free"
+                                        className="text-slate-300"
+                                      >
+                                        Free
+                                      </SelectItem>
+                                      <SelectItem
+                                        value="pro"
+                                        className="text-slate-300"
+                                      >
+                                        Pro
+                                      </SelectItem>
+                                      <SelectItem
+                                        value="enterprise"
+                                        className="text-slate-300"
+                                      >
+                                        Enterprise
                                       </SelectItem>
                                     </SelectContent>
                                   </Select>
