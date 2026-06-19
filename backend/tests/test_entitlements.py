@@ -156,6 +156,13 @@ class TestEntitlements(unittest.TestCase):
         # Pro user passes pro feature checks
         res = client.get("/api/v1/analytics/summary", headers=self.free_headers)
         self.assertEqual(res.status_code, 200)
+        # Heatmap data must be gated (empty) for Pro users
+        self.assertEqual(res.json()["heatmap_data"], [])
+
+        # Admin (Enterprise) user should get non-empty heatmap data
+        res_admin = client.get("/api/v1/analytics/summary", headers=self.admin_headers)
+        self.assertEqual(res_admin.status_code, 200)
+        self.assertNotEqual(res_admin.json()["heatmap_data"], [])
 
         # Pro user still blocked from enterprise feature (multi-site)
         res = client.get("/api/v1/multi-site", headers=self.free_headers)
