@@ -238,13 +238,8 @@ def predict_upload(
     hours = df.index.hour.values
     days = df.index.dayofweek.values
     months = df.index.month.values
-    hour_sin = np.sin(2 * np.pi * hours / 24.0)
-    hour_cos = np.cos(2 * np.pi * hours / 24.0)
-    day_sin = np.sin(2 * np.pi * days / 7.0)
-    day_cos = np.cos(2 * np.pi * days / 7.0)
-    month_sin = np.sin(2 * np.pi * months / 12.0)
-    month_cos = np.cos(2 * np.pi * months / 12.0)
-    calendar = np.stack([hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos], axis=1).astype(np.float32)
+    from app.services.forecast_service import generate_calendar_features
+    calendar = generate_calendar_features(hours, days, months)
 
     # Get user's custom alert threshold
     alert_config = db.query(AlertConfig).filter(
@@ -357,11 +352,8 @@ def compare_upload(
     hours = df.index.hour.values
     days = df.index.dayofweek.values
     months = df.index.month.values
-    calendar = np.stack([
-        np.sin(2 * np.pi * hours / 24.0), np.cos(2 * np.pi * hours / 24.0),
-        np.sin(2 * np.pi * days / 7.0), np.cos(2 * np.pi * days / 7.0),
-        np.sin(2 * np.pi * months / 12.0), np.cos(2 * np.pi * months / 12.0),
-    ], axis=1).astype(np.float32)
+    from app.services.forecast_service import generate_calendar_features
+    calendar = generate_calendar_features(hours, days, months)
 
     results = service.predict_comparison(targets, calendar)
 
@@ -403,17 +395,14 @@ def sync_smart_meter_forecast(
         step_time = now - datetime.timedelta(hours=(95 - h))
         hours.append(step_time.hour)
         days.append(step_time.weekday())
-        months.append(step_time.month - 1)
+        months.append(step_time.month)
         
     hours = np.array(hours)
     days = np.array(days)
     months = np.array(months)
     
-    calendar = np.stack([
-        np.sin(2 * np.pi * hours / 24.0), np.cos(2 * np.pi * hours / 24.0),
-        np.sin(2 * np.pi * days / 7.0), np.cos(2 * np.pi * days / 7.0),
-        np.sin(2 * np.pi * months / 12.0), np.cos(2 * np.pi * months / 12.0),
-    ], axis=1).astype(np.float32)
+    from app.services.forecast_service import generate_calendar_features
+    calendar = generate_calendar_features(hours, days, months)
 
     # Get user alert threshold config
     alert_config = db.query(AlertConfig).filter(AlertConfig.user_id == current_user.id).first()
@@ -512,17 +501,14 @@ def compare_smart_meter_forecasts(
         step_time = now - datetime.timedelta(hours=(95 - h))
         hours.append(step_time.hour)
         days.append(step_time.weekday())
-        months.append(step_time.month - 1)
+        months.append(step_time.month)
         
     hours = np.array(hours)
     days = np.array(days)
     months = np.array(months)
     
-    calendar = np.stack([
-        np.sin(2 * np.pi * hours / 24.0), np.cos(2 * np.pi * hours / 24.0),
-        np.sin(2 * np.pi * days / 7.0), np.cos(2 * np.pi * days / 7.0),
-        np.sin(2 * np.pi * months / 12.0), np.cos(2 * np.pi * months / 12.0),
-    ], axis=1).astype(np.float32)
+    from app.services.forecast_service import generate_calendar_features
+    calendar = generate_calendar_features(hours, days, months)
 
     service = get_forecast_service()
     results = service.predict_comparison(targets, calendar)

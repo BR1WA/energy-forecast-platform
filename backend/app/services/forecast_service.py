@@ -19,6 +19,19 @@ TARGET_COLS = [
 ]
 
 
+def generate_calendar_features(hours: np.ndarray, days: np.ndarray, months: np.ndarray) -> np.ndarray:
+    """
+    Generate cyclical calendar features (hour, day, month sin/cos) from numpy arrays.
+    Inputs are assumed to be 1-indexed for months (1..12).
+    """
+    hour_sin = np.sin(2 * np.pi * hours / 24.0)
+    hour_cos = np.cos(2 * np.pi * hours / 24.0)
+    day_sin = np.sin(2 * np.pi * days / 7.0)
+    day_cos = np.cos(2 * np.pi * days / 7.0)
+    month_sin = np.sin(2 * np.pi * months / 12.0)
+    month_cos = np.cos(2 * np.pi * months / 12.0)
+    return np.stack([hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos], axis=1).astype(np.float32)
+
 
 class ForecastService:
     """Manages ML model loading and inference for energy forecasting."""
@@ -221,14 +234,7 @@ class ForecastService:
                     days = df.index.dayofweek.values
                     months = df.index.month.values
                     
-                    hour_sin = np.sin(2 * np.pi * hours / 24.0)
-                    hour_cos = np.cos(2 * np.pi * hours / 24.0)
-                    day_sin = np.sin(2 * np.pi * days / 7.0)
-                    day_cos = np.cos(2 * np.pi * days / 7.0)
-                    month_sin = np.sin(2 * np.pi * months / 12.0)
-                    month_cos = np.cos(2 * np.pi * months / 12.0)
-                    
-                    calendar = np.stack([hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos], axis=1).astype(np.float32)
+                    calendar = generate_calendar_features(hours, days, months)
                     
                     name = sample_file.stem
                     self.samples[name] = {
