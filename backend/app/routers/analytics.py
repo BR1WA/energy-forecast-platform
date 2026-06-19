@@ -511,17 +511,36 @@ def export_pdf_report(
         peak_val = max(gap_values) if gap_values else 0.0
         avg_val = sum(gap_values) / len(gap_values) if gap_values else 0.0
 
-        # Calculate cost
-        total_cost = 0.0
-        peak_start = settings.peak_start_hour
-        peak_end = settings.peak_end_hour
-        for h_idx, val in enumerate(gap_values):
-            is_peak = (
-                peak_start <= h_idx < peak_end if peak_start < peak_end
-                else h_idx >= peak_start or h_idx < peak_end
-            )
-            rate = settings.peak_rate if is_peak else settings.off_peak_rate
-            total_cost += val * rate
+        # Calculate cost using Moroccan ONEE Tiered Pricing structure
+        total_daily_kwh = sum(gap_values)
+        projected_monthly_kwh = total_daily_kwh * 30.5
+
+        if projected_monthly_kwh <= 150.0:
+            # Progressive Billing
+            if projected_monthly_kwh <= 100.0:
+                onee_rate = 0.9010
+            else:
+                onee_cost = (100.0 * 0.9010) + ((projected_monthly_kwh - 100.0) * 1.0735)
+                onee_rate = onee_cost / projected_monthly_kwh if projected_monthly_kwh > 0 else 0.9010
+        else:
+            # Selective Billing
+            if projected_monthly_kwh <= 200.0:
+                onee_rate = 1.0735
+            elif projected_monthly_kwh <= 300.0:
+                onee_rate = 1.1601
+            elif projected_monthly_kwh <= 500.0:
+                onee_rate = 1.3817
+            else:
+                onee_rate = 1.5958
+
+        # Calculate cost using the computed ONEE rate
+        total_cost = sum(val * onee_rate for val in gap_values)
+        
+        # Get forecast start hour references
+        start_dt = forecast.input_start
+        if not start_dt:
+            start_dt = forecast.created_at
+        start_hour = start_dt.hour if start_dt else 0
 
         story.append(Paragraph(f"Latest Forecast Details (ID: #{forecast.id})", section_heading))
 
@@ -566,28 +585,20 @@ def export_pdf_report(
         # Populate rows (12 rows, splitting 24 values side-by-side)
         for h in range(12):
             val1 = gap_values[h] if h < len(gap_values) else 0.0
-            is_peak1 = (
-                peak_start <= h < peak_end if peak_start < peak_end 
-                else h >= peak_start or h < peak_end
-            )
-            rate1 = settings.peak_rate if is_peak1 else settings.off_peak_rate
-            cost1 = val1 * rate1
+            wall_hour1 = (start_hour + h) % 24
+            cost1 = val1 * onee_rate
 
             h2 = h + 12
             val2 = gap_values[h2] if h2 < len(gap_values) else 0.0
-            is_peak2 = (
-                peak_start <= h2 < peak_end if peak_start < peak_end 
-                else h2 >= peak_start or h2 < peak_end
-            )
-            rate2 = settings.peak_rate if is_peak2 else settings.off_peak_rate
-            cost2 = val2 * rate2
+            wall_hour2 = (start_hour + h2) % 24
+            cost2 = val2 * onee_rate
 
             table_data.append([
-                Paragraph(f"{h:02d}:00", table_cell_style),
+                Paragraph(f"{wall_hour1:02d}:00", table_cell_style),
                 Paragraph(f"{val1:.3f} kW", table_cell_style),
                 Paragraph(f"{settings.currency} {cost1:.3f}", table_cell_style),
                 "",
-                Paragraph(f"{h2:02d}:00", table_cell_style),
+                Paragraph(f"{wall_hour2:02d}:00", table_cell_style),
                 Paragraph(f"{val2:.3f} kW", table_cell_style),
                 Paragraph(f"{settings.currency} {cost2:.3f}", table_cell_style),
             ])
