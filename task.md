@@ -8,8 +8,8 @@ This task list tracks the resolution of open improvements and hygiene tasks.
   - [x] Update `predict_upload` path in `forecast.py` to use helper
   - [x] Update `smart-meter` sync path in `forecast.py` to use helper
   - [x] Update `_load_samples` in `forecast_service.py` to use helper
-- [ ] **ML-2: Persist Forecast Start Hour (1.2)**
-  - [ ] Save `input_start` and `input_end` datetimes during new predictions
+- [x] **ML-2: Persist Forecast Start Hour (1.2)**
+  - [x] Save `input_start` and `input_end` datetimes during new predictions
 - [ ] **ML-3: Moroccan ONEE Pricing Wiring (1.3)**
   - [ ] Update report generation in `analytics.py` to calculate costs using the start hour and ONEE tiered preset brackets
 - [ ] **ML-4: Label Synthetic/Simulated Analytics Data (1.4)**
