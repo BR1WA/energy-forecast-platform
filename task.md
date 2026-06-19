@@ -31,11 +31,11 @@ This task list tracks the resolution of open issues identified in the v2 Technic
   - [x] Align role gating on smart-meter endpoints (`smart-meter/sync`, `smart-meter/compare`) with standard forecast endpoints (require `admin` or `analyst`)
 
 ## Priority 3: Robustness & Hygiene (Lower Impact)
-- [ ] **M5-NEW: Prevent SSRF**
-  - [ ] Validate `sensor_api_url` in `smart_meter_service.py` before making requests (block internal IPs)
-- [ ] **L1-NEW: Cleanup Unused Features**
-  - [ ] Resolve unused `Feature.HEATMAP` feature gate (either apply to an endpoint or remove)
-- [ ] **L6-NEW: Docker Configuration**
-  - [ ] Add `NEXT_PUBLIC_API_URL` ARG/ENV to frontend `Dockerfile`
-- [ ] **L2-NEW: Type Safety**
-  - [ ] Update `User.subscription_tier` to union type `'free' | 'pro' | 'enterprise'` in frontend types
+- [x] **M5-NEW: Prevent SSRF**
+  - [x] Validate `sensor_api_url` in `smart_meter_service.py` before making requests (block internal IPs)
+- [x] **L1-NEW: Cleanup Unused Features**
+  - [x] Resolve unused `Feature.HEATMAP` feature gate (either apply to an endpoint or remove)
+- [x] **L6-NEW: Docker Configuration**
+  - [x] Add `NEXT_PUBLIC_API_URL` ARG/ENV to frontend `Dockerfile`
+- [x] **L2-NEW: Type Safety**
+  - [x] Update `User.subscription_tier` to union type `'free' | 'pro' | 'enterprise'` in frontend types
