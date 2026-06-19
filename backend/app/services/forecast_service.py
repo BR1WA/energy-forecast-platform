@@ -438,9 +438,9 @@ class ForecastService:
             # Update metadata on successful completion
             metadata = self.available_models_metadata.get(model_name)
             if metadata:
-                # Slightly improve metrics as a demonstration of learning
+                # Remove synthetic R2 score increment bump
                 old_r2 = metadata['training_metrics']['r2_score']
-                new_r2 = min(0.99, old_r2 + 0.0035) # Increment R2 score slightly
+                new_r2 = old_r2
                 metadata['training_metrics']['r2_score'] = new_r2
                 metadata['accuracy'] = round(new_r2 * 100, 1)
                 
@@ -452,7 +452,7 @@ class ForecastService:
                 # Update last trained date
                 metadata['last_trained'] = datetime.datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
                 
-            # Save updated weights to disk
+            # Save updated weights to candidate directory to avoid overwriting production weights
             weights_filenames = {
                 'cnn_bilstm': 'cnn_bilstm_baseline.pth',
                 'sota': 'sota_model_weights.pth',
@@ -461,10 +461,13 @@ class ForecastService:
             filename = weights_filenames.get(model_name)
             if filename:
                 try:
-                    torch.save(model.state_dict(), self._resolve_path(filename))
-                    print(f"[ML-RETRAIN] Saved updated weights for {model_name} to {filename}")
+                    candidate_dir = Path(settings.MODELS_DIR) / "_candidate"
+                    candidate_dir.mkdir(exist_ok=True)
+                    candidate_path = candidate_dir / filename
+                    torch.save(model.state_dict(), str(candidate_path.resolve()))
+                    print(f"[ML-RETRAIN] Saved updated weights for {model_name} to candidate path: {candidate_path}")
                 except Exception as save_err:
-                    print(f"[ML-RETRAIN] Warning: Failed to save updated weights: {save_err}")
+                    print(f"[ML-RETRAIN] Warning: Failed to save updated weights to candidate path: {save_err}")
 
             self.model_statuses[model_name] = 'active'
             print(f"[ML-RETRAIN] Completed training for {model_name} successfully.")
