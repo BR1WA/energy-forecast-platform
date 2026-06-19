@@ -11,7 +11,7 @@ export interface User {
   updated_at?: string;
   avatar_url?: string;
   last_activity?: string;
-  subscription_tier?: string;
+  subscription_tier?: 'free' | 'pro' | 'enterprise';
   is_setup_complete?: boolean;
   preferences?: Record<string, any>;
 }
@@ -230,7 +230,7 @@ export interface SubscriptionResponse {
 }
 
 export interface EntitlementsResponse {
-  subscription_tier: string;
+  subscription_tier: 'free' | 'pro' | 'enterprise';
   features: string[];
 }
 
