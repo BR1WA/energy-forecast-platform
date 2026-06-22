@@ -17,6 +17,11 @@ import type {
   SubscriptionResponse,
   EntitlementsResponse,
   EnergyBudget,
+  SystemSettings,
+  RawAlertResponse,
+  AlertConfigResponse,
+  UserPreferences,
+  Site,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -295,7 +300,7 @@ export const analyticsApi = {
 // Multi-Site API
 // ============================================================
 export const multiSiteApi = {
-  getSites: (): Promise<{ data: any[] }> =>
+  getSites: (): Promise<{ data: Site[] }> =>
     apiFetch('/api/v1/multi-site'),
 };
 
@@ -304,10 +309,10 @@ export const multiSiteApi = {
 // ============================================================
 export const alertsApi = {
   getAlerts: async (): Promise<Alert[]> => {
-    const raw = await apiFetch<any[]>('/api/v1/alerts');
+    const raw = await apiFetch<RawAlertResponse[]>('/api/v1/alerts');
     return raw.map((a) => ({
       id: String(a.id),
-      type: a.alert_type,
+      type: a.alert_type as any,
       severity: a.severity,
       title: a.alert_type ? a.alert_type.replace(/_/g, ' ').toUpperCase() : 'ALERT',
       message: a.message || '',
@@ -317,7 +322,7 @@ export const alertsApi = {
   },
 
   getConfig: async (): Promise<AlertConfig> => {
-    const raw = await apiFetch<any>('/api/v1/alerts/config');
+    const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config');
     return {
       high_consumption_threshold: raw.threshold_kw,
       anomaly_sensitivity: 'medium',
@@ -331,7 +336,7 @@ export const alertsApi = {
       threshold_kw: config.high_consumption_threshold,
       email_enabled: config.notification_email,
     };
-    const raw = await apiFetch<any>('/api/v1/alerts/config', {
+    const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config', {
       method: 'POST',
       body: JSON.stringify(backendPayload),
     });
@@ -384,13 +389,13 @@ export const adminApi = {
 // Settings API
 // ============================================================
 export const settingsApi = {
-  getSettings: (): Promise<any> =>
+  getSettings: (): Promise<SystemSettings> =>
     apiFetch('/api/v1/settings'),
 
   getSetupStatus: (): Promise<{ is_setup_complete: boolean }> =>
     apiFetch('/api/v1/settings/setup-status'),
 
-  postSetup: (data: any): Promise<any> =>
+  postSetup: (data: Omit<SystemSettings, 'id' | 'is_setup_complete' | 'updated_at'>): Promise<{ message: string; settings: SystemSettings }> =>
     apiFetch('/api/v1/settings/setup', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -401,7 +406,7 @@ export const settingsApi = {
     language?: string;
     email_alerts?: boolean;
     push_alerts?: boolean;
-  }): Promise<{ message: string; preferences: any }> =>
+  }): Promise<{ message: string; preferences: UserPreferences }> =>
     apiFetch('/api/v1/settings/preferences', {
       method: 'PUT',
       body: JSON.stringify(data),

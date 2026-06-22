@@ -243,3 +243,68 @@ export interface EnergyBudget {
   updated_at: string;
 }
 
+export interface SystemSettings {
+  id?: number;
+  is_setup_complete: boolean;
+  country: string;
+  region: string;
+  electricity_provider: string;
+  currency: string;
+  peak_rate: number;
+  off_peak_rate: number;
+  peak_start_hour: number;
+  peak_end_hour: number;
+  sensor_type: string;
+  sensor_api_url: string | null;
+  updated_at?: string;
+}
+
+export interface RawAlertResponse {
+  id: number;
+  user_id: number;
+  forecast_id: number | null;
+  alert_type: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  peak_kw: number | null;
+  is_acknowledged: boolean;
+  created_at: string;
+}
+
+export interface AlertConfigResponse {
+  id: number;
+  user_id: number;
+  threshold_kw: number;
+  email_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserPreferences {
+  theme?: string;
+  language?: string;
+  email_alerts?: boolean;
+  push_alerts?: boolean;
+  [key: string]: any;
+}
+
+export interface SiteCircuit {
+  name: string;
+  status: string;
+  current: number;
+  power: number;
+  cosPhi: number;
+}
+
+export interface Site {
+  id: string;
+  name: string;
+  meterId: string;
+  status: string;
+  load: number;
+  dailyConsumption: number;
+  peakPower: number;
+  monthlyCost: number;
+  circuits: SiteCircuit[];
+}
+
