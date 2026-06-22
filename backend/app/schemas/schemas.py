@@ -138,10 +138,11 @@ class EntitlementsResponse(BaseModel):
 # ======================== FORECAST ========================
 
 class ForecastRequest(BaseModel):
-    model_name: Optional[str] = Field(None, description="Model to use: 'patchtst', 'sota', 'cnn_bilstm'")
+    model_name: Optional[str] = Field(None, description="Model to use: 'patchtst', 'sota', 'cnn_bilstm', 'itransformer'")
     sample_name: Optional[str] = Field(None, description="Name of pre-loaded sample dataset")
-    data: Optional[List[List[float]]] = Field(None, description="Raw input data [96 timesteps x 7 features]")
-    calendar: Optional[List[List[float]]] = Field(None, description="Calendar features [96 x 6]")
+    data: Optional[List[List[float]]] = Field(None, description="Raw input data [lookback timesteps x 7 features]")
+    calendar: Optional[List[List[float]]] = Field(None, description="Calendar features [lookback x 6]")
+    horizon: int = Field(24, description="Forecast horizon in hours (24, 168, or 720)")
 
 
 class ForecastResponse(BaseModel):

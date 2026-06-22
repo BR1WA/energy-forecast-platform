@@ -35,7 +35,7 @@ def is_safe_url(url: str, allow_private: bool = False) -> bool:
 class SmartMeterService:
     """Simulates smart meter readings fetched from utility API or real API."""
 
-    def fetch_live_readings(self, meter_id: str = "LNK-4829-1092") -> np.ndarray:
+    def fetch_live_readings(self, meter_id: str = "LNK-4829-1092", db = None) -> np.ndarray:
         """
         Generates 96 hours of hourly historical readings representing the lookback window.
         
@@ -47,15 +47,21 @@ class SmartMeterService:
         now = datetime.datetime.now(timezone.utc)
         
         # Fetch settings for sensor_type
-        from app.database import SessionLocal
         from app.models.settings import SystemSettings
-        db = SessionLocal()
+        
+        close_db = False
+        if db is None:
+            from app.database import SessionLocal
+            db = SessionLocal()
+            close_db = True
+            
         try:
             settings_db = db.query(SystemSettings).first()
             sensor_type = settings_db.sensor_type if settings_db else "simulator"
             sensor_api_url = settings_db.sensor_api_url if settings_db else None
         finally:
-            db.close()
+            if close_db:
+                db.close()
 
         if sensor_type == "real_api" and sensor_api_url:
             from app.config import get_settings

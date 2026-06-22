@@ -3,6 +3,7 @@ ML Model Architectures — must EXACTLY match training notebook definitions.
 """
 import torch
 import torch.nn as nn
+import math
 
 
 class RevIN(nn.Module):
@@ -206,3 +207,226 @@ class CNN_BiLSTM(nn.Module):
         last_out = out[:, -1, :]
         pred = self.fc(last_out)
         return pred.view(-1, self.forecast_horizon, self.num_targets)
+
+
+class PositionalEncoding(nn.Module):
+    """Sinusoidal Positional Encoding"""
+    def __init__(self, d_model, max_len=5000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))
+
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1), :]
+
+
+class TemporalEmbedding(nn.Module):
+    """Embeds Temporal Calendar Features (Hour, DayOfWeek, Month)"""
+    def __init__(self, d_model):
+        super().__init__()
+        self.hour_embed = nn.Embedding(24, d_model)
+        self.weekday_embed = nn.Embedding(7, d_model)
+        self.month_embed = nn.Embedding(12, d_model)
+        
+    def forward(self, temporal_patches):
+        # temporal_patches: (B, Num_Patches, 3) where 3 is [Hour, DayOfWeek, Month]
+        hour_x = self.hour_embed(temporal_patches[:, :, 0])
+        weekday_x = self.weekday_embed(temporal_patches[:, :, 1])
+        month_x = self.month_embed(temporal_patches[:, :, 2])
+        return hour_x + weekday_x + month_x
+
+
+class Flatten_Head(nn.Module):
+    """Flatten Head for PatchTST mapping channel tokens to the forecast horizon"""
+    def __init__(self, individual: bool, n_vars: int, head_nf: int, target_window: int, head_dropout=0.0):
+        super().__init__()
+        self.individual = individual
+        self.n_vars = n_vars
+        
+        if self.individual:
+            self.linears = nn.ModuleList()
+            self.dropouts = nn.ModuleList()
+            for _ in range(self.n_vars):
+                self.dropouts.append(nn.Dropout(head_dropout))
+                self.linears.append(nn.Linear(head_nf, target_window))
+        else:
+            self.dropout = nn.Dropout(head_dropout)
+            self.linear = nn.Linear(head_nf, target_window)
+
+    def forward(self, x):
+        # x shape: (B, C, Num_Patches, d_model)
+        x = x.reshape(x.size(0), x.size(1), -1) # (B, C, Num_Patches * d_model)
+        if self.individual:
+            x_out = []
+            for i in range(self.n_vars):
+                z = self.dropouts[i](x[:, i, :])
+                x_out.append(self.linears[i](z))
+            x = torch.stack(x_out, dim=1) # (B, C, Target_Window)
+        else:
+            x = self.dropout(x)
+            x = self.linear(x) # (B, C, Target_Window)
+        return x
+
+
+class AdvancedPatchTST(nn.Module):
+    """Upgraded PatchTST with Temporal Features and stateless RevIN"""
+    def __init__(self, c_in=7, context_window=336, target_window=168, 
+                 patch_len=16, stride=8, d_model=128, n_heads=8, 
+                 n_layers=3, d_ff=256, dropout=0.2, head_dropout=0.2, 
+                 individual=False, revin=True, affine=True):
+        super().__init__()
+        self.c_in = c_in
+        self.context_window = context_window
+        self.target_window = target_window
+        self.patch_len = patch_len
+        self.stride = stride
+        
+        self.revin = revin
+        if self.revin: 
+            self.revin_layer = RevIN(c_in, affine=affine)
+            
+        # Patching mechanics
+        self.patch_num = int((context_window - patch_len)/stride + 1)
+        self.padding_patch_layer = nn.ReplicationPad1d((0, stride)) 
+        self.patch_num += 1 # Account for padding
+        
+        self.value_embedding = nn.Linear(patch_len, d_model, bias=False)
+        self.position_encoding = PositionalEncoding(d_model, max_len=1024)
+        self.temporal_embedding = TemporalEmbedding(d_model)
+        self.dropout = nn.Dropout(dropout)
+        
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=n_heads, dim_feedforward=d_ff, 
+            dropout=dropout, activation='gelu', batch_first=True, norm_first=True
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        self.head = Flatten_Head(individual, c_in, d_model * self.patch_num, target_window, head_dropout=head_dropout)
+
+    def forward(self, x, temporal):
+        # x shape: (B, S, C)
+        # temporal shape: (B, S, 3) [Hour, DayOfWeek, Month]
+        
+        # 1. Normalize
+        if self.revin: 
+            x, mean, stdev = self.revin_layer(x, 'norm')
+            
+        # Channel Independence: (B, S, C) -> (B, C, S)
+        x = x.permute(0, 2, 1) 
+        
+        # 2. Patching Sequence
+        x = self.padding_patch_layer(x)
+        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride) # (B, C, Num_Patches, Patch_Len)
+        
+        # Merge Batch and Channels
+        batch_size = x.size(0)
+        x = x.reshape(batch_size * self.c_in, self.patch_num, self.patch_len)
+        
+        # 2.5 Patching Temporal Features
+        temporal_pad = self.padding_patch_layer(temporal.permute(0, 2, 1).float())
+        temporal_unfold = temporal_pad.unfold(dimension=-1, size=self.patch_len, step=self.stride)
+        temporal_patches = temporal_unfold[:, :, :, -1] # Get last element of each patch (B, 3, Num_Patches)
+        temporal_patches = temporal_patches.permute(0, 2, 1).long() # (B, Num_Patches, 3)
+        
+        # Compute and add temporal calendar embedding
+        temp_emb = self.temporal_embedding(temporal_patches) # (B, Num_Patches, d_model)
+        temp_emb = temp_emb.unsqueeze(1).repeat(1, self.c_in, 1, 1) # (B, C, Num_Patches, d_model)
+        temp_emb = temp_emb.reshape(batch_size * self.c_in, self.patch_num, -1)
+        
+        # 3. Embeddings
+        x = self.value_embedding(x) + temp_emb
+        x = self.position_encoding(x)
+        x = self.dropout(x)
+        
+        # 4. Transformer Encoder
+        x = self.encoder(x)
+        
+        # 5. Head
+        x = x.reshape(batch_size, self.c_in, self.patch_num, -1)
+        x = self.head(x) # (B, C, Target_Window)
+        
+        # 6. Denorm
+        x = x.permute(0, 2, 1) # (B, Target_Window, C)
+        if self.revin:
+            x = self.revin_layer(x, 'denorm', mean=mean, stdev=stdev)
+            
+        return x
+
+
+class iTransformer(nn.Module):
+    """iTransformer with Calendar Embeddings as Channels/Tokens"""
+    def __init__(self, c_in=7, lookback=336, forecast_horizon=168, 
+                 d_model=128, n_heads=8, n_layers=3, d_ff=256, 
+                 dropout=0.1, revin=True, affine=True):
+        super().__init__()
+        self.c_in = c_in
+        self.lookback = lookback
+        self.forecast_horizon = forecast_horizon
+        
+        self.revin = revin
+        if self.revin:
+            self.revin_layer = RevIN(c_in, affine=affine)
+            
+        # Feature Projection (transposed: maps lookback window length to d_model)
+        self.token_embedding = nn.Linear(lookback, d_model)
+        
+        # Embeddings for Calendar Features
+        self.hour_embed = nn.Embedding(24, d_model)
+        self.weekday_embed = nn.Embedding(7, d_model)
+        self.month_embed = nn.Embedding(12, d_model)
+        
+        # Pool temporal dimensions across sequence to form a single token
+        self.temporal_pool = nn.Linear(lookback, 1)
+        
+        # Learnable channel embeddings (order invariance requires some variable identity)
+        self.channel_embed = nn.Parameter(torch.zeros(1, c_in, d_model))
+        
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=n_heads, dim_feedforward=d_ff,
+            dropout=dropout, activation='gelu', batch_first=True, norm_first=True
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        
+        # Linear head for each variable independently
+        self.head = nn.Linear(d_model, forecast_horizon)
+        
+    def forward(self, x, temporal):
+        # x shape: (B, Lookback, C)
+        # temporal shape: (B, Lookback, 3)
+        
+        # 1. RevIN normalization
+        if self.revin:
+            x, mean, stdev = self.revin_layer(x, 'norm')
+            
+        # 2. Feature projection
+        # Transpose sequence and channel dims: (B, L, C) -> (B, C, L)
+        x_trans = x.permute(0, 2, 1)
+        enc_in = self.token_embedding(x_trans) # (B, C, d_model)
+        
+        # 3. Calendar embedding & pooling
+        hour_emb = self.hour_embed(temporal[:, :, 0]) # (B, L, d_model)
+        weekday_emb = self.weekday_embed(temporal[:, :, 1]) # (B, L, d_model)
+        month_emb = self.month_embed(temporal[:, :, 2]) # (B, L, d_model)
+        
+        temp_emb = hour_emb + weekday_emb + month_emb # (B, L, d_model)
+        temp_emb_pooled = self.temporal_pool(temp_emb.permute(0, 2, 1)).squeeze(-1) # (B, d_model)
+        
+        # Add calendar embeddings to all target tokens
+        enc_in = enc_in + temp_emb_pooled.unsqueeze(1) # (B, C, d_model)
+        enc_in = enc_in + self.channel_embed
+        
+        # 4. Multi-head attention across channels
+        enc_out = self.encoder(enc_in) # (B, C, d_model)
+        
+        # 5. Predict & Transpose back
+        dec_out = self.head(enc_out) # (B, C, Horizon)
+        dec_out = dec_out.permute(0, 2, 1) # (B, Horizon, C)
+        
+        # 6. RevIN denormalization
+        if self.revin:
+            dec_out = self.revin_layer(dec_out, 'denorm', mean=mean, stdev=stdev)
+            
+        return dec_out

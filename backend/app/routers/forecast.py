@@ -53,10 +53,19 @@ def predict(
             detail="model_name is required for predictions",
         )
 
+    # Determine lookback based on horizon
+    lookback = 96
+    if payload.horizon == 168:
+        lookback = 512
+    elif payload.horizon == 720:
+        lookback = 1440
+
     # Get input data
     start_hour = None
     input_start = None
     input_end = None
+    timestamps = None
+
     if payload.sample_name:
         if payload.sample_name not in service.samples:
             raise HTTPException(
@@ -64,22 +73,25 @@ def predict(
                 detail=f"Sample '{payload.sample_name}' not found. Available: {list(service.samples.keys())}",
             )
         sample = service.samples[payload.sample_name]
-        targets = sample['targets']
-        calendar = sample['calendar']
+        targets = sample['targets'][-lookback:]
+        calendar = sample['calendar'][-lookback:] if sample.get('calendar') is not None else None
         start_hour = sample.get('start_hour')
         input_start = sample.get('input_start')
         input_end = sample.get('input_end')
+        timestamps = sample.get('timestamps')
+        if timestamps is not None:
+            timestamps = timestamps[-lookback:]
     elif payload.data:
         targets = np.array(payload.data, dtype=np.float32)
         calendar = np.array(payload.calendar, dtype=np.float32) if payload.calendar else None
-        if targets.shape != (96, 7):
+        if targets.shape != (lookback, 7):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Input data must be shape [96, 7], got {targets.shape}",
+                detail=f"Input data must be shape [{lookback}, 7] for horizon {payload.horizon}h, got {targets.shape}",
             )
         import datetime
         input_end = datetime.datetime.now(datetime.timezone.utc)
-        input_start = input_end - datetime.timedelta(hours=95)
+        input_start = input_end - datetime.timedelta(hours=lookback-1)
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -95,7 +107,8 @@ def predict(
     # Run inference
     try:
         predictions, alerts_data = service.predict(
-            payload.model_name, targets, calendar, threshold_kw=threshold, start_hour=start_hour
+            payload.model_name, targets, calendar, threshold_kw=threshold, 
+            start_hour=start_hour, horizon=payload.horizon, timestamps=timestamps
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -105,10 +118,14 @@ def predict(
             detail=f"Model inference failed: {str(e)}",
         )
 
-    # Save forecast to database
+    # Save forecast to database, using the model name with horizon suffix for clarity
+    model_db_name = payload.model_name
+    if payload.horizon != 24 and not payload.model_name.endswith(f"_{payload.horizon}"):
+        model_db_name = f"{payload.model_name}_{payload.horizon}"
+
     forecast = Forecast(
         user_id=current_user.id,
-        model_name=payload.model_name,
+        model_name=model_db_name,
         predictions=predictions.tolist(),
         input_start=input_start,
         input_end=input_end,
@@ -167,6 +184,15 @@ def compare_models(
     """Run all models on the same input for comparison."""
     service = get_forecast_service()
 
+    # Determine lookback based on horizon
+    lookback = 96
+    if request.horizon == 168:
+        lookback = 512
+    elif request.horizon == 720:
+        lookback = 1440
+
+    timestamps = None
+
     if request.sample_name:
         if request.sample_name not in service.samples:
             raise HTTPException(
@@ -174,18 +200,26 @@ def compare_models(
                 detail=f"Sample '{request.sample_name}' not found",
             )
         sample = service.samples[request.sample_name]
-        targets = sample['targets']
-        calendar = sample['calendar']
+        targets = sample['targets'][-lookback:]
+        calendar = sample['calendar'][-lookback:] if sample.get('calendar') is not None else None
+        timestamps = sample.get('timestamps')
+        if timestamps is not None:
+            timestamps = timestamps[-lookback:]
     elif request.data:
         targets = np.array(request.data, dtype=np.float32)
         calendar = np.array(request.calendar, dtype=np.float32) if request.calendar else None
+        if targets.shape != (lookback, 7):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Input data must be shape [{lookback}, 7] for horizon {request.horizon}h, got {targets.shape}",
+            )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provide either 'sample_name' or 'data'",
         )
 
-    results = service.predict_comparison(targets, calendar)
+    results = service.predict_comparison(targets, calendar, horizon=request.horizon, timestamps=timestamps)
 
     return {
         'models': {
@@ -202,6 +236,7 @@ def predict_upload(
     request: Request,
     file: UploadFile = File(...),
     model_name: str = Form(...),
+    horizon: int = Form(24),
     current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
 ):
@@ -223,14 +258,21 @@ def predict_upload(
             detail=f"Failed to parse CSV: {str(e)}",
         )
 
+    # Determine lookback based on horizon
+    lookback = 96
+    if horizon == 168:
+        lookback = 512
+    elif horizon == 720:
+        lookback = 1440
+
     service = get_forecast_service()
 
-    # Take last 96 rows
-    df = df.tail(96)
-    if len(df) < 96:
+    # Take last rows matching lookback size
+    df = df.tail(lookback)
+    if len(df) < lookback:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV must have at least 96 rows, got {len(df)}.",
+            detail=f"CSV must have at least {lookback} rows for horizon {horizon}h, got {len(df)}.",
         )
 
     # Validate columns
@@ -243,7 +285,7 @@ def predict_upload(
 
     targets = df[TARGET_COLS].values.astype(np.float32)
 
-    # Generate calendar features from the datetime index
+    # Generate cyclical calendar features from the datetime index
     hours = df.index.hour.values
     days = df.index.dayofweek.values
     months = df.index.month.values
@@ -260,7 +302,8 @@ def predict_upload(
     start_hour = int((df.index[-1].hour + 1) % 24)
     try:
         predictions, alerts_data = service.predict(
-            model_name, targets, calendar, threshold_kw=threshold, start_hour=start_hour
+            model_name, targets, calendar, threshold_kw=threshold, 
+            start_hour=start_hour, horizon=horizon, timestamps=df.index
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -331,6 +374,7 @@ def predict_upload(
 @router.post("/compare/upload")
 def compare_upload(
     file: UploadFile = File(...),
+    horizon: int = Form(24),
     current_user: User = Depends(require_role(["admin", "analyst"])),
 ):
     """Run comparison from an uploaded CSV file."""
@@ -351,12 +395,19 @@ def compare_upload(
             detail=f"Failed to parse CSV: {str(e)}",
         )
 
+    # Determine lookback based on horizon
+    lookback = 96
+    if horizon == 168:
+        lookback = 512
+    elif horizon == 720:
+        lookback = 1440
+
     service = get_forecast_service()
-    df = df.tail(96)
-    if len(df) < 96:
+    df = df.tail(lookback)
+    if len(df) < lookback:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV must have at least 96 rows, got {len(df)}.",
+            detail=f"CSV must have at least {lookback} rows for horizon {horizon}h, got {len(df)}.",
         )
 
     missing = [c for c in TARGET_COLS if c not in df.columns]
@@ -373,7 +424,7 @@ def compare_upload(
     from app.services.forecast_service import generate_calendar_features
     calendar = generate_calendar_features(hours, days, months)
 
-    results = service.predict_comparison(targets, calendar)
+    results = service.predict_comparison(targets, calendar, horizon=horizon, timestamps=df.index)
 
     return {
         'models': {name: preds.tolist() for name, preds in results.items()},
@@ -402,7 +453,7 @@ def sync_smart_meter_forecast(
 
     # Fetch live 96-hour readings
     meter_service = get_smart_meter_service()
-    targets = meter_service.fetch_live_readings() # Shape (96, 7)
+    targets = meter_service.fetch_live_readings(db=db) # Shape (96, 7)
     
     # Generate cyclical calendar features for the 96 hours
     now = datetime.datetime.now(timezone.utc)

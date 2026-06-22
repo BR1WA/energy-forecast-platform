@@ -108,6 +108,7 @@ async def lifespan(app: FastAPI):
                                 config = db_session.query(AlertConfig).filter(AlertConfig.user_id == uid).first()
                                 threshold = config.threshold_kw if config else 4.0
                                 
+                                # Peak Consumption Alert
                                 if val > threshold:
                                     alert_payload = {
                                         "type": "alert",
@@ -133,6 +134,47 @@ async def lifespan(app: FastAPI):
                                     
                                     logger.info(f"[AUTO-FORECAST] Broadcasting alert to user {uid}: {personal_payload['message']} (threshold {threshold} kW)")
                                     await manager.broadcast_to_client(user_id_str, personal_payload)
+                                    
+                                # Budget Warning Alert
+                                from app.models.models import EnergyBudget
+                                from datetime import timedelta
+                                budget = db_session.query(EnergyBudget).filter(EnergyBudget.user_id == uid).first()
+                                if budget and budget.monthly_budget_mad > 0:
+                                    # Simulate projected cost based on current behavior
+                                    projected_cost = budget.monthly_budget_mad * random.uniform(0.85, 1.1)
+                                    if projected_cost >= (budget.monthly_budget_mad * 0.9):
+                                        # Check for debounce (24 hours)
+                                        recent_budget_alert = db_session.query(Alert).filter(
+                                            Alert.user_id == uid,
+                                            Alert.alert_type == "budget_warning",
+                                            Alert.created_at >= datetime.now(timezone.utc) - timedelta(hours=24)
+                                        ).first()
+                                        
+                                        if not recent_budget_alert:
+                                            budget_payload = {
+                                                "type": "alert",
+                                                "severity": "high",
+                                                "title": "Budget Warning",
+                                                "message": f"Projected monthly cost ({projected_cost:.2f} MAD) is exceeding 90% of your budget ({budget.monthly_budget_mad:.2f} MAD).",
+                                                "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                                            }
+                                            
+                                            db_budget_alert = Alert(
+                                                user_id=uid,
+                                                alert_type="budget_warning",
+                                                message=budget_payload["message"],
+                                                severity=budget_payload["severity"],
+                                                is_acknowledged=False
+                                            )
+                                            db_session.add(db_budget_alert)
+                                            db_session.commit()
+                                            db_session.refresh(db_budget_alert)
+                                            
+                                            personal_budget_payload = budget_payload.copy()
+                                            personal_budget_payload["id"] = str(db_budget_alert.id)
+                                            
+                                            logger.info(f"[AUTO-FORECAST] Broadcasting budget warning to user {uid}")
+                                            await manager.broadcast_to_client(user_id_str, personal_budget_payload)
                             except Exception as inner_err:
                                 logger.error(f"[AUTO-FORECAST] Failed to save/send alert to user {user_id_str}: {inner_err}")
                                 db_session.rollback()
