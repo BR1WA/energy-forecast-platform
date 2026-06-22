@@ -37,6 +37,7 @@ interface AnalyticsData {
   total_forecasts: number;
   total_alerts: number;
   unacknowledged_alerts: number;
+  models_used?: Record<string, number>;
   avg_peak_power: number | null;
   weekly_consumption?: Array<{
     week: string;
@@ -212,7 +213,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {[
             {
               label: 'Avg Peak Power',
@@ -222,7 +223,7 @@ export default function AnalyticsPage() {
               positive: true,
             },
             {
-              label: 'Monthly Consumption',
+              label: 'Consumption',
               value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : `${monthlyKWh.toFixed(1)} kWh`,
               trend: 'Last 30 days',
               icon: TrendingUp,
@@ -236,10 +237,24 @@ export default function AnalyticsPage() {
               positive: false,
             },
             {
-              label: 'Billing Estimate',
+              label: 'Bill Estimate',
               value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : `${systemSettings?.currency || 'MAD'} ${billingEstimate.toFixed(2)}`,
               trend: 'Estimated bill',
               icon: FileText,
+              positive: true,
+            },
+            {
+              label: 'Forecasts Run',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (analytics ? analytics.total_forecasts.toString() : '—'),
+              trend: 'Total requests',
+              icon: BarChart3,
+              positive: true,
+            },
+            {
+              label: 'Models Used',
+              value: loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : (analytics?.models_used ? Object.keys(analytics.models_used).length.toString() : '—'),
+              trend: 'PatchTST, SOTA...',
+              icon: BarChart3,
               positive: true,
             },
           ].map((stat) => (

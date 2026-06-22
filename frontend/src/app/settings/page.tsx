@@ -13,7 +13,7 @@ import { authApi, alertsApi, settingsApi, billingApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard, AlertCircle } from 'lucide-react';
+import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard, AlertCircle, Zap } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -240,6 +240,48 @@ export default function SettingsPage() {
                       <span className={`text-lg font-bold mb-1 ${language === 'ar' ? 'text-blue-400' : 'text-slate-400'}`}>AR</span>
                       <span className={`text-xs ${language === 'ar' ? 'text-blue-400 font-medium' : 'text-slate-400'}`}>العربية</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Alert Configurations */}
+                <div className="space-y-4 pt-4 border-t border-white/[0.06]">
+                  <Label className="text-slate-300">{language === 'ar' ? 'إعدادات التنبيه' : language === 'fr' ? 'Configuration des Alertes' : 'Alert Configuration'}</Label>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="peak-threshold" className="text-xs text-slate-400">
+                      {language === 'ar' ? 'حد الاستهلاك الأقصى (كيلوواط)' : language === 'fr' ? 'Seuil de consommation max (kW)' : 'Peak Consumption Limit (kW)'}
+                    </Label>
+                    <div className="relative">
+                      <Zap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                      <Input
+                        id="peak-threshold"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={threshold}
+                        onChange={(e) => setThreshold(parseFloat(e.target.value) || 3.0)}
+                        className="pl-9 bg-[#0A0F1C] border-white/[0.06] text-white focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      {language === 'ar' ? 'سيتم تنبيهك إذا تجاوز الاستهلاك الفوري هذا الحد.' : language === 'fr' ? 'Vous serez alerté si la consommation dépasse ce seuil.' : 'You will be alerted if live consumption exceeds this threshold.'}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mt-4">
+                    <div className="flex items-start gap-2 text-amber-400">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">{language === 'ar' ? 'تنبيه الميزانية الشهري' : language === 'fr' ? 'Alerte de Budget Mensuel' : 'Monthly Budget Warning'}</p>
+                        <p className="text-xs text-amber-500/80 mt-1">
+                          {language === 'ar' 
+                            ? 'سيتم تنبيهك تلقائيًا إذا كانت تكلفتك المتوقعة تتجاوز 90٪ من ميزانيتك المحددة في لوحة التحكم.' 
+                            : language === 'fr' 
+                            ? 'Vous serez automatiquement alerté si le coût projeté dépasse 90% de votre budget défini sur le tableau de bord.' 
+                            : 'You will automatically be alerted if your projected cost exceeds 90% of your set dashboard budget.'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

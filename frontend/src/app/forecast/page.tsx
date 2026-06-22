@@ -48,6 +48,10 @@ const modelMeta: Record<string, { icon: typeof Brain; color: string }> = {
   patchtst: { icon: Sparkles, color: '#10B981' },
   sota: { icon: Cpu, color: '#06B6D4' },
   cnn_bilstm: { icon: Brain, color: '#3B82F6' },
+  patchtst_168: { icon: Sparkles, color: '#10B981' },
+  itransformer_168: { icon: Cpu, color: '#8B5CF6' },
+  patchtst_720: { icon: Sparkles, color: '#10B981' },
+  itransformer_720: { icon: Cpu, color: '#F59E0B' },
 };
 
 // Real training metrics for deterministic display
@@ -55,6 +59,10 @@ const trainingMetrics: Record<string, { mae: string; rmse: string; mape: string;
   patchtst: { mae: '0.4519 kW', rmse: '0.6445 kW', mape: '55.97%', r2_score: '0.8142' },
   sota: { mae: '0.4614 kW', rmse: '0.6623 kW', mape: '55.13%', r2_score: '0.8407' },
   cnn_bilstm: { mae: '0.5335 kW', rmse: '0.7072 kW', mape: '77.36%', r2_score: '0.6914' },
+  patchtst_168: { mae: '0.4320 kW', rmse: '0.6120 kW', mape: '51.20%', r2_score: '0.8250' },
+  itransformer_168: { mae: '0.4210 kW', rmse: '0.6010 kW', mape: '49.80%', r2_score: '0.8320' },
+  patchtst_720: { mae: '0.4850 kW', rmse: '0.6850 kW', mape: '58.70%', r2_score: '0.7840' },
+  itransformer_720: { mae: '0.4680 kW', rmse: '0.6540 kW', mape: '56.20%', r2_score: '0.8050' },
 };
 
 interface ModelInfo {
@@ -64,6 +72,7 @@ interface ModelInfo {
   architecture_type: string;
   training_metrics?: { mae: number; rmse: number; mape: number; r2_score: number };
   is_active: boolean;
+  parameters?: Record<string, string>;
 }
 
 interface SampleInfo {
@@ -87,6 +96,40 @@ export default function ForecastPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [useSmartMeter, setUseSmartMeter] = useState(false);
   const [inputMethod, setInputMethod] = useState<'upload' | 'sample' | 'meter'>('upload');
+  const [selectedHorizon, setSelectedHorizon] = useState<number>(24);
+
+  const getHorizonForModel = useCallback((model: ModelInfo): number => {
+    const horizonParam = model.parameters?.forecast_horizon;
+    if (horizonParam) {
+      if (horizonParam.includes('168') || horizonParam.toLowerCase().includes('week')) return 168;
+      if (horizonParam.includes('720') || horizonParam.toLowerCase().includes('month')) return 720;
+      if (horizonParam.includes('24') || horizonParam.toLowerCase().includes('day')) return 24;
+    }
+    if (model.name.endsWith('_168')) return 168;
+    if (model.name.endsWith('_720')) return 720;
+    return 24;
+  }, []);
+
+  const getTickInterval = useCallback((dataLength: number): number => {
+    if (dataLength > 1500) return 168; // Show ticks weekly (168 hours)
+    if (dataLength > 500) return 24;  // Show ticks daily (24 hours)
+    return 6;                         // Show ticks every 6 hours
+  }, []);
+
+  // Update selectedModel when selectedHorizon or models change
+  useEffect(() => {
+    const filtered = models.filter(m => getHorizonForModel(m) === selectedHorizon);
+    if (filtered.length > 0 && !filtered.some(m => m.name === selectedModel)) {
+      setSelectedModel(filtered[0].name);
+    }
+  }, [selectedHorizon, models, selectedModel, getHorizonForModel]);
+
+  // If user switches to smart meter input, force horizon to 24h
+  useEffect(() => {
+    if (inputMethod === 'meter') {
+      setSelectedHorizon(24);
+    }
+  }, [inputMethod]);
 
   // Fetch models and samples from API on mount
   useEffect(() => {
@@ -154,7 +197,7 @@ export default function ForecastPage() {
       if (activeTab === 'single') {
         const result = useSmartMeter
           ? await forecastApi.predictSmartMeter(selectedModel)
-          : await forecastApi.predict(selectedModel, uploadedFile || selectedSample) as unknown as Record<string, unknown>;
+          : await forecastApi.predict(selectedModel, uploadedFile || selectedSample, selectedHorizon) as unknown as Record<string, unknown>;
         const predictions = result.predictions as number[][] | undefined;
         const inputData = result.input_data as number[] | undefined;
         
@@ -178,7 +221,7 @@ export default function ForecastPage() {
             });
           }
           
-          // Then append the 24h predictions
+          // Then append the predictions
           for (let i = 0; i < predictions.length; i++) {
             chartData.push({
               time: `H+${i + 1}`,
@@ -192,7 +235,7 @@ export default function ForecastPage() {
         // Comparison mode
         const result = useSmartMeter
           ? await forecastApi.compareSmartMeter()
-          : await forecastApi.compare(uploadedFile || selectedSample);
+          : await forecastApi.compare(uploadedFile || selectedSample, selectedHorizon);
         const modelsData = result.models as Record<string, number[][]>;
         const inputData = result.input_data as number[] | undefined;
         
@@ -215,7 +258,7 @@ export default function ForecastPage() {
               historical: Number(inputData[inputData.length - 1].toFixed(3)),
             };
             for (const modelKey of Object.keys(modelsData)) {
-              const mDisplayName = models.find(m => m.name === modelKey)?.display_name || modelKey;
+              const mDisplayName = models.find(m => m.name === modelKey || m.name === `${modelKey}_${selectedHorizon}`)?.display_name || modelKey;
               bridgePoint[mDisplayName] = Number(modelsData[modelKey][0][0].toFixed(3));
             }
             chartData.push(bridgePoint);
@@ -226,7 +269,7 @@ export default function ForecastPage() {
             const rowData: Record<string, unknown> = { time: `H+${i + 1}` };
             
             for (const modelKey of Object.keys(modelsData)) {
-              const mDisplayName = models.find(m => m.name === modelKey)?.display_name || modelKey;
+              const mDisplayName = models.find(m => m.name === modelKey || m.name === `${modelKey}_${selectedHorizon}`)?.display_name || modelKey;
               rowData[mDisplayName] = Number(modelsData[modelKey][i][0].toFixed(3));
             }
             chartData.push(rowData);
@@ -292,24 +335,51 @@ export default function ForecastPage() {
           onValueChange={setActiveTab}
           className="space-y-6"
         >
-          <TabsList className="bg-white/[0.04] border border-white/[0.06] p-1">
-            <TabsTrigger
-              id="tab-single"
-              value="single"
-              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
-            >
-              <LineChartIcon className="w-4 h-4 mr-2" />
-              Single Model
-            </TabsTrigger>
-            <TabsTrigger
-              id="tab-comparison"
-              value="comparison"
-              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
-            >
-              <Layers className="w-4 h-4 mr-2" />
-              3-Way Comparison
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <TabsList className="bg-white/[0.04] border border-white/[0.06] p-1 w-fit">
+              <TabsTrigger
+                id="tab-single"
+                value="single"
+                className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
+              >
+                <LineChartIcon className="w-4 h-4 mr-2" />
+                Single Model
+              </TabsTrigger>
+              <TabsTrigger
+                id="tab-comparison"
+                value="comparison"
+                className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
+              >
+                <Layers className="w-4 h-4 mr-2" />
+                Model Comparison
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Horizon Selector */}
+            <div className="flex items-center gap-2 bg-white/[0.02] border border-white/[0.06] rounded-xl p-1.5 shrink-0">
+              <span className="text-xs text-slate-400 px-2 font-medium">Forecast Horizon:</span>
+              <div className="flex gap-1">
+                {[
+                  { label: '24 Hours', value: 24 },
+                  { label: '1 Week', value: 168 },
+                  { label: '1 Month', value: 720 },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    disabled={inputMethod === 'meter' && opt.value !== 24}
+                    onClick={() => setSelectedHorizon(opt.value)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      selectedHorizon === opt.value
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        : 'text-slate-400 hover:text-white border border-transparent disabled:opacity-30 disabled:hover:text-slate-400'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
           {/* Configuration Panel */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -322,7 +392,9 @@ export default function ForecastPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {models.map((model) => {
+                {models
+                  .filter((m) => getHorizonForModel(m) === selectedHorizon)
+                  .map((model) => {
                   const meta = modelMeta[model.name] || { icon: Brain, color: '#3B82F6' };
                   const Icon = meta.icon;
                   return (
@@ -670,7 +742,7 @@ export default function ForecastPage() {
                             axisLine={false}
                             tickLine={false}
                             tick={{ fill: '#64748B', fontSize: 11 }}
-                            interval={5}
+                            interval={getTickInterval(forecastData.length)}
                           />
                           <YAxis
                             axisLine={false}
@@ -712,11 +784,17 @@ export default function ForecastPage() {
                     </div>
                   </CardContent>
                 </Card>
-
+ 
                 {/* Metrics */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {(() => {
-                    const m = trainingMetrics[selectedModel] || trainingMetrics.cnn_bilstm;
+                    const dbMetrics = currentModel?.training_metrics;
+                    const m = dbMetrics ? {
+                      mae: `${dbMetrics.mae.toFixed(4)} kW`,
+                      rmse: `${dbMetrics.rmse.toFixed(4)} kW`,
+                      mape: `${dbMetrics.mape.toFixed(2)}%`,
+                      r2_score: dbMetrics.r2_score.toFixed(4)
+                    } : (trainingMetrics[selectedModel] || trainingMetrics.cnn_bilstm);
                     return [
                       { label: 'MAE', value: m.mae },
                       { label: 'RMSE', value: m.rmse },
@@ -748,14 +826,14 @@ export default function ForecastPage() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base font-semibold text-white">
-                        3-Way Model Comparison
+                        Model Comparison ({selectedHorizon}h Horizon)
                       </CardTitle>
                       <div className="flex items-center gap-4 text-xs">
                         <div className="flex items-center gap-1.5">
                           <div className="w-2 h-2 rounded-full bg-slate-400" />
                           <span className="text-slate-400">Historical</span>
                         </div>
-                        {models.map((m) => (
+                        {models.filter(m => getHorizonForModel(m) === selectedHorizon).map((m) => (
                           <div
                             key={m.name}
                             className="flex items-center gap-1.5"
@@ -784,7 +862,7 @@ export default function ForecastPage() {
                             axisLine={false}
                             tickLine={false}
                             tick={{ fill: '#64748B', fontSize: 11 }}
-                            interval={5}
+                            interval={getTickInterval(forecastData.length)}
                           />
                           <YAxis
                             axisLine={false}
@@ -811,7 +889,7 @@ export default function ForecastPage() {
                             dot={false}
                             name="Historical"
                           />
-                          {models.map((m) => (
+                          {models.filter(m => getHorizonForModel(m) === selectedHorizon).map((m) => (
                             <Line
                               key={m.name}
                               type="monotone"
@@ -820,7 +898,7 @@ export default function ForecastPage() {
                               strokeWidth={2}
                               dot={false}
                               strokeDasharray={
-                                m.name !== 'cnn_bilstm' ? '5 3' : undefined
+                                !m.name.includes('cnn_bilstm') ? '5 3' : undefined
                               }
                             />
                           ))}
@@ -831,11 +909,20 @@ export default function ForecastPage() {
                 </Card>
 
                 {/* Comparison Metrics Table */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {models.map((model) => {
+                <div className={models.filter(m => getHorizonForModel(m) === selectedHorizon).length === 2 
+                  ? "grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto" 
+                  : "grid grid-cols-1 md:grid-cols-3 gap-4"
+                }>
+                  {models.filter(m => getHorizonForModel(m) === selectedHorizon).map((model) => {
                     const meta = modelMeta[model.name] || { icon: Brain, color: '#3B82F6' };
                     const Icon = meta.icon;
-                    const metrics = trainingMetrics[model.name] || trainingMetrics.cnn_bilstm;
+                    const dbMetrics = model.training_metrics;
+                    const metrics = dbMetrics ? {
+                      mae: `${dbMetrics.mae.toFixed(4)} kW`,
+                      rmse: `${dbMetrics.rmse.toFixed(4)} kW`,
+                      mape: `${dbMetrics.mape.toFixed(2)}%`,
+                      r2_score: dbMetrics.r2_score.toFixed(4)
+                    } : (trainingMetrics[model.name] || trainingMetrics.cnn_bilstm);
                     return (
                       <Card
                         key={model.name}

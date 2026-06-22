@@ -234,11 +234,12 @@ export const forecastApi = {
   getModels: (): Promise<ForecastModel[]> =>
     apiFetch('/api/v1/forecast/models'),
 
-  predict: (modelName: string, data: File | string): Promise<ForecastResult> => {
+  predict: (modelName: string, data: File | string, horizon: number = 24): Promise<ForecastResult> => {
     if (data instanceof File) {
       const formData = new FormData();
       formData.append('model_name', modelName);
       formData.append('file', data);
+      formData.append('horizon', String(horizon));
 
       return apiFetch('/api/v1/forecast/predict/upload', {
         method: 'POST',
@@ -249,14 +250,15 @@ export const forecastApi = {
     // String = sample name
     return apiFetch('/api/v1/forecast/predict', {
       method: 'POST',
-      body: JSON.stringify({ model_name: modelName, sample_name: data }),
+      body: JSON.stringify({ model_name: modelName, sample_name: data, horizon }),
     });
   },
 
-  compare: (data: File | string): Promise<Record<string, unknown>> => {
+  compare: (data: File | string, horizon: number = 24): Promise<Record<string, unknown>> => {
     if (data instanceof File) {
       const formData = new FormData();
       formData.append('file', data);
+      formData.append('horizon', String(horizon));
 
       return apiFetch('/api/v1/forecast/compare/upload', {
         method: 'POST',
@@ -266,7 +268,7 @@ export const forecastApi = {
 
     return apiFetch('/api/v1/forecast/compare', {
       method: 'POST',
-      body: JSON.stringify({ sample_name: data }),
+      body: JSON.stringify({ sample_name: data, horizon }),
     });
   },
 
