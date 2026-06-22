@@ -83,7 +83,6 @@ class PasswordUpdate(BaseModel):
 class SubscriptionTier(str, Enum):
     free = "free"
     pro = "pro"
-    enterprise = "enterprise"
 
 
 class SubscriptionUpdate(BaseModel):
@@ -100,7 +99,6 @@ class SubscriptionUpdate(BaseModel):
 class PaidTier(str, Enum):
     """Tiers that can be purchased via checkout (free is not purchasable)."""
     pro = "pro"
-    enterprise = "enterprise"
 
 
 class CheckoutRequest(BaseModel):

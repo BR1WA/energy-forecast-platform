@@ -17,7 +17,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=True)
     role = Column(String(20), default="viewer", nullable=False)  # admin, analyst, viewer
-    subscription_tier = Column(String(50), default="free", nullable=False)  # free, pro, enterprise
+    subscription_tier = Column(String(50), default="free", nullable=False)  # free, pro
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
@@ -61,7 +61,7 @@ class Subscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    tier = Column(String(50), nullable=False)          # pro, enterprise (free = absence of active sub)
+    tier = Column(String(50), nullable=False)          # pro (free = absence of active sub)
     status = Column(String(20), nullable=False, default="pending")  # pending, active, cancelled, expired
     source = Column(String(20), nullable=False, default="checkout")  # admin_grant, checkout, trial
     # Opaque reference returned by the (simulated) payment provider at checkout.

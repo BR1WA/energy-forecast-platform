@@ -14,12 +14,11 @@ from enum import Enum, IntEnum
 class Tier(IntEnum):
     """Subscription tiers, ordered from least to most privileged.
 
-    Ordering matters: `Tier.enterprise > Tier.pro > Tier.free`, which lets a
+    Ordering matters: `Tier.pro > Tier.free`, which lets a
     higher tier automatically satisfy a lower tier's feature requirements.
     """
     free = 0
     pro = 1
-    enterprise = 2
 
     @classmethod
     def from_str(cls, value: str | None) -> "Tier":
@@ -30,8 +29,11 @@ class Tier(IntEnum):
         """
         if not value:
             return cls.free
+        cleaned = value.strip().lower()
+        if cleaned == "enterprise":
+            return cls.pro
         try:
-            return cls[value.strip().lower()]
+            return cls[cleaned]
         except KeyError:
             return cls.free
 
@@ -51,8 +53,8 @@ FEATURE_MIN_TIER: dict[Feature, Tier] = {
     Feature.PRO_FORECAST_CURVE: Tier.pro,
     Feature.ANALYTICS_SUMMARY: Tier.pro,
     Feature.PDF_EXPORT: Tier.pro,
-    Feature.HEATMAP: Tier.enterprise,
-    Feature.MULTI_SITE: Tier.enterprise,
+    Feature.HEATMAP: Tier.pro,
+    Feature.MULTI_SITE: Tier.pro,
 }
 
 

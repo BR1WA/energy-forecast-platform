@@ -23,7 +23,7 @@ from app.entitlements import Tier
 
 # Tiers a user may purchase via checkout (free is not a purchasable product;
 # it is the absence of an active paid subscription).
-PURCHASABLE_TIERS = {Tier.pro, Tier.enterprise}
+PURCHASABLE_TIERS = {Tier.pro}
 
 # Length of a simulated billing period.
 BILLING_PERIOD_DAYS = 30
