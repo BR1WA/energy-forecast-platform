@@ -12,6 +12,7 @@ import { can, Feature } from '@/lib/entitlements';
 import { analyticsApi, settingsApi, getAccessToken } from '@/lib/api';
 import { EnergyBudget } from '@/types';
 import { toast } from 'sonner';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import {
   BarChart3,
@@ -116,7 +117,6 @@ export default function DashboardPage() {
   const [liveData, setLiveData] = useState<TelemetryFrame | null>(null);
   const [history, setHistory] = useState<TelemetryFrame[]>([]);
   const [historyWindow, setHistoryWindow] = useState<number>(20);
-  const [connected, setConnected] = useState(false);
   const [framesLog, setFramesLog] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
@@ -149,68 +149,57 @@ export default function DashboardPage() {
         }
       })
       .catch(console.error);
-
-    // Resolve websocket URL
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
-    const host = apiBase.replace(/^https?:\/\//, '');
-    const token = getAccessToken();
-    const wsUrl = `${wsProto}://${host}/api/v1/forecast/smart-meter/live-ws${token ? `?token=${encodeURIComponent(token)}` : ''}`;
-
-    console.log(`[DASHBOARD-TELEMETRY] Connecting to ${wsUrl}`);
-    let ws: WebSocket;
-    let reconnectTimer: NodeJS.Timeout;
-
-    const connect = () => {
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        setConnected(true);
-        setFramesLog((prev) => [...prev, `[SYSTEM] Connection established to Linky Telemetry stream.`].slice(-50));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const frame: TelemetryFrame = JSON.parse(event.data);
-          setLiveData(frame);
-          
-          // Add to rolling history (keep last 500 frames in memory)
-          setHistory((prev) => {
-            const updated = [...prev, frame];
-            if (updated.length > 500) {
-              return updated.slice(updated.length - 500);
-            }
-            return updated;
-          });
-
-          // Add to log
-          const timeStr = new Date(frame.timestamp).toLocaleTimeString();
-          const logMsg = `[${timeStr}] RECV: GAP=${frame.gap}kW | VOLT=${frame.voltage}V | AMP=${frame.intensity}A | SUB3=${frame.sub_metering_3}Wh`;
-          setFramesLog((prev) => [...prev, logMsg].slice(-50));
-        } catch (err) {
-          console.error('[DASHBOARD-TELEMETRY-WS] Error parsing frame:', err);
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.error('[DASHBOARD-TELEMETRY-WS] error:', err);
-        setConnected(false);
-      };
-
-      ws.onclose = () => {
-        setConnected(false);
-        setFramesLog((prev) => [...prev, `[SYSTEM] Connection lost. Attempting to reconnect...`].slice(-50));
-        reconnectTimer = setTimeout(connect, 4000);
-      };
-    };
-
-    connect();
-
-    return () => {
-      if (ws) ws.close();
-      clearTimeout(reconnectTimer);
-    };
   }, []);
+
+  const [wsUrl, setWsUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mounted) {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
+      const host = apiBase.replace(/^https?:\/\//, '');
+      const token = getAccessToken();
+      setWsUrl(`${wsProto}://${host}/api/v1/forecast/smart-meter/live-ws${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+    }
+  }, [mounted]);
+
+  const { connected, reconnectAttempt } = useWebSocket(wsUrl, {
+    onOpen: () => {
+      setFramesLog((prev) => [...prev, `[SYSTEM] Connection established to Linky Telemetry stream.`].slice(-50));
+    },
+    onMessage: (event) => {
+      try {
+        const frame: TelemetryFrame = JSON.parse(event.data);
+        setLiveData(frame);
+        
+        // Add to rolling history (keep last 500 frames in memory)
+        setHistory((prev) => {
+          const updated = [...prev, frame];
+          if (updated.length > 500) {
+            return updated.slice(updated.length - 500);
+          }
+          return updated;
+        });
+
+        // Add to log
+        const timeStr = new Date(frame.timestamp).toLocaleTimeString();
+        const logMsg = `[${timeStr}] RECV: GAP=${frame.gap}kW | VOLT=${frame.voltage}V | AMP=${frame.intensity}A | SUB3=${frame.sub_metering_3}Wh`;
+        setFramesLog((prev) => [...prev, logMsg].slice(-50));
+      } catch (err) {
+        console.error('[DASHBOARD-TELEMETRY-WS] Error parsing frame:', err);
+      }
+    },
+  });
+
+  // Reconnecting log effect
+  useEffect(() => {
+    if (reconnectAttempt > 0 && !connected) {
+      setFramesLog((prev) => [
+        ...prev,
+        `[SYSTEM] Connection lost. Attempting to reconnect (attempt ${reconnectAttempt})...`
+      ].slice(-50));
+    }
+  }, [reconnectAttempt, connected]);
 
   // Auto scroll telemetry logs
   useEffect(() => {
@@ -528,10 +517,10 @@ export default function DashboardPage() {
                 </div>
                 <Badge className={cn(
                   "shrink-0 uppercase font-mono tracking-wider text-[9px] px-2 py-0.5",
-                  connected ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
+                  connected ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : reconnectAttempt > 0 ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" : "bg-red-500/10 text-red-400 border border-red-500/20"
                 )}>
-                  <span className={cn("w-1.5 h-1.5 rounded-full inline-block mr-1.5", connected ? "bg-emerald-400 animate-ping" : "bg-red-500")} />
-                  {connected ? 'LINKY ONLINE' : 'LINKY OFFLINE'}
+                  <span className={cn("w-1.5 h-1.5 rounded-full inline-block mr-1.5", connected ? "bg-emerald-400 animate-ping" : reconnectAttempt > 0 ? "bg-amber-400 animate-pulse" : "bg-red-500")} />
+                  {connected ? 'LINKY ONLINE' : reconnectAttempt > 0 ? `RECONNECTING (${reconnectAttempt})` : 'LINKY OFFLINE'}
                 </Badge>
               </CardContent>
             </Card>

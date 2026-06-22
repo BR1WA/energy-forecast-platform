@@ -10,6 +10,7 @@ import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 import {
@@ -90,7 +91,53 @@ export default function Navbar() {
     .join('')
     .toUpperCase() || 'U';
 
-  // Load alerts & WebSockets connection for real-time alerts
+  const [wsUrl, setWsUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
+      const host = apiBase.replace(/^https?:\/\//, '');
+      const token = getAccessToken();
+      setWsUrl(`${wsProto}://${host}/api/v1/alerts/ws/${user.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+    } else {
+      setWsUrl(null);
+    }
+  }, [user]);
+
+  useWebSocket(wsUrl, {
+    onMessage: (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        console.log('[WS] Received payload:', payload);
+        
+        if (payload.type === 'alert') {
+          // Prepend new alert to dropdown in real time
+          setAlerts((prev) => [payload, ...prev].slice(0, 8));
+          setUnreadCount((prev) => prev + 1);
+          
+          // Deduplicate toasts (cooldown of 8 seconds per unique message body)
+          const now = Date.now();
+          const lastTime = globalLastToastTimes[payload.message] || 0;
+          if (now - lastTime > 8000) {
+            globalLastToastTimes[payload.message] = now;
+            // Show sonner toast
+            toast.warning(payload.title, {
+              description: payload.message,
+              duration: 8000,
+              action: {
+                label: 'View',
+                onClick: () => router.push('/alerts')
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[WS] Error parsing message:', err);
+      }
+    }
+  });
+
   useEffect(() => {
     const loadAlerts = async () => {
       try {
@@ -102,71 +149,7 @@ export default function Navbar() {
       }
     };
     loadAlerts();
-
-    if (!user) return;
-    
-    // Resolve ws URL based on NEXT_PUBLIC_API_URL or current host
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
-    const host = apiBase.replace(/^https?:\/\//, '');
-    const token = getAccessToken();
-    const wsUrl = `${wsProto}://${host}/api/v1/alerts/ws/${user.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
-    
-    console.log(`[WS] Connecting to ${wsUrl}`);
-    let ws: WebSocket;
-    let reconnectTimer: NodeJS.Timeout;
-    
-    const connect = () => {
-      ws = new WebSocket(wsUrl);
-      
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          console.log('[WS] Received payload:', payload);
-          
-          if (payload.type === 'alert') {
-            // Prepend new alert to dropdown in real time
-            setAlerts((prev) => [payload, ...prev].slice(0, 8));
-            setUnreadCount((prev) => prev + 1);
-            
-            // Deduplicate toasts (cooldown of 8 seconds per unique message body)
-            const now = Date.now();
-            const lastTime = globalLastToastTimes[payload.message] || 0;
-            if (now - lastTime > 8000) {
-              globalLastToastTimes[payload.message] = now;
-              // Show sonner toast
-              toast.warning(payload.title, {
-                description: payload.message,
-                duration: 8000,
-                action: {
-                  label: 'View',
-                  onClick: () => router.push('/alerts')
-                }
-              });
-            }
-          }
-        } catch (err) {
-          console.error('[WS] Error parsing message:', err);
-        }
-      };
-      
-      ws.onclose = () => {
-        console.log('[WS] Disconnected. Reconnecting in 5s...');
-        reconnectTimer = setTimeout(connect, 5000);
-      };
-    };
-    
-    connect();
-    
-    return () => {
-      if (ws) {
-        ws.onclose = null;
-        ws.onerror = null;
-        ws.close();
-      }
-      clearTimeout(reconnectTimer);
-    };
-  }, [user, router]);
+  }, [router]);
 
   // Keyboard shortcut ⌘K / Ctrl+K
   useEffect(() => {
