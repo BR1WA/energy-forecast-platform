@@ -48,13 +48,11 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { adminApi, forecastApi } from '@/lib/api';
+import { adminApi, forecastApi, API_BASE_URL } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { AdminUser, SystemHealth, ModelRegistry } from '@/types';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 
 

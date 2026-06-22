@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth';
-import { authApi, analyticsApi } from '@/lib/api';
+import { authApi, analyticsApi, API_BASE_URL } from '@/lib/api';
 import { toast } from 'sonner';
 import {
   User as UserIcon,
@@ -19,6 +19,7 @@ import {
   Calendar,
   Cpu,
   BarChart3,
+  BarChart3 as BarChartIcon, // If needed, keeping style
   Loader2,
   Trash2,
   Clock,
@@ -27,8 +28,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { parseDate } from '@/lib/utils';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface UserStats {
   totalForecasts: number;
