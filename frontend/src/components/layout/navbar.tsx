@@ -272,16 +272,6 @@ export default function Navbar() {
               Pro Plan
             </Badge>
           </button>
-        ) : user?.subscription_tier === 'enterprise' ? (
-          <button
-            onClick={() => router.push('/plans')}
-            className="hover:scale-105 transition-all duration-200"
-            title="Manage Subscription"
-          >
-            <Badge className="bg-gradient-to-r from-purple-500 to-indigo-500 border-0 text-white font-bold text-[10px] uppercase px-2 py-0.5 select-none cursor-pointer">
-              Enterprise
-            </Badge>
-          </button>
         ) : (
           <button
             onClick={() => router.push('/plans')}

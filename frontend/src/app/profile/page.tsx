@@ -278,8 +278,6 @@ export default function ProfilePage() {
                       <Badge className={
                         user.subscription_tier === 'pro' 
                           ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 capitalize animate-pulse font-mono text-[9px]'
-                          : user.subscription_tier === 'enterprise'
-                          ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 capitalize font-mono text-[9px]'
                           : 'bg-slate-500/10 text-slate-400 border-slate-500/20 capitalize font-mono text-[9px]'
                       }>
                         {user.subscription_tier} Plan

@@ -52,7 +52,7 @@ const navItems = [
     translationKey: 'nav.multi_site',
     href: '/multi-site',
     icon: Building,
-    enterpriseOnly: true,
+    featureGate: Feature.MULTI_SITE,
   },
   {
     label: 'Analytics',
@@ -127,7 +127,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           .filter((item) => {
             if (item.adminOnly && user?.role !== 'admin') return false;
             if (item.analystOrAdminOnly && user?.role !== 'analyst' && user?.role !== 'admin') return false;
-            if (item.enterpriseOnly && !can(user, Feature.MULTI_SITE)) return false;
+            if (item.featureGate && !can(user, item.featureGate)) return false;
             return true;
           })
           .map((item) => {

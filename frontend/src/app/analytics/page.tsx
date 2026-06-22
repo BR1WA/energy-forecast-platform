@@ -120,8 +120,6 @@ export default function AnalyticsPage() {
   const [downloading, setDownloading] = useState(false);
 
   const isFree = !can(user, Feature.ANALYTICS_SUMMARY);
-  const isEnterprise = can(user, Feature.HEATMAP);
-
   const finalHeatmapData = analytics?.heatmap_data || heatmapData;
 
   useEffect(() => {
@@ -140,7 +138,7 @@ export default function AnalyticsPage() {
 
   const handleDownloadPDF = async () => {
     if (!can(user, Feature.PDF_EXPORT)) {
-      toast.warning('PDF Report Export is a Pro/Enterprise tier feature. Please upgrade your plan.');
+      toast.warning('PDF Report Export is a Pro tier feature. Please upgrade your plan.');
       router.push('/plans');
       return;
     }

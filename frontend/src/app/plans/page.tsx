@@ -97,7 +97,7 @@ export default function PlansPage() {
 
     try {
       // Step 1: Create checkout intent
-      const checkoutRes = await billingApi.checkout(checkoutPlan.id as 'pro' | 'enterprise');
+      const checkoutRes = await billingApi.checkout(checkoutPlan.id as 'pro');
       setCheckoutRef(checkoutRes.checkout_ref);
 
       // Transition to confirming state (webhook simulation)
@@ -149,26 +149,11 @@ export default function PlansPage() {
         "SOTA Hybrid AI Forecasting model access",
         "Real-time Linky WebSocket telemetry stream",
         "Dynamic peak/off-peak cost analysis",
+        "Full analytics suite & Heatmap visualization",
+        "Multi-site grid management",
+        "PDF export & advanced reports",
         "Smart load-shifting notifications & suggestions",
         "Priority email support",
-      ],
-    },
-    {
-      id: "enterprise",
-      name: "Enterprise",
-      price: "499",
-      description: "Tailored solutions for businesses and multi-site grids.",
-      icon: Building,
-      iconColor: "text-purple-400 bg-purple-500/10 border-purple-500/20",
-      accent: "border-purple-500/30 bg-[#111827]/50",
-      buttonText: "Go Enterprise",
-      features: [
-        "Everything in Pro Plan",
-        "Custom ML model fine-tuning per site pattern",
-        "Unlimited smart meter integrations & aggregations",
-        "Direct SMTP custom email alerts & warnings",
-        "API Gateway access for raw JSON telemetry export",
-        "24/7 Dedicated Account Manager & grid auditor",
       ],
     },
   ];
@@ -189,7 +174,7 @@ export default function PlansPage() {
         </div>
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 max-w-3xl mx-auto">
           {plans.map((plan) => {
             const Icon = plan.icon;
             const isCurrent = currentTier === plan.id;
@@ -261,8 +246,6 @@ export default function PlansPage() {
                           : "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50"
                         : plan.id === "pro"
                         ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.2)] hover:shadow-[0_0_25px_rgba(245,158,11,0.3)]"
-                        : plan.id === "enterprise"
-                        ? "bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.2)] hover:shadow-[0_0_25px_rgba(168,85,247,0.3)]"
                         : "bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20"
                     }`}
                   >
@@ -274,7 +257,7 @@ export default function PlansPage() {
                       plan.id === "free" ? "Active Free Tier" : "Cancel Subscription"
                     ) : (
                       (() => {
-                        const tierRanks: Record<string, number> = { free: 0, pro: 1, enterprise: 2 };
+                        const tierRanks: Record<string, number> = { free: 0, pro: 1 };
                         const currentRank = tierRanks[currentTier] ?? 0;
                         const targetRank = tierRanks[plan.id] ?? 0;
                         return targetRank > currentRank ? plan.buttonText : `Downgrade to ${plan.name.replace(" Plan", "")}`;

@@ -65,7 +65,7 @@ export default function MultiSitePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [systemSettings, setSystemSettings] = useState<any>(null);
 
-  const isEnterprise = can(user, Feature.MULTI_SITE);
+  const isPro = can(user, Feature.MULTI_SITE);
   const [sitesData, setSitesData] = useState<SiteData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -82,12 +82,12 @@ export default function MultiSitePage() {
       }
     };
     
-    if (isEnterprise) {
+    if (isPro) {
       fetchSites();
     } else {
       setIsLoading(false);
     }
-  }, [isEnterprise]);
+  }, [isPro]);
 
   useEffect(() => {
     // Fetch system settings for localization and currency
@@ -160,7 +160,7 @@ export default function MultiSitePage() {
     daily: s.dailyConsumption,
   }));
 
-  if (!isEnterprise) {
+  if (!isPro) {
     return (
       <AppLayout>
         <div className="min-h-[75vh] flex items-center justify-center">
@@ -171,7 +171,7 @@ export default function MultiSitePage() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Multi-Site Grid Manager</h2>
               <Badge className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white border-0 text-[10px] mb-4 uppercase tracking-wider font-semibold">
-                Enterprise Exclusive
+                Pro Exclusive
               </Badge>
               <p className="text-sm text-slate-400 max-w-md mb-8">
                 Aggregate electrical telemetry, manage demand response integrations, simulate load shedding, and compare power metrics across multiple geographic sites in real-time.
@@ -181,7 +181,7 @@ export default function MultiSitePage() {
                   onClick={() => router.push('/plans')}
                   className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-8 shadow-lg shadow-blue-500/20"
                 >
-                  Upgrade to Enterprise Plan
+                  Upgrade to Pro Plan
                 </Button>
                 <Button
                   onClick={() => router.push('/dashboard')}

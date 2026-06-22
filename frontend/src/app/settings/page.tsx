@@ -396,8 +396,6 @@ export default function SettingsPage() {
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         user?.subscription_tier === 'pro' 
                           ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
-                          : user?.subscription_tier === 'enterprise'
-                          ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
                           : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
                       }`}>
                         {user?.subscription_tier === 'free' || !user?.subscription_tier ? 'Free' : 'Premium'}
@@ -406,8 +404,6 @@ export default function SettingsPage() {
                     <p className="text-xs text-slate-400 mt-2">
                       {user?.subscription_tier === 'pro' 
                         ? '99 MAD / month (Advanced AI forecasting & live Linky telemetry enabled)'
-                        : user?.subscription_tier === 'enterprise'
-                        ? '499 MAD / month (Custom ML fine-tuning & multi-site grids enabled)'
                         : '0 MAD / month (Basic CNN-BiLSTM forecasting & 1-hour lookback)'}
                     </p>
                   </div>

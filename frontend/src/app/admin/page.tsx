@@ -435,9 +435,7 @@ export default function AdminPage() {
                         <Badge
                           variant="outline"
                           className={`text-[10px] uppercase ${
-                            u.subscription_tier === 'enterprise'
-                              ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/10'
-                              : u.subscription_tier === 'pro'
+                            u.subscription_tier === 'pro'
                               ? 'border-blue-500/20 text-blue-400 bg-blue-500/10'
                               : 'border-slate-500/20 text-slate-400 bg-slate-500/10'
                           }`}
@@ -567,12 +565,6 @@ export default function AdminPage() {
                                         className="text-slate-300"
                                       >
                                         Pro
-                                      </SelectItem>
-                                      <SelectItem
-                                        value="enterprise"
-                                        className="text-slate-300"
-                                      >
-                                        Enterprise
                                       </SelectItem>
                                     </SelectContent>
                                   </Select>

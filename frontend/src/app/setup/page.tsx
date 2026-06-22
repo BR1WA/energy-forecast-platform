@@ -42,7 +42,7 @@ export default function SetupWizard() {
         if (plan === "free") {
           await billingApi.cancelSubscription();
         } else {
-          const checkoutRes = await billingApi.checkout(plan as 'pro' | 'enterprise');
+          const checkoutRes = await billingApi.checkout(plan as 'pro');
           await billingApi.confirmCheckout(checkoutRes.checkout_ref);
         }
         await refreshUser();
@@ -166,11 +166,10 @@ export default function SetupWizard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                 {[
                   { id: "free", name: "Free", price: "0", desc: "Basic forecasting & live telemetry." },
-                  { id: "pro", name: "Pro", price: "99", desc: "SOTA AI models & shifting advice." },
-                  { id: "enterprise", name: "Enterprise", price: "499", desc: "Custom fine-tuning & multi-site grids." }
+                  { id: "pro", name: "Pro", price: "99", desc: "SOTA AI models & shifting advice." }
                 ].map((p) => (
                   <div
                     key={p.id}
@@ -179,8 +178,6 @@ export default function SetupWizard() {
                       plan === p.id 
                         ? p.id === "pro" 
                           ? "border-amber-500 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.1)]" 
-                          : p.id === "enterprise"
-                          ? "border-purple-500 bg-purple-500/5 shadow-[0_0_15px_rgba(168,85,247,0.1)]"
                           : "border-blue-500 bg-blue-500/5 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
                         : "border-white/10 bg-[#1A2333]/50 hover:border-white/20"
                     }`}
