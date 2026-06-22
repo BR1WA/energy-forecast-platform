@@ -234,3 +234,12 @@ export interface EntitlementsResponse {
   features: string[];
 }
 
+export interface EnergyBudget {
+  id: number;
+  user_id: string | number;
+  monthly_budget_mad: number;
+  monthly_budget_kwh?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+

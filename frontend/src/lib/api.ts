@@ -16,6 +16,7 @@ import type {
   CheckoutResponse,
   SubscriptionResponse,
   EntitlementsResponse,
+  EnergyBudget,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -402,6 +403,18 @@ export const settingsApi = {
     push_alerts?: boolean;
   }): Promise<{ message: string; preferences: any }> =>
     apiFetch('/api/v1/settings/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  getBudget: (): Promise<EnergyBudget | null> =>
+    apiFetch('/api/v1/settings/budget'),
+
+  setBudget: (data: {
+    monthly_budget_mad: number;
+    monthly_budget_kwh?: number | null;
+  }): Promise<EnergyBudget> =>
+    apiFetch('/api/v1/settings/budget', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

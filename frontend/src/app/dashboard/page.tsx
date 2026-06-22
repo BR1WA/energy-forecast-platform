@@ -10,6 +10,8 @@ import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { can, Feature } from '@/lib/entitlements';
 import { analyticsApi, settingsApi, getAccessToken } from '@/lib/api';
+import { EnergyBudget } from '@/types';
+import { toast } from 'sonner';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import {
   BarChart3,
@@ -118,7 +120,13 @@ export default function DashboardPage() {
   const [framesLog, setFramesLog] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load analytics & establish WebSockets connection on mount
+  // Budget progress state
+  const [budget, setBudget] = useState<EnergyBudget | null>(null);
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [budgetValue, setBudgetValue] = useState('');
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
+
+  // Load analytics, budget & establish WebSockets connection on mount
   useEffect(() => {
     setMounted(true);
     
@@ -130,6 +138,17 @@ export default function DashboardPage() {
         setAnalytics(null);
       })
       .finally(() => setLoading(false));
+
+    // Fetch budget
+    settingsApi
+      .getBudget()
+      .then((data) => {
+        setBudget(data);
+        if (data) {
+          setBudgetValue(data.monthly_budget_mad.toString());
+        }
+      })
+      .catch(console.error);
 
     // Resolve websocket URL
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -307,6 +326,29 @@ export default function DashboardPage() {
   };
 
   const chartData = buildChartData();
+
+  const handleSaveBudget = async () => {
+    const val = parseFloat(budgetValue);
+    if (isNaN(val) || val <= 0) {
+      toast.error("Please enter a valid budget amount.");
+      return;
+    }
+    setIsSavingBudget(true);
+    try {
+      const updatedBudget = await settingsApi.setBudget({
+        monthly_budget_mad: val,
+      });
+      setBudget(updatedBudget);
+      setBudgetValue(updatedBudget.monthly_budget_mad.toString());
+      setIsEditingBudget(false);
+      toast.success("Monthly budget updated!");
+    } catch (err) {
+      console.error("Failed to update budget", err);
+      toast.error("Failed to update budget. Please try again.");
+    } finally {
+      setIsSavingBudget(false);
+    }
+  };
 
   // AI Insights
   const getSmartAdvice = () => {
@@ -699,6 +741,113 @@ export default function DashboardPage() {
                     <p className="text-[10px] text-slate-500 font-bold uppercase">{language === 'ar' ? 'التكلفة الشهرية المتوقعة' : language === 'fr' ? 'Projection Mensuelle' : 'Projected Monthly Cost'}</p>
                     <p className="text-xl font-black text-cyan-400 mt-1 font-mono">{systemSettings?.currency || 'MAD'} {projectedMonthlyCost.toFixed(2)}</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">Projected billing cycle forecast</p>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-white/[0.04] my-2" />
+
+                  {/* Monthly Budget Tracker */}
+                  <div className="p-3.5 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase">
+                        {language === 'ar' ? 'الميزانية الشهرية' : language === 'fr' ? 'Budget Mensuel' : 'Monthly Budget'}
+                      </p>
+                      <button
+                        onClick={() => setIsEditingBudget(!isEditingBudget)}
+                        className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold transition-colors animate-pulse"
+                      >
+                        {budget ? (language === 'ar' ? 'تعديل' : language === 'fr' ? 'Modifier' : 'Edit') : (language === 'ar' ? 'تحديد' : language === 'fr' ? 'Définir' : 'Set Budget')}
+                      </button>
+                    </div>
+
+                    {isEditingBudget ? (
+                      <div className="flex flex-col gap-2 mt-1">
+                        <div className="relative flex-1">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-bold">
+                            {systemSettings?.currency || 'MAD'}
+                          </span>
+                          <input
+                            type="number"
+                            value={budgetValue}
+                            onChange={(e) => setBudgetValue(e.target.value)}
+                            placeholder="Enter budget..."
+                            className="w-full bg-[#111827] border border-white/10 rounded-lg py-1.5 pl-11 pr-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                            min="1"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={handleSaveBudget}
+                            disabled={isSavingBudget}
+                            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] h-8 px-3 font-bold"
+                          >
+                            {isSavingBudget ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              language === 'ar' ? 'حفظ' : language === 'fr' ? 'Enregistrer' : 'Save'
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setIsEditingBudget(false);
+                              if (budget) setBudgetValue(budget.monthly_budget_mad.toString());
+                            }}
+                            className="text-slate-400 hover:text-white text-[10px] h-8 px-2 border border-white/10"
+                          >
+                            {language === 'ar' ? 'إلغاء' : language === 'fr' ? 'Annuler' : 'Cancel'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : budget ? (
+                      <div className="space-y-2">
+                        <div className="flex items-baseline justify-between mt-1">
+                          <p className="text-sm text-slate-300">
+                            <span className="text-xl font-bold text-white font-mono">
+                              {projectedMonthlyCost.toFixed(0)}
+                            </span>
+                            <span className="text-slate-500 text-xs font-mono"> / {budget.monthly_budget_mad} {systemSettings?.currency || 'MAD'}</span>
+                          </p>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            (projectedMonthlyCost / budget.monthly_budget_mad) > 0.9
+                              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                              : (projectedMonthlyCost / budget.monthly_budget_mad) > 0.7
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          }`}>
+                            {((projectedMonthlyCost / budget.monthly_budget_mad) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="w-full bg-[#111827] h-2 rounded-full overflow-hidden border border-white/[0.04]">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              (projectedMonthlyCost / budget.monthly_budget_mad) > 0.9
+                                ? 'bg-red-500'
+                                : (projectedMonthlyCost / budget.monthly_budget_mad) > 0.7
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500'
+                            }`}
+                            style={{ width: `${Math.min(100, (projectedMonthlyCost / budget.monthly_budget_mad) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-2 text-center">
+                        <p className="text-xs text-slate-400 mb-2">No budget set for this month</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsEditingBudget(true)}
+                          className="border-white/10 hover:bg-white/5 text-slate-300 text-[10px] h-7 px-3 rounded-lg w-full font-bold"
+                        >
+                          Set Budget Limit
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
