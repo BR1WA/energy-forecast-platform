@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from app.main import app
 from app.models import User
+from app.models.settings import SystemSettings
 from app.services.auth_service import hash_password, create_access_token
 from app.entitlements import Tier
 
@@ -33,21 +34,19 @@ client = TestClient(app)
 class TestEntitlements(unittest.TestCase):
     def setUp(self):
         app.dependency_overrides[get_db] = override_get_db
-        # Create all tables
         Base.metadata.create_all(bind=engine)
         self.db = TestingSessionLocal()
-
         # Seed data
         self.admin_pass = "adminpassword"
         self.user_pass = "userpassword"
 
-        # Create admin user
+        # Create admin user with pro subscription tier
         self.admin_user = User(
             email="admin@example.com",
             password_hash=hash_password(self.admin_pass),
             full_name="Admin User",
             role="admin",
-            subscription_tier=Tier.enterprise.name,
+            subscription_tier=Tier.pro.name,
             is_active=True,
         )
         # Create normal free user
@@ -76,7 +75,7 @@ class TestEntitlements(unittest.TestCase):
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
 
-    def test_free_user_access_denied_on_pro_and_enterprise(self):
+    def test_free_user_access_denied_on_gated_features(self):
         # Free user -> 403 on analytics summary (pro feature)
         res = client.get("/api/v1/analytics/summary", headers=self.free_headers)
         self.assertEqual(res.status_code, 403)
@@ -86,14 +85,14 @@ class TestEntitlements(unittest.TestCase):
         res = client.get("/api/v1/analytics/report/pdf", headers=self.free_headers)
         self.assertEqual(res.status_code, 403)
 
-        # Free user -> 403 on multi-site (enterprise feature)
+        # Free user -> 403 on multi-site (pro feature)
         res = client.get("/api/v1/multi-site", headers=self.free_headers)
         self.assertEqual(res.status_code, 403)
-        self.assertIn("This feature requires the 'enterprise' subscription tier or higher", res.json()["detail"])
+        self.assertIn("This feature requires the 'pro' subscription tier or higher", res.json()["detail"])
 
     def test_self_grant_upgrades_blocked(self):
         # User tries to self-upgrade via POST /api/v1/auth/subscription
-        # Upgrades to 'pro' or 'enterprise' must return 403.
+        # Upgrades to 'pro' must return 403.
         res = client.post(
             "/api/v1/auth/subscription",
             headers=self.free_headers,
@@ -142,7 +141,8 @@ class TestEntitlements(unittest.TestCase):
         self.assertEqual(entitlements["subscription_tier"], "pro")
         self.assertIn("analytics_summary", entitlements["features"])
         self.assertIn("pdf_export", entitlements["features"])
-        self.assertNotIn("multi_site", entitlements["features"])
+        self.assertIn("multi_site", entitlements["features"])
+        self.assertIn("heatmap", entitlements["features"])
 
         # Update headers with new session (or check the db user directly)
         self.db.expire_all()
@@ -152,29 +152,23 @@ class TestEntitlements(unittest.TestCase):
         # Pro user passes pro feature checks
         res = client.get("/api/v1/analytics/summary", headers=self.free_headers)
         self.assertEqual(res.status_code, 200)
-        # Heatmap data must be gated (empty) for Pro users
-        self.assertEqual(res.json()["heatmap_data"], [])
+        self.assertNotEqual(res.json()["heatmap_data"], [])
 
-        # Admin (Enterprise) user should get non-empty heatmap data
-        res_admin = client.get("/api/v1/analytics/summary", headers=self.admin_headers)
-        self.assertEqual(res_admin.status_code, 200)
-        self.assertNotEqual(res_admin.json()["heatmap_data"], [])
-
-        # Pro user still blocked from enterprise feature (multi-site)
+        # Pro user passes multi-site check
         res = client.get("/api/v1/multi-site", headers=self.free_headers)
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 200)
 
     def test_admin_grant_changes_entitlement(self):
-        # Admin upgrades free user to enterprise via PUT /api/v1/admin/users/{id}
+        # Admin upgrades free user to pro via PUT /api/v1/admin/users/{id}
         res = client.put(
             f"/api/v1/admin/users/{self.free_user.id}",
             headers=self.admin_headers,
-            json={"subscription_tier": "enterprise"},
+            json={"subscription_tier": "pro"},
         )
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["subscription_tier"], "enterprise")
+        self.assertEqual(res.json()["subscription_tier"], "pro")
 
-        # Verify free user can now access enterprise multi-site
+        # Verify free user can now access multi-site
         res = client.get("/api/v1/multi-site", headers=self.free_headers)
         self.assertEqual(res.status_code, 200)
         self.assertIn("data", res.json())
