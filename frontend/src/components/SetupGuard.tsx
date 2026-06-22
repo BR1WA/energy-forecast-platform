@@ -4,13 +4,22 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { settingsApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export function SetupGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!isAuthenticated) {
+      setIsChecking(false);
+      return;
+    }
+
     const checkSetupStatus = async () => {
       try {
         const data = await settingsApi.getSetupStatus();
@@ -27,9 +36,9 @@ export function SetupGuard({ children }: { children: React.ReactNode }) {
     };
 
     checkSetupStatus();
-  }, [pathname, router]);
+  }, [pathname, router, isAuthenticated, authLoading]);
 
-  if (isChecking) {
+  if (isChecking || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0A0F1C]">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />

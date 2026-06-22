@@ -120,7 +120,10 @@ async function apiFetch<T>(
     } else {
       clearTokens();
       if (typeof window !== 'undefined') {
-        window.location.href = '/';
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/' && currentPath !== '/login' && currentPath !== '/register') {
+          window.location.href = '/';
+        }
       }
       throw new Error('Session expired');
     }
