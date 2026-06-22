@@ -200,7 +200,7 @@ export const billingApi = {
   getSubscription: (): Promise<SubscriptionResponse | null> =>
     apiFetch('/api/v1/billing/subscription'),
 
-  checkout: (tier: 'pro' | 'enterprise'): Promise<CheckoutResponse> =>
+  checkout: (tier: 'pro'): Promise<CheckoutResponse> =>
     apiFetch('/api/v1/billing/checkout', {
       method: 'POST',
       body: JSON.stringify({ tier }),

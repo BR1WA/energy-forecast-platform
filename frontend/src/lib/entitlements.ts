@@ -3,13 +3,11 @@ import { User } from '../types';
 export enum Tier {
   free = 0,
   pro = 1,
-  enterprise = 2,
 }
 
 export const TIER_ORDER: Record<string, Tier> = {
   free: Tier.free,
   pro: Tier.pro,
-  enterprise: Tier.enterprise,
 };
 
 export enum Feature {
@@ -24,13 +22,14 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   [Feature.PRO_FORECAST_CURVE]: Tier.pro,
   [Feature.ANALYTICS_SUMMARY]: Tier.pro,
   [Feature.PDF_EXPORT]: Tier.pro,
-  [Feature.HEATMAP]: Tier.enterprise,
-  [Feature.MULTI_SITE]: Tier.enterprise,
+  [Feature.HEATMAP]: Tier.pro,
+  [Feature.MULTI_SITE]: Tier.pro,
 };
 
 export function getTier(tierName?: string): Tier {
   if (!tierName) return Tier.free;
   const normalized = tierName.trim().toLowerCase();
+  if (normalized === 'enterprise') return Tier.pro;
   return TIER_ORDER[normalized] ?? Tier.free;
 }
 

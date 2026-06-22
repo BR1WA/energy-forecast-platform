@@ -11,7 +11,7 @@ export interface User {
   updated_at?: string;
   avatar_url?: string;
   last_activity?: string;
-  subscription_tier?: 'free' | 'pro' | 'enterprise';
+  subscription_tier?: 'free' | 'pro';
   is_setup_complete?: boolean;
   preferences?: Record<string, any>;
 }
@@ -206,7 +206,7 @@ export interface ApiError {
 // Billing Types
 // ============================================================
 export interface CheckoutRequest {
-  tier: 'pro' | 'enterprise';
+  tier: 'pro';
 }
 
 export interface CheckoutResponse {
@@ -230,7 +230,7 @@ export interface SubscriptionResponse {
 }
 
 export interface EntitlementsResponse {
-  subscription_tier: 'free' | 'pro' | 'enterprise';
+  subscription_tier: 'free' | 'pro';
   features: string[];
 }
 
