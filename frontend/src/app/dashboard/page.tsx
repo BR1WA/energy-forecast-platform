@@ -113,6 +113,7 @@ export default function DashboardPage() {
   // Live Telemetry data
   const [liveData, setLiveData] = useState<TelemetryFrame | null>(null);
   const [history, setHistory] = useState<TelemetryFrame[]>([]);
+  const [historyWindow, setHistoryWindow] = useState<number>(20);
   const [connected, setConnected] = useState(false);
   const [framesLog, setFramesLog] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -154,11 +155,11 @@ export default function DashboardPage() {
           const frame: TelemetryFrame = JSON.parse(event.data);
           setLiveData(frame);
           
-          // Add to rolling history (keep last 20 frames)
+          // Add to rolling history (keep last 500 frames in memory)
           setHistory((prev) => {
             const updated = [...prev, frame];
-            if (updated.length > 20) {
-              return updated.slice(updated.length - 20);
+            if (updated.length > 500) {
+              return updated.slice(updated.length - 500);
             }
             return updated;
           });
@@ -276,7 +277,8 @@ export default function DashboardPage() {
   // Scrolling chart data mapping: past actual consumption + future predicted consumption
   const buildChartData = () => {
     // 1. Map past telemetry entries
-    const dataPoints: Array<{ time: string, consumption: number | null, predicted: number | null }> = history.map((h) => ({
+    const slicedHistory = historyWindow === 9999 ? history : history.slice(-historyWindow);
+    const dataPoints: Array<{ time: string, consumption: number | null, predicted: number | null }> = slicedHistory.map((h) => ({
       time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       consumption: h.gap,
       predicted: null,
@@ -584,15 +586,37 @@ export default function DashboardPage() {
               {/* Scrolling Recharts Curve */}
               <Card className="glass-card border-white/[0.06] lg:col-span-2">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold text-white flex items-center justify-between">
-                    <span className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
                       <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
                       {language === 'ar' ? 'منحنى الاستهلاك المباشر' : language === 'fr' ? 'Graphique en Temps Réel' : 'Live Consumption Curve'}
-                    </span>
-                    <span className="text-xs font-normal text-slate-400">
-                      {language === 'ar' ? 'تحديث تلقائي كل ثانيتين' : language === 'fr' ? 'Mise à jour 2s' : 'Auto-updates every 2s'}
-                    </span>
-                  </CardTitle>
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <div className="flex bg-[#111827] border border-white/10 rounded-lg p-0.5 select-none">
+                        {[
+                          { value: 20, label: '40s' },
+                          { value: 60, label: '2m' },
+                          { value: 150, label: '5m' },
+                          { value: 9999, label: 'All' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setHistoryWindow(opt.value)}
+                            className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${
+                              historyWindow === opt.value
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'text-slate-400 hover:text-white border border-transparent'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-slate-500 hidden md:inline">
+                        {language === 'ar' ? 'تحديث تلقائي كل ثانيتين' : language === 'fr' ? 'Mise à jour 2s' : 'Auto-updates 2s'}
+                      </span>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="h-[280px] mt-2">
