@@ -95,33 +95,35 @@ async def lifespan(app: FastAPI):
                 from datetime import datetime, timezone
                 if manager.active_connections:
                     val = round(random.uniform(2.5, 5.2), 2)
-                    threshold = 4.0
-                    logger.info(f"[AUTO-FORECAST] Simulating load check: current usage {val} kW (threshold {threshold} kW)")
+                    logger.info(f"[AUTO-FORECAST] Simulating load check: current usage {val} kW")
                     
-                    if val > threshold:
-                        alert_payload = {
-                            "type": "alert",
-                            "severity": "high",
-                            "title": "Peak Consumption Warning",
-                            "message": f"Real-time usage is {val} kW, exceeding safety threshold of {threshold} kW. Recommend shifting load.",
-                            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                        }
-                        
-                        # Save alert to DB for each active connected user and broadcast
-                        from app.database import SessionLocal
-                        from app.models import Alert
-                        db_session = SessionLocal()
-                        try:
-                            for user_id_str in list(manager.active_connections.keys()):
-                                try:
-                                    uid = int(user_id_str)
+                    from app.database import SessionLocal
+                    from app.models import Alert, AlertConfig
+                    db_session = SessionLocal()
+                    try:
+                        for user_id_str in list(manager.active_connections.keys()):
+                            try:
+                                uid = int(user_id_str)
+                                # Query AlertConfig for this user
+                                config = db_session.query(AlertConfig).filter(AlertConfig.user_id == uid).first()
+                                threshold = config.threshold_kw if config else 4.0
+                                
+                                if val > threshold:
+                                    alert_payload = {
+                                        "type": "alert",
+                                        "severity": "high",
+                                        "title": "Peak Consumption Warning",
+                                        "message": f"Real-time usage is {val} kW, exceeding safety threshold of {threshold} kW. Recommend shifting load.",
+                                        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                                    }
+                                    
                                     db_alert = Alert(
                                         user_id=uid,
                                         alert_type="peak_demand",
                                         message=alert_payload["message"],
                                         severity=alert_payload["severity"],
                                         is_acknowledged=False
-                                     )
+                                    )
                                     db_session.add(db_alert)
                                     db_session.commit()
                                     db_session.refresh(db_alert)
@@ -129,15 +131,15 @@ async def lifespan(app: FastAPI):
                                     personal_payload = alert_payload.copy()
                                     personal_payload["id"] = str(db_alert.id)
                                     
-                                    logger.info(f"[AUTO-FORECAST] Broadcasting alert to user {uid}: {personal_payload['message']}")
+                                    logger.info(f"[AUTO-FORECAST] Broadcasting alert to user {uid}: {personal_payload['message']} (threshold {threshold} kW)")
                                     await manager.broadcast_to_client(user_id_str, personal_payload)
-                                except Exception as inner_err:
-                                    logger.error(f"[AUTO-FORECAST] Failed to save/send alert to user {user_id_str}: {inner_err}")
-                                    db_session.rollback()
-                        except Exception as db_err:
-                            logger.error(f"[AUTO-FORECAST] DB log error: {db_err}")
-                        finally:
-                            db_session.close()
+                            except Exception as inner_err:
+                                logger.error(f"[AUTO-FORECAST] Failed to save/send alert to user {user_id_str}: {inner_err}")
+                                db_session.rollback()
+                    except Exception as db_err:
+                        logger.error(f"[AUTO-FORECAST] DB query/log error: {db_err}")
+                    finally:
+                        db_session.close()
             except Exception as e:
                 logger.error(f"[AUTO-FORECAST] Loop exception: {e}")
             await asyncio.sleep(30)
