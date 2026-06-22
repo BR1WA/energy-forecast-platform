@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.models.settings import SystemSettings
-from app.models.models import User
+from app.models.models import User, EnergyBudget
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
@@ -25,6 +25,10 @@ class PreferencesPayload(BaseModel):
     language: str | None = None
     email_alerts: bool | None = None
     push_alerts: bool | None = None
+
+class BudgetPayload(BaseModel):
+    monthly_budget_mad: float
+    monthly_budget_kwh: float | None = None
 
 @router.get("/setup-status")
 def get_setup_status(
@@ -118,3 +122,31 @@ def update_preferences(
     db.commit()
     db.refresh(current_user)
     return {"message": "Preferences updated successfully", "preferences": current_user.preferences}
+
+@router.get("/budget")
+def get_budget(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    budget = db.query(EnergyBudget).filter(EnergyBudget.user_id == current_user.id).first()
+    if not budget:
+        return None
+    return budget
+
+@router.put("/budget")
+def update_budget(
+    payload: BudgetPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    budget = db.query(EnergyBudget).filter(EnergyBudget.user_id == current_user.id).first()
+    if not budget:
+        budget = EnergyBudget(user_id=current_user.id)
+        db.add(budget)
+    
+    budget.monthly_budget_mad = payload.monthly_budget_mad
+    budget.monthly_budget_kwh = payload.monthly_budget_kwh
+    
+    db.commit()
+    db.refresh(budget)
+    return budget

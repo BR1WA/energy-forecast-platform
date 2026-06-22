@@ -32,6 +32,7 @@ class User(Base):
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    energy_budget = relationship("EnergyBudget", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -154,6 +155,20 @@ class ModelRegistry(Base):
     last_trained = Column(String(50), nullable=True)
     parameters = Column(JSON, nullable=True)
     status = Column(String(20), default="active", nullable=False)
+
+
+class EnergyBudget(Base):
+    __tablename__ = "energy_budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    monthly_budget_mad = Column(Float, nullable=False)
+    monthly_budget_kwh = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship
+    user = relationship("User", back_populates="energy_budget")
 
 
 
