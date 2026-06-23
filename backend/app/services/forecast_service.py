@@ -237,16 +237,17 @@ class ForecastService:
         self._seed_model_registry_db()
 
     def _seed_model_registry_db(self):
-        """Seed ModelRegistry database table if empty."""
+        """Seed or update ModelRegistry database table with all available models."""
         from app.database import SessionLocal
         from app.models.models import ModelRegistry
 
         db = SessionLocal()
         try:
-            existing_count = db.query(ModelRegistry).count()
-            if existing_count == 0:
-                print("[ML] Seeding ModelRegistry database table...")
-                for name, info in self.available_models_metadata.items():
+            print("[ML] Seeding/updating ModelRegistry database table...")
+            for name, info in self.available_models_metadata.items():
+                db_model = db.query(ModelRegistry).filter(ModelRegistry.id == info['id']).first()
+                if not db_model:
+                    print(f"[ML] Seeding ModelRegistry for {info['display_name']}...")
                     db_model = ModelRegistry(
                         id=info['id'],
                         name=info['name'],
@@ -262,10 +263,20 @@ class ForecastService:
                         status='active'
                     )
                     db.add(db_model)
-                db.commit()
-                print("[ML] Seeding completed.")
+                else:
+                    # Update fields to ensure metrics are accurate
+                    db_model.name = info['name']
+                    db_model.display_name = info['display_name']
+                    db_model.architecture_type = info['architecture_type']
+                    db_model.description = info['description']
+                    db_model.training_metrics = info['training_metrics']
+                    db_model.accuracy = info['accuracy']
+                    db_model.parameters = info['parameters']
+                    db_model.last_trained = info['last_trained']
+            db.commit()
+            print("[ML] ModelRegistry seeding/updating completed.")
         except Exception as e:
-            print(f"[ML] Error seeding ModelRegistry: {e}")
+            print(f"[ML] Error seeding/updating ModelRegistry: {e}")
             db.rollback()
         finally:
             db.close()
