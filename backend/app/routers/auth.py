@@ -48,7 +48,7 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
         email=data.email,
         password_hash=hash_password(data.password),
         full_name=data.full_name,
-        role="viewer",  # Default role
+        role="analyst",  # Default role
         is_active=True,
         is_setup_complete=False,
     )

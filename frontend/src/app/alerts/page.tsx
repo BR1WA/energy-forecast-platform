@@ -204,7 +204,10 @@ export default function AlertsPage() {
               ) : filteredAlerts.length > 0 ? (
                 filteredAlerts.map((alert) => {
                   const config = severityConfig[alert.severity] || severityConfig.medium;
-                  const Icon = config.icon;
+                  let Icon = config.icon;
+                  if (alert.type === 'peak_demand') Icon = Zap;
+                  else if (alert.type === 'cost_threshold') Icon = TrendingUp;
+                  else if (alert.type === 'budget_warning') Icon = AlertTriangle;
                   const isRead = alert.is_read || (alert as any).is_acknowledged;
                   return (
                     <Card

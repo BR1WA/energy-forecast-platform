@@ -137,7 +137,7 @@ export interface ConsumptionPoint {
 // ============================================================
 export interface Alert {
   id: string;
-  type: 'high_consumption' | 'anomaly' | 'threshold' | 'system';
+  type: 'high_consumption' | 'anomaly' | 'threshold' | 'system' | 'peak_demand' | 'cost_threshold' | 'budget_warning';
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
   message: string;
