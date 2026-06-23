@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { can, Feature } from '@/lib/entitlements';
-import { analyticsApi, settingsApi, getAccessToken } from '@/lib/api';
+import { analyticsApi, settingsApi, forecastApi, getAccessToken } from '@/lib/api';
 import { EnergyBudget } from '@/types';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/hooks/useWebSocket';
@@ -80,6 +80,11 @@ export default function DashboardPage() {
   const [historyWindow, setHistoryWindow] = useState<number>(20);
   const [framesLog, setFramesLog] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  // Forecast/Timeframe state for Day, Week, Month
+  const [dashboardTimeframe, setDashboardTimeframe] = useState<'live' | '24' | '168' | '720'>('live');
+  const [forecastChartData, setForecastChartData] = useState<any[] | null>(null);
+  const [isLoadingForecast, setIsLoadingForecast] = useState<boolean>(false);
 
   // Budget progress state
   const [budget, setBudget] = useState<EnergyBudget | null>(null);
@@ -270,6 +275,138 @@ export default function DashboardPage() {
   };
 
   const chartData = buildChartData();
+
+  const processDashboardForecastData = (
+    horizon: number,
+    inputData: any,
+    predictions: number[][] | undefined,
+    createdAtStr?: string
+  ) => {
+    const chartDataResult: Array<Record<string, any>> = [];
+    const createdDate = createdAtStr ? new Date(createdAtStr) : new Date();
+    
+    if (!inputData || !Array.isArray(inputData)) return chartDataResult;
+    if (!predictions || !Array.isArray(predictions)) return chartDataResult;
+
+    let lookback = 96;
+    if (horizon === 168) lookback = 512;
+    else if (horizon === 720) lookback = 1440;
+
+    const flatInput: number[] = Array.isArray(inputData[0])
+      ? (inputData as number[][]).map(row => row[0])
+      : (inputData as number[]);
+    const slicedInput = flatInput.slice(-lookback);
+
+    if (horizon === 24) {
+      const historyToShow = slicedInput.slice(-24);
+      for (let i = 0; i < historyToShow.length; i++) {
+        const pointTime = new Date(createdDate.getTime() - (historyToShow.length - i) * 3600 * 1000);
+        chartDataResult.push({
+          time: pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          historical: Number(historyToShow[i].toFixed(3)),
+        });
+      }
+
+      const bridgePoint: Record<string, any> = {
+        time: createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        historical: Number(historyToShow[historyToShow.length - 1].toFixed(3)),
+        predicted: Number(predictions[0][0].toFixed(3)),
+      };
+      chartDataResult.push(bridgePoint);
+
+      for (let i = 0; i < predictions.length; i++) {
+        const pointTime = new Date(createdDate.getTime() + (i + 1) * 3600 * 1000);
+        chartDataResult.push({
+          time: pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          predicted: Number(predictions[i][0].toFixed(3)),
+        });
+      }
+    } else {
+      const historyHours = horizon === 168 ? 168 : 720;
+      const historyToShow = slicedInput.slice(-historyHours);
+      const numDays = horizon === 168 ? 7 : 30;
+
+      const formatDateLabel = (d: Date) => {
+        return d.toLocaleDateString([], { day: '2-digit', month: 'short' });
+      };
+
+      for (let d = 0; d < numDays; d++) {
+        const daySlice = historyToShow.slice(d * 24, (d + 1) * 24);
+        if (daySlice.length === 0) continue;
+        const dailySum = daySlice.reduce((a, b) => a + b, 0);
+        const dayDate = new Date(createdDate.getTime() - (numDays - d) * 24 * 3600 * 1000);
+        chartDataResult.push({
+          time: formatDateLabel(dayDate),
+          historical: Number(dailySum.toFixed(2)),
+        });
+      }
+
+      const lastDayHistorySlice = historyToShow.slice(-24);
+      const lastDayHistorySum = lastDayHistorySlice.reduce((a, b) => a + b, 0);
+      const firstDayPredictSlice = predictions.slice(0, 24);
+      const firstDayPredictSum = firstDayPredictSlice.reduce((a, b) => a + b[0], 0);
+
+      chartDataResult.push({
+        time: formatDateLabel(createdDate),
+        historical: Number(lastDayHistorySum.toFixed(2)),
+        predicted: Number(firstDayPredictSum.toFixed(2)),
+      });
+
+      for (let d = 0; d < numDays; d++) {
+        const dayDate = new Date(createdDate.getTime() + (d + 1) * 24 * 3600 * 1000);
+        const dayPredictSlice = predictions.slice(d * 24, (d + 1) * 24);
+        if (dayPredictSlice.length === 0) continue;
+        const dayPredictSum = dayPredictSlice.reduce((a, b) => a + b[0], 0);
+        chartDataResult.push({
+          time: formatDateLabel(dayDate),
+          predicted: Number(dayPredictSum.toFixed(2)),
+        });
+      }
+    }
+
+    return chartDataResult;
+  };
+
+  const getDashboardTickInterval = (dataLength: number, timeframe: string): number => {
+    if (timeframe === '24') return 6;
+    if (timeframe === '168') return 1;
+    if (timeframe === '720') return 5;
+    return 6;
+  };
+
+  useEffect(() => {
+    if (dashboardTimeframe === 'live') {
+      setForecastChartData(null);
+      return;
+    }
+
+    const fetchForecast = async () => {
+      setIsLoadingForecast(true);
+      try {
+        const horizonNum = parseInt(dashboardTimeframe);
+        let modelName = 'sota';
+        if (horizonNum === 168) modelName = 'patchtst_168';
+        if (horizonNum === 720) modelName = 'patchtst_720';
+
+        const result = await forecastApi.predictSmartMeter(modelName, horizonNum);
+        const processed = processDashboardForecastData(
+          horizonNum,
+          result.input_data,
+          result.predictions,
+          result.created_at
+        );
+        setForecastChartData(processed);
+      } catch (err) {
+        console.error("Failed to fetch dashboard forecast:", err);
+        toast.error("Failed to fetch forecast for the selected timeframe.");
+        setDashboardTimeframe('live');
+      } finally {
+        setIsLoadingForecast(false);
+      }
+    };
+
+    fetchForecast();
+  }, [dashboardTimeframe]);
 
   const handleSaveBudget = async () => {
     const val = parseFloat(budgetValue);
@@ -504,16 +641,16 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <div className="flex bg-[#111827] border border-white/10 rounded-lg p-0.5 select-none">
                         {[
-                          { value: 20, label: '40s' },
-                          { value: 60, label: '2m' },
-                          { value: 150, label: '5m' },
-                          { value: 9999, label: 'All' },
+                          { value: 'live', label: 'Live' },
+                          { value: '24', label: 'Day' },
+                          { value: '168', label: 'Week' },
+                          { value: '720', label: 'Month' },
                         ].map((opt) => (
                           <button
                             key={opt.value}
-                            onClick={() => setHistoryWindow(opt.value)}
+                            onClick={() => setDashboardTimeframe(opt.value as any)}
                             className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${
-                              historyWindow === opt.value
+                              dashboardTimeframe === opt.value
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                 : 'text-slate-400 hover:text-white border border-transparent'
                             }`}
@@ -523,54 +660,119 @@ export default function DashboardPage() {
                         ))}
                       </div>
                       <span className="text-[10px] text-slate-500 hidden md:inline">
-                        {language === 'ar' ? 'تحديث تلقائي كل ثانيتين' : language === 'fr' ? 'Mise à jour 2s' : 'Auto-updates 2s'}
+                        {dashboardTimeframe === 'live' ? (
+                          language === 'ar' ? 'تحديث تلقائي كل ثانيتين' : language === 'fr' ? 'Mise à jour 2s' : 'Auto-updates 2s'
+                        ) : (
+                          language === 'ar' ? 'توقعات الذكاء الاصطناعي' : language === 'fr' ? 'Prédiction IA' : 'AI Forecast'
+                        )}
                       </span>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="h-[280px] mt-2">
-                    {history.length < 2 ? (
+                    {isLoadingForecast ? (
                       <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="w-7 h-7 text-slate-600 animate-spin" />
-                        <p className="text-xs text-slate-400">Connecting and collecting Linky stream frames...</p>
+                        <Loader2 className="w-7 h-7 text-blue-500 animate-spin" />
+                        <p className="text-xs text-slate-400">Computing energy forecast via AI models...</p>
                       </div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(16,185,129,0.06)" vertical={false} />
-                          <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10 }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 11 }} domain={[0, 'auto']} />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: '#111827',
-                              border: '1px solid rgba(16,185,129,0.15)',
-                              borderRadius: '12px',
-                              color: '#E2E8F0',
-                              fontSize: '11px',
-                            }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="consumption"
-                            stroke="#10B981"
-                            strokeWidth={3}
-                            dot={false}
-                            activeDot={{ r: 6, fill: '#10B981', stroke: '#111827', strokeWidth: 2 }}
-                          />
-                          {can(user, Feature.PRO_FORECAST_CURVE) && (
+                    ) : dashboardTimeframe === 'live' ? (
+                      history.length < 2 ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                          <Loader2 className="w-7 h-7 text-slate-600 animate-spin" />
+                          <p className="text-xs text-slate-400">Connecting and collecting Linky stream frames...</p>
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(16,185,129,0.06)" vertical={false} />
+                            <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 11 }} domain={[0, 'auto']} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#111827',
+                                border: '1px solid rgba(16,185,129,0.15)',
+                                borderRadius: '12px',
+                                color: '#E2E8F0',
+                                fontSize: '11px',
+                              }}
+                            />
                             <Line
                               type="monotone"
-                              dataKey="predicted"
-                              stroke="#06B6D4"
-                              strokeWidth={2}
-                              strokeDasharray="5 5"
+                              dataKey="consumption"
+                              stroke="#10B981"
+                              strokeWidth={3}
                               dot={false}
-                              activeDot={{ r: 5, fill: '#06B6D4', stroke: '#111827', strokeWidth: 2 }}
+                              activeDot={{ r: 6, fill: '#10B981', stroke: '#111827', strokeWidth: 2 }}
                             />
-                          )}
-                        </LineChart>
-                      </ResponsiveContainer>
+                            {can(user, Feature.PRO_FORECAST_CURVE) && (
+                              <Line
+                                type="monotone"
+                                dataKey="predicted"
+                                stroke="#06B6D4"
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                dot={false}
+                                activeDot={{ r: 5, fill: '#06B6D4', stroke: '#111827', strokeWidth: 2 }}
+                              />
+                            )}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )
+                    ) : (
+                      forecastChartData && (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={forecastChartData}>
+                            <defs>
+                              <linearGradient id="dashGradHist" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.2} />
+                                <stop offset="100%" stopColor="#3B82F6" stopOpacity={0} />
+                              </linearGradient>
+                              <linearGradient id="dashGradPred" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#10B981" stopOpacity={0.15} />
+                                <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(59,130,246,0.06)" vertical={false} />
+                            <XAxis
+                              dataKey="time"
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fill: '#64748B', fontSize: 10 }}
+                              interval={getDashboardTickInterval(forecastChartData.length, dashboardTimeframe)}
+                            />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 11 }} domain={[0, 'auto']} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#111827',
+                                border: '1px solid rgba(59,130,246,0.15)',
+                                borderRadius: '12px',
+                                color: '#E2E8F0',
+                                fontSize: '11px',
+                              }}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="historical"
+                              stroke="#3B82F6"
+                              strokeWidth={2}
+                              fill="url(#dashGradHist)"
+                              name={['24'].includes(dashboardTimeframe) ? "Historical (kW)" : "Historical (kWh)"}
+                              connectNulls={false}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="predicted"
+                              stroke="#10B981"
+                              strokeWidth={2}
+                              strokeDasharray="5 3"
+                              fill="url(#dashGradPred)"
+                              name={['24'].includes(dashboardTimeframe) ? "Predicted (kW)" : "Predicted (kWh)"}
+                              connectNulls={false}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      )
                     )}
                   </div>
                 </CardContent>

@@ -35,12 +35,12 @@ def is_safe_url(url: str, allow_private: bool = False) -> bool:
 class SmartMeterService:
     """Simulates smart meter readings fetched from utility API or real API."""
 
-    def fetch_live_readings(self, meter_id: str = "LNK-4829-1092", db = None) -> np.ndarray:
+    def fetch_live_readings(self, meter_id: str = "LNK-4829-1092", db = None, limit: int = 96) -> np.ndarray:
         """
-        Generates 96 hours of hourly historical readings representing the lookback window.
+        Generates historical readings representing the lookback window.
         
         Returns:
-            np.ndarray of shape (96, 7) representing:
+            np.ndarray of shape (limit, 7) representing:
             [Global_active_power, Global_reactive_power, Voltage, Global_intensity, Sub_metering_1, Sub_metering_2, Sub_metering_3]
         """
         # Diurnal pattern generation based on current time
@@ -77,7 +77,7 @@ class SmartMeterService:
                         # Expecting data format matching our numpy array or similar. 
                         # If it's a real API, parse it here. For now, fallback to simulator if error.
                         if 'readings' in data:
-                            return np.array(data['readings'], dtype=float)
+                            return np.array(data['readings'], dtype=float)[:limit]
                 except Exception as e:
                     print(f"[SmartMeterService] Failed to fetch from real API, falling back to simulator: {e}")
             else:
@@ -86,9 +86,9 @@ class SmartMeterService:
         # Simulator (Normalized for Moroccan average households)
         # Moroccan homes use significantly less electricity.
         readings = []
-        for h in range(96):
+        for h in range(limit):
             # Hour of day for this step
-            step_time = now - datetime.timedelta(hours=(95 - h))
+            step_time = now - datetime.timedelta(hours=(limit - 1 - h))
             hour = step_time.hour
             is_weekend = step_time.weekday() in [5, 6]
             

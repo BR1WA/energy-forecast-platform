@@ -445,23 +445,47 @@ def sync_smart_meter_forecast(
     """
     import datetime
     from datetime import timezone
+    import pandas as pd
     from app.services.smart_meter_service import get_smart_meter_service
+    from app.services.forecast_service import get_forecast_service
     
     model_name = payload.model_name or 'sota'
-    if model_name not in ['sota', 'patchtst', 'cnn_bilstm']:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid model name: {model_name}")
-
-    # Fetch live 96-hour readings
-    meter_service = get_smart_meter_service()
-    targets = meter_service.fetch_live_readings(db=db) # Shape (96, 7)
+    horizon = payload.horizon or 24
     
-    # Generate cyclical calendar features for the 96 hours
+    # Determine lookback based on horizon
+    lookback = 96
+    if horizon == 168:
+        lookback = 512
+    elif horizon == 720:
+        lookback = 1440
+
+    service = get_forecast_service()
+    
+    # Map model name based on horizon if not ended with it
+    full_model_key = model_name
+    if horizon != 24 and not model_name.endswith(f"_{horizon}"):
+        full_model_key = f"{model_name}_{horizon}"
+        
+    if full_model_key not in service.models:
+        if model_name in service.models:
+            full_model_key = model_name
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model '{model_name}' for horizon {horizon}h is not loaded. Available: {list(service.models.keys())}"
+            )
+
+    # Fetch live readings with dynamic lookback
+    meter_service = get_smart_meter_service()
+    targets = meter_service.fetch_live_readings(db=db, limit=lookback) # Shape (lookback, 7)
+    
+    # Generate cyclical calendar features for lookback hours
     now = datetime.datetime.now(timezone.utc)
     hours = []
     days = []
     months = []
-    for h in range(96):
-        step_time = now - datetime.timedelta(hours=(95 - h))
+    for h in range(lookback):
+        step_time = now - datetime.timedelta(hours=(lookback - 1 - h))
         hours.append(step_time.hour)
         days.append(step_time.weekday())
         months.append(step_time.month)
@@ -472,17 +496,18 @@ def sync_smart_meter_forecast(
     
     from app.services.forecast_service import generate_calendar_features
     calendar = generate_calendar_features(hours, days, months)
+    timestamps = pd.date_range(end=now, periods=lookback, freq='h')
 
     # Get user alert threshold config
     alert_config = db.query(AlertConfig).filter(AlertConfig.user_id == current_user.id).first()
     threshold = alert_config.threshold_kw if alert_config else 3.0
 
-    service = get_forecast_service()
     start_hour = (now + datetime.timedelta(hours=1)).hour # Start of forecast horizon
     
     try:
         predictions, alerts_data = service.predict(
-            model_name, targets, calendar, threshold_kw=threshold, start_hour=start_hour
+            model_name, targets, calendar, threshold_kw=threshold, 
+            start_hour=start_hour, horizon=horizon, timestamps=timestamps
         )
     except Exception as e:
         raise HTTPException(
@@ -492,10 +517,10 @@ def sync_smart_meter_forecast(
 
     # Save to DB
     input_end = now
-    input_start = now - datetime.timedelta(hours=95)
+    input_start = now - datetime.timedelta(hours=lookback - 1)
     forecast = Forecast(
         user_id=current_user.id,
-        model_name=model_name,
+        model_name=full_model_key,
         predictions=predictions.tolist(),
         input_start=input_start,
         input_end=input_end,
@@ -551,27 +576,39 @@ def sync_smart_meter_forecast(
 
 @router.post("/smart-meter/compare")
 def compare_smart_meter_forecasts(
+    payload: ForecastRequest,
     current_user: User = Depends(require_role(["admin", "analyst"])),
+    db: Session = Depends(get_db),
 ):
     """
     Sync live readings from the simulated Enedis Linky smart meter,
-    run all three forecast models for comparison, and return the results.
+    run all forecast models for the chosen horizon, and return comparison results.
     """
     import datetime
     from datetime import timezone
+    import pandas as pd
     from app.services.smart_meter_service import get_smart_meter_service
     
-    # Fetch live 96-hour readings
-    meter_service = get_smart_meter_service()
-    targets = meter_service.fetch_live_readings() # Shape (96, 7)
+    horizon = payload.horizon or 24
     
-    # Generate cyclical calendar features for the 96 hours
+    # Determine lookback based on horizon
+    lookback = 96
+    if horizon == 168:
+        lookback = 512
+    elif horizon == 720:
+        lookback = 1440
+
+    # Fetch live readings with dynamic lookback
+    meter_service = get_smart_meter_service()
+    targets = meter_service.fetch_live_readings(db=db, limit=lookback) # Shape (lookback, 7)
+    
+    # Generate cyclical calendar features for lookback hours
     now = datetime.datetime.now(timezone.utc)
     hours = []
     days = []
     months = []
-    for h in range(96):
-        step_time = now - datetime.timedelta(hours=(95 - h))
+    for h in range(lookback):
+        step_time = now - datetime.timedelta(hours=(lookback - 1 - h))
         hours.append(step_time.hour)
         days.append(step_time.weekday())
         months.append(step_time.month)
@@ -582,9 +619,10 @@ def compare_smart_meter_forecasts(
     
     from app.services.forecast_service import generate_calendar_features
     calendar = generate_calendar_features(hours, days, months)
+    timestamps = pd.date_range(end=now, periods=lookback, freq='h')
 
     service = get_forecast_service()
-    results = service.predict_comparison(targets, calendar)
+    results = service.predict_comparison(targets, calendar, horizon=horizon, timestamps=timestamps)
 
     return {
         'models': {name: preds.tolist() for name, preds in results.items()},

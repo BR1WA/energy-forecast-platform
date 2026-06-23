@@ -82,6 +82,182 @@ interface SampleInfo {
   date_range: string;
 }
 
+const processForecastChartData = (
+  horizon: number,
+  inputData: number[] | undefined,
+  predictionsOrModels: number[][] | Record<string, number[][]> | undefined,
+  isComparison: boolean,
+  modelsList: ModelInfo[],
+  selectedModelName: string,
+  createdAtStr?: string
+) => {
+  const chartData: Array<Record<string, any>> = [];
+  const createdDate = createdAtStr ? new Date(createdAtStr) : new Date();
+  
+  if (!inputData || !Array.isArray(inputData)) return chartData;
+  if (!predictionsOrModels) return chartData;
+
+  // Determine lookback based on horizon
+  let lookback = 96;
+  if (horizon === 168) lookback = 512;
+  else if (horizon === 720) lookback = 1440;
+
+  // Slice inputData to match the expected lookback just in case
+  const slicedInput = inputData.slice(-lookback);
+
+  if (horizon === 24) {
+    // --- Day Horizon: Hourly view, keep last 24h of history + 24h prediction ---
+    const historyToShow = slicedInput.slice(-24);
+    
+    // 1. Add historical hours
+    for (let i = 0; i < historyToShow.length; i++) {
+      const pointTime = new Date(createdDate.getTime() - (historyToShow.length - i) * 3600 * 1000);
+      const timeLabel = pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      chartData.push({
+        time: timeLabel,
+        historical: Number(historyToShow[i].toFixed(3)),
+      });
+    }
+
+    // Bridge point at H0
+    const bridgeTimeLabel = createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const bridgePoint: Record<string, any> = {
+      time: bridgeTimeLabel,
+      historical: Number(historyToShow[historyToShow.length - 1].toFixed(3)),
+    };
+
+    if (isComparison) {
+      const modelsData = predictionsOrModels as Record<string, number[][]>;
+      for (const modelKey of Object.keys(modelsData)) {
+        const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+        if (modelsData[modelKey] && modelsData[modelKey].length > 0) {
+          bridgePoint[mDisplayName] = Number(modelsData[modelKey][0][0].toFixed(3));
+        }
+      }
+    } else {
+      const predictions = predictionsOrModels as number[][];
+      const modelDisplayName = modelsList.find(m => m.name === selectedModelName)?.display_name || selectedModelName;
+      if (predictions && predictions.length > 0) {
+        bridgePoint[modelDisplayName] = Number(predictions[0][0].toFixed(3));
+      }
+    }
+    chartData.push(bridgePoint);
+
+    // 2. Add predictions
+    if (isComparison) {
+      const modelsData = predictionsOrModels as Record<string, number[][]>;
+      const firstModel = Object.keys(modelsData)[0];
+      const length = modelsData[firstModel]?.length || 0;
+      for (let i = 0; i < length; i++) {
+        const pointTime = new Date(createdDate.getTime() + (i + 1) * 3600 * 1000);
+        const timeLabel = pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const rowData: Record<string, any> = { time: timeLabel };
+        for (const modelKey of Object.keys(modelsData)) {
+          const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+          if (modelsData[modelKey] && modelsData[modelKey][i]) {
+            rowData[mDisplayName] = Number(modelsData[modelKey][i][0].toFixed(3));
+          }
+        }
+        chartData.push(rowData);
+      }
+    } else {
+      const predictions = predictionsOrModels as number[][];
+      const modelDisplayName = modelsList.find(m => m.name === selectedModelName)?.display_name || selectedModelName;
+      for (let i = 0; i < predictions.length; i++) {
+        const pointTime = new Date(createdDate.getTime() + (i + 1) * 3600 * 1000);
+        const timeLabel = pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        chartData.push({
+          time: timeLabel,
+          [modelDisplayName]: Number(predictions[i][0].toFixed(3)),
+        });
+      }
+    }
+
+  } else {
+    // --- Week (168h) / Month (720h) Horizon: Daily aggregation view ---
+    const historyHours = horizon === 168 ? 168 : 720;
+    const historyToShow = slicedInput.slice(-historyHours);
+    const numDays = horizon === 168 ? 7 : 30;
+
+    const formatDateLabel = (d: Date) => {
+      return d.toLocaleDateString([], { day: '2-digit', month: 'short' });
+    };
+
+    // 1. Add aggregated daily history
+    for (let d = 0; d < numDays; d++) {
+      const daySlice = historyToShow.slice(d * 24, (d + 1) * 24);
+      if (daySlice.length === 0) continue;
+      const dailySum = daySlice.reduce((a, b) => a + b, 0);
+      const dayDate = new Date(createdDate.getTime() - (numDays - d) * 24 * 3600 * 1000);
+      chartData.push({
+        time: formatDateLabel(dayDate),
+        historical: Number(dailySum.toFixed(2)),
+      });
+    }
+
+    // Bridge point at Today (connect history end day to prediction start day)
+    const lastDayHistorySlice = historyToShow.slice(-24);
+    const lastDayHistorySum = lastDayHistorySlice.reduce((a, b) => a + b, 0);
+    
+    const bridgePoint: Record<string, any> = {
+      time: formatDateLabel(createdDate),
+      historical: Number(lastDayHistorySum.toFixed(2)),
+    };
+
+    if (isComparison) {
+      const modelsData = predictionsOrModels as Record<string, number[][]>;
+      for (const modelKey of Object.keys(modelsData)) {
+        const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+        if (modelsData[modelKey]) {
+          const dayPredictSlice = modelsData[modelKey].slice(0, 24);
+          const dayPredictSum = dayPredictSlice.reduce((a, b) => a + b[0], 0);
+          bridgePoint[mDisplayName] = Number(dayPredictSum.toFixed(2));
+        }
+      }
+    } else {
+      const predictions = predictionsOrModels as number[][];
+      const modelDisplayName = modelsList.find(m => m.name === selectedModelName)?.display_name || selectedModelName;
+      if (predictions) {
+        const dayPredictSlice = predictions.slice(0, 24);
+        const dayPredictSum = dayPredictSlice.reduce((a, b) => a + b[0], 0);
+        bridgePoint[modelDisplayName] = Number(dayPredictSum.toFixed(2));
+      }
+    }
+    chartData.push(bridgePoint);
+
+    // 2. Add aggregated daily predictions
+    for (let d = 0; d < numDays; d++) {
+      const dayDate = new Date(createdDate.getTime() + (d + 1) * 24 * 3600 * 1000);
+      const rowData: Record<string, any> = { time: formatDateLabel(dayDate) };
+
+      if (isComparison) {
+        const modelsData = predictionsOrModels as Record<string, number[][]>;
+        for (const modelKey of Object.keys(modelsData)) {
+          const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+          if (modelsData[modelKey]) {
+            const dayPredictSlice = modelsData[modelKey].slice(d * 24, (d + 1) * 24);
+            if (dayPredictSlice.length === 0) continue;
+            const dayPredictSum = dayPredictSlice.reduce((a, b) => a + b[0], 0);
+            rowData[mDisplayName] = Number(dayPredictSum.toFixed(2));
+          }
+        }
+      } else {
+        const predictions = predictionsOrModels as number[][];
+        const modelDisplayName = modelsList.find(m => m.name === selectedModelName)?.display_name || selectedModelName;
+        if (predictions) {
+          const dayPredictSlice = predictions.slice(d * 24, (d + 1) * 24);
+          if (dayPredictSlice.length === 0) continue;
+          const dayPredictSum = dayPredictSlice.reduce((a, b) => a + b[0], 0);
+          rowData[modelDisplayName] = Number(dayPredictSum.toFixed(2));
+        }
+      }
+      chartData.push(rowData);
+    }
+  }
+
+  return chartData;
+};
+
 export default function ForecastPage() {
   const { t, language } = useI18n();
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -110,10 +286,11 @@ export default function ForecastPage() {
     return 24;
   }, []);
 
-  const getTickInterval = useCallback((dataLength: number): number => {
-    if (dataLength > 1500) return 168; // Show ticks weekly (168 hours)
-    if (dataLength > 500) return 24;  // Show ticks daily (24 hours)
-    return 6;                         // Show ticks every 6 hours
+  const getTickInterval = useCallback((dataLength: number, horizon: number): number => {
+    if (horizon === 24) return 6; // Show ticks every 6 hours
+    if (horizon === 168) return 1; // Show daily ticks since there are only 15 points
+    if (horizon === 720) return 5; // Show ticks every 5 days
+    return 6;
   }, []);
 
   // Update selectedModel when selectedHorizon or models change
@@ -122,14 +299,10 @@ export default function ForecastPage() {
     if (filtered.length > 0 && !filtered.some(m => m.name === selectedModel)) {
       setSelectedModel(filtered[0].name);
     }
+    setForecastData(null);
   }, [selectedHorizon, models, selectedModel, getHorizonForModel]);
 
-  // If user switches to smart meter input, force horizon to 24h
-  useEffect(() => {
-    if (inputMethod === 'meter') {
-      setSelectedHorizon(24);
-    }
-  }, [inputMethod]);
+
 
   // Fetch models and samples from API on mount
   useEffect(() => {
@@ -196,84 +369,43 @@ export default function ForecastPage() {
     try {
       if (activeTab === 'single') {
         const result = useSmartMeter
-          ? await forecastApi.predictSmartMeter(selectedModel)
+          ? await forecastApi.predictSmartMeter(selectedModel, selectedHorizon)
           : await forecastApi.predict(selectedModel, uploadedFile || selectedSample, selectedHorizon) as unknown as Record<string, unknown>;
         const predictions = result.predictions as number[][] | undefined;
         const inputData = result.input_data as number[] | undefined;
+        const createdAt = result.created_at as string | undefined;
         
         if (predictions && Array.isArray(predictions)) {
-          const chartData: Array<Record<string, unknown>> = [];
-          const modelDisplayName = currentModel?.display_name || selectedModel;
-          
-          // Show full lookback window of real historical data
-          if (inputData && Array.isArray(inputData)) {
-            for (let i = 0; i < inputData.length; i++) {
-              chartData.push({
-                time: `H-${inputData.length - i}`,
-                historical: Number(inputData[i].toFixed(3)),
-              });
-            }
-            // Bridge point at H0: connects historical end to prediction start
-            chartData.push({
-              time: 'H',
-              historical: Number(inputData[inputData.length - 1].toFixed(3)),
-              [modelDisplayName]: Number(predictions[0][0].toFixed(3)),
-            });
-          }
-          
-          // Then append the predictions
-          for (let i = 0; i < predictions.length; i++) {
-            chartData.push({
-              time: `H+${i + 1}`,
-              [modelDisplayName]: Number(predictions[i][0].toFixed(3)),
-            });
-          }
-          
+          const chartData = processForecastChartData(
+            selectedHorizon,
+            inputData,
+            predictions,
+            false,
+            models,
+            selectedModel,
+            createdAt
+          );
           setForecastData(chartData);
         }
       } else {
         // Comparison mode
         const result = useSmartMeter
-          ? await forecastApi.compareSmartMeter()
+          ? await forecastApi.compareSmartMeter(selectedHorizon)
           : await forecastApi.compare(uploadedFile || selectedSample, selectedHorizon);
         const modelsData = result.models as Record<string, number[][]>;
         const inputData = result.input_data as number[] | undefined;
+        const createdAt = result.created_at as string | undefined;
         
         if (modelsData && Object.keys(modelsData).length > 0) {
-          const firstModel = Object.keys(modelsData)[0];
-          const length = modelsData[firstModel].length;
-          const chartData: Array<Record<string, unknown>> = [];
-          
-          // Show full lookback window of real historical data
-          if (inputData && Array.isArray(inputData)) {
-            for (let i = 0; i < inputData.length; i++) {
-              chartData.push({
-                time: `H-${inputData.length - i}`,
-                historical: Number(inputData[i].toFixed(3)),
-              });
-            }
-            // Bridge point at H0
-            const bridgePoint: Record<string, unknown> = {
-              time: 'H',
-              historical: Number(inputData[inputData.length - 1].toFixed(3)),
-            };
-            for (const modelKey of Object.keys(modelsData)) {
-              const mDisplayName = models.find(m => m.name === modelKey || m.name === `${modelKey}_${selectedHorizon}`)?.display_name || modelKey;
-              bridgePoint[mDisplayName] = Number(modelsData[modelKey][0][0].toFixed(3));
-            }
-            chartData.push(bridgePoint);
-          }
-          
-          // Then append predictions from each model
-          for (let i = 0; i < length; i++) {
-            const rowData: Record<string, unknown> = { time: `H+${i + 1}` };
-            
-            for (const modelKey of Object.keys(modelsData)) {
-              const mDisplayName = models.find(m => m.name === modelKey || m.name === `${modelKey}_${selectedHorizon}`)?.display_name || modelKey;
-              rowData[mDisplayName] = Number(modelsData[modelKey][i][0].toFixed(3));
-            }
-            chartData.push(rowData);
-          }
+          const chartData = processForecastChartData(
+            selectedHorizon,
+            inputData,
+            modelsData,
+            true,
+            models,
+            selectedModel,
+            createdAt
+          );
           setForecastData(chartData);
         }
       }
@@ -366,7 +498,6 @@ export default function ForecastPage() {
                 ].map((opt) => (
                   <button
                     key={opt.value}
-                    disabled={inputMethod === 'meter' && opt.value !== 24}
                     onClick={() => setSelectedHorizon(opt.value)}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                       selectedHorizon === opt.value
@@ -742,7 +873,7 @@ export default function ForecastPage() {
                             axisLine={false}
                             tickLine={false}
                             tick={{ fill: '#64748B', fontSize: 11 }}
-                            interval={getTickInterval(forecastData.length)}
+                            interval={getTickInterval(forecastData.length, selectedHorizon)}
                           />
                           <YAxis
                             axisLine={false}
@@ -752,12 +883,12 @@ export default function ForecastPage() {
                           />
                           <Tooltip
                             contentStyle={{
-                              backgroundColor: '#111827',
-                              border: '1px solid rgba(59,130,246,0.15)',
-                              borderRadius: '12px',
-                              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-                              color: '#E2E8F0',
-                              fontSize: '13px',
+                                backgroundColor: '#111827',
+                                border: '1px solid rgba(59,130,246,0.15)',
+                                borderRadius: '12px',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                                color: '#E2E8F0',
+                                fontSize: '13px',
                             }}
                           />
                           <Area
@@ -766,7 +897,7 @@ export default function ForecastPage() {
                             stroke="#3B82F6"
                             strokeWidth={2}
                             fill="url(#gradHistorical)"
-                            name="Historical (kW)"
+                            name={selectedHorizon === 24 ? "Historical (kW)" : "Historical (kWh)"}
                             connectNulls={false}
                           />
                           <Area
@@ -776,7 +907,7 @@ export default function ForecastPage() {
                             strokeWidth={2}
                             strokeDasharray="5 3"
                             fill="url(#gradPredicted)"
-                            name="Predicted (kW)"
+                            name={selectedHorizon === 24 ? "Predicted (kW)" : "Predicted (kWh)"}
                             connectNulls={false}
                           />
                         </AreaChart>
@@ -862,7 +993,7 @@ export default function ForecastPage() {
                             axisLine={false}
                             tickLine={false}
                             tick={{ fill: '#64748B', fontSize: 11 }}
-                            interval={getTickInterval(forecastData.length)}
+                            interval={getTickInterval(forecastData.length, selectedHorizon)}
                           />
                           <YAxis
                             axisLine={false}

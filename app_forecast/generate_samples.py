@@ -24,7 +24,7 @@ TARGET_COLS = [
 
 LOOKBACK = 96
 HORIZON = 24
-WINDOW_SIZE = LOOKBACK + HORIZON  # 120 rows per sample
+WINDOW_SIZE = 1500  # to satisfy 1-month horizon lookback (1440 hours)
 
 
 def load_and_preprocess(filepath):
@@ -73,7 +73,7 @@ def main():
     # --- 2. Extract sample windows from the 2010 test set ---
     os.makedirs(SAMPLES_DIR, exist_ok=True)
 
-    test_mask = df_h.index >= '2010-01-01'
+    test_mask = df_h.index >= '2009-01-01'
     df_test = df_h.loc[test_mask, TARGET_COLS]
     print(f"\nTest set: {len(df_test)} hours ({df_test.index[0]} to {df_test.index[-1]})")
 
@@ -89,9 +89,9 @@ def main():
          'desc': 'Summer weekday (July) — low heating, cooling spikes'},
         {'name': 'summer_weekend_aug', 'start': '2010-08-14 00:00:00',
          'desc': 'Summer weekend (August) — vacation/relaxed patterns'},
-        {'name': 'autumn_evening_oct', 'start': '2010-10-18 00:00:00',
+        {'name': 'autumn_evening_oct', 'start': '2009-10-12 00:00:00',
          'desc': 'Autumn weekday (October) — evening peaks returning'},
-        {'name': 'late_autumn_nov', 'start': '2010-11-08 00:00:00',
+        {'name': 'late_autumn_nov', 'start': '2009-11-02 00:00:00',
          'desc': 'Late autumn (November) — heating ramp-up'},
     ]
 
