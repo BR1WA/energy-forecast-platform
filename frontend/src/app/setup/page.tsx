@@ -17,6 +17,7 @@ export default function SetupWizard() {
   const [sensorType, setSensorType] = useState("simulator");
   const [sensorApiUrl, setSensorApiUrl] = useState("");
   const [plan, setPlan] = useState("free");
+  const [budgetValue, setBudgetValue] = useState("500");
 
   const handleComplete = async () => {
     setIsSubmitting(true);
@@ -36,6 +37,18 @@ export default function SetupWizard() {
       };
 
       await settingsApi.postSetup(payload);
+
+      // Save monthly budget
+      try {
+        const val = parseFloat(budgetValue);
+        if (!isNaN(val) && val > 0) {
+          await settingsApi.setBudget({
+            monthly_budget_mad: val,
+          });
+        }
+      } catch (budgetErr) {
+        console.error("Failed to set budget during setup:", budgetErr);
+      }
 
       // Save user's selected subscription plan
       try {
@@ -66,14 +79,14 @@ export default function SetupWizard() {
 
       <div className="w-full max-w-2xl bg-[#111827]/80 backdrop-blur-xl border border-blue-500/20 rounded-3xl overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-95 duration-300">
         <div className="flex border-b border-white/5 bg-white/[0.02]">
-          {[1, 2].map((s) => (
+          {[1, 2, 3].map((s) => (
             <div 
               key={s} 
               className={`flex-1 p-5 text-center text-xs font-bold uppercase tracking-wider transition-colors ${
                 step === s ? "text-blue-400 border-b-2 border-blue-500 bg-blue-500/5" : "text-slate-500"
               }`}
             >
-              {s === 1 ? "Step 1: Telemetry Setup" : "Step 2: Plan Setup"}
+              {s === 1 ? "Step 1: Telemetry" : s === 2 ? "Step 2: Budget" : "Step 3: Plan"}
             </div>
           ))}
         </div>
@@ -148,13 +161,64 @@ export default function SetupWizard() {
                   onClick={() => setStep(2)}
                   className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-500/20"
                 >
-                  Next: Choose Plan <ArrowRight className="w-4 h-4" />
+                  Next: Monthly Budget <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           )}
 
           {step === 2 && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="p-3 bg-blue-500/20 text-blue-400 rounded-2xl">
+                  <Settings className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Monthly Budget Setup</h2>
+                  <p className="text-slate-400 text-sm">Set your target monthly electricity budget in MAD.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-6 rounded-2xl border border-white/10 bg-[#1A2333]/50 space-y-4">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Setting a target budget allows the Enedis Linky simulator and AI forecasting models to estimate your progression through the Moroccan National ONEE tiered pricing system. You will receive alert warnings on the dashboard if your projected usage exceeds this threshold.
+                  </p>
+                  
+                  <div className="relative mt-2">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500">
+                      MAD
+                    </span>
+                    <input 
+                      type="number" 
+                      value={budgetValue} 
+                      onChange={(e) => setBudgetValue(e.target.value)}
+                      className="w-full bg-[#111827] border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl pl-16 pr-4 py-3 text-sm text-white outline-none transition-all font-mono"
+                      placeholder="500"
+                      min="1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-6 border-t border-white/5">
+                <button 
+                  onClick={() => setStep(1)}
+                  className="px-6 py-3 rounded-xl font-bold text-xs text-slate-400 hover:text-white transition-colors"
+                >
+                  Back
+                </button>
+                <button 
+                  onClick={() => setStep(3)}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-500/20"
+                >
+                  Next: Choose Plan <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
               <div className="flex items-center gap-4 mb-6">
                 <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl">
@@ -195,7 +259,7 @@ export default function SetupWizard() {
 
               <div className="flex justify-between pt-8 border-t border-white/5">
                 <button 
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   className="px-6 py-3 rounded-xl font-bold text-xs text-slate-400 hover:text-white transition-colors"
                 >
                   Back
