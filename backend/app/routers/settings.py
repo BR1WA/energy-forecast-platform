@@ -25,6 +25,9 @@ class PreferencesPayload(BaseModel):
     language: str | None = None
     email_alerts: bool | None = None
     push_alerts: bool | None = None
+    default_model_24: str | None = None
+    default_model_168: str | None = None
+    default_model_720: str | None = None
 
 class BudgetPayload(BaseModel):
     monthly_budget_mad: float
@@ -117,6 +120,12 @@ def update_preferences(
         prefs["email_alerts"] = payload.email_alerts
     if payload.push_alerts is not None:
         prefs["push_alerts"] = payload.push_alerts
+    if payload.default_model_24 is not None:
+        prefs["default_model_24"] = payload.default_model_24
+    if payload.default_model_168 is not None:
+        prefs["default_model_168"] = payload.default_model_168
+    if payload.default_model_720 is not None:
+        prefs["default_model_720"] = payload.default_model_720
         
     current_user.preferences = prefs
     db.commit()
