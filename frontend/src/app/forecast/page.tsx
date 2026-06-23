@@ -42,6 +42,7 @@ import {
 
 import { forecastApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth';
 
 // Icon and color mapping for models
 const modelMeta: Record<string, { icon: typeof Brain; color: string }> = {
@@ -97,6 +98,21 @@ const processForecastChartData = (
   if (!inputData || !Array.isArray(inputData)) return chartData;
   if (!predictionsOrModels) return chartData;
 
+  const getModelDisplayName = (modelKey: string, h: number) => {
+    return modelsList.find((m) => {
+      const matchName = m.name === modelKey || m.name === `${modelKey}_${h}`;
+      if (!matchName) return false;
+      const hParam = m.parameters?.forecast_horizon;
+      if (hParam) {
+        if (hParam.includes(String(h)) || hParam.toLowerCase().includes(h === 168 ? 'week' : h === 720 ? 'month' : 'day')) return true;
+      }
+      if (h === 168 && m.name.endsWith('_168')) return true;
+      if (h === 720 && m.name.endsWith('_720')) return true;
+      if (h === 24 && !m.name.endsWith('_168') && !m.name.endsWith('_720')) return true;
+      return false;
+    })?.display_name || modelKey;
+  };
+
   // Determine lookback based on horizon
   let lookback = 96;
   if (horizon === 168) lookback = 512;
@@ -129,7 +145,7 @@ const processForecastChartData = (
     if (isComparison) {
       const modelsData = predictionsOrModels as Record<string, number[][]>;
       for (const modelKey of Object.keys(modelsData)) {
-        const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+        const mDisplayName = getModelDisplayName(modelKey, horizon);
         if (modelsData[modelKey] && modelsData[modelKey].length > 0) {
           bridgePoint[mDisplayName] = Number(modelsData[modelKey][0][0].toFixed(3));
         }
@@ -153,7 +169,7 @@ const processForecastChartData = (
         const timeLabel = pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const rowData: Record<string, any> = { time: timeLabel };
         for (const modelKey of Object.keys(modelsData)) {
-          const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+          const mDisplayName = getModelDisplayName(modelKey, horizon);
           if (modelsData[modelKey] && modelsData[modelKey][i]) {
             rowData[mDisplayName] = Number(modelsData[modelKey][i][0].toFixed(3));
           }
@@ -207,7 +223,7 @@ const processForecastChartData = (
     if (isComparison) {
       const modelsData = predictionsOrModels as Record<string, number[][]>;
       for (const modelKey of Object.keys(modelsData)) {
-        const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+        const mDisplayName = getModelDisplayName(modelKey, horizon);
         if (modelsData[modelKey]) {
           const dayPredictSlice = modelsData[modelKey].slice(0, 24);
           const dayPredictSum = dayPredictSlice.reduce((a, b) => a + b[0], 0);
@@ -233,7 +249,7 @@ const processForecastChartData = (
       if (isComparison) {
         const modelsData = predictionsOrModels as Record<string, number[][]>;
         for (const modelKey of Object.keys(modelsData)) {
-          const mDisplayName = modelsList.find(m => m.name === modelKey || m.name === `${modelKey}_${horizon}`)?.display_name || modelKey;
+          const mDisplayName = getModelDisplayName(modelKey, horizon);
           if (modelsData[modelKey]) {
             const dayPredictSlice = modelsData[modelKey].slice(d * 24, (d + 1) * 24);
             if (dayPredictSlice.length === 0) continue;
@@ -260,6 +276,7 @@ const processForecastChartData = (
 
 export default function ForecastPage() {
   const { t, language } = useI18n();
+  const { user } = useAuth();
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [sampleDatasets, setSampleDatasets] = useState<SampleInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -296,11 +313,21 @@ export default function ForecastPage() {
   // Update selectedModel when selectedHorizon or models change
   useEffect(() => {
     const filtered = models.filter(m => getHorizonForModel(m) === selectedHorizon);
-    if (filtered.length > 0 && !filtered.some(m => m.name === selectedModel)) {
-      setSelectedModel(filtered[0].name);
+    if (filtered.length > 0) {
+      let preferredModelName = '';
+      if (selectedHorizon === 24) preferredModelName = user?.preferences?.default_model_24 || 'sota';
+      else if (selectedHorizon === 168) preferredModelName = user?.preferences?.default_model_168 || 'itransformer_168';
+      else if (selectedHorizon === 720) preferredModelName = user?.preferences?.default_model_720 || 'itransformer_720';
+      
+      const hasPreferred = filtered.some(m => m.name === preferredModelName);
+      if (hasPreferred) {
+        setSelectedModel(preferredModelName);
+      } else if (!filtered.some(m => m.name === selectedModel)) {
+        setSelectedModel(filtered[0].name);
+      }
     }
     setForecastData(null);
-  }, [selectedHorizon, models, selectedModel, getHorizonForModel]);
+  }, [selectedHorizon, models, selectedModel, getHorizonForModel, user?.preferences]);
 
 
 
@@ -310,7 +337,22 @@ export default function ForecastPage() {
       .then((data) => {
         const parsed = data as unknown as ModelInfo[];
         setModels(parsed);
-        if (parsed.length > 0) setSelectedModel(parsed[0].name);
+        if (parsed.length > 0) {
+          const filtered = parsed.filter(m => getHorizonForModel(m) === selectedHorizon);
+          let preferredModelName = '';
+          if (selectedHorizon === 24) preferredModelName = user?.preferences?.default_model_24 || 'sota';
+          else if (selectedHorizon === 168) preferredModelName = user?.preferences?.default_model_168 || 'itransformer_168';
+          else if (selectedHorizon === 720) preferredModelName = user?.preferences?.default_model_720 || 'itransformer_720';
+          
+          const hasPreferred = filtered.some(m => m.name === preferredModelName);
+          if (hasPreferred) {
+            setSelectedModel(preferredModelName);
+          } else if (filtered.length > 0) {
+            setSelectedModel(filtered[0].name);
+          } else {
+            setSelectedModel(parsed[0].name);
+          }
+        }
       })
       .catch(() => {});
 
