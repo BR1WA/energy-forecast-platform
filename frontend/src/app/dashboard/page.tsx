@@ -385,8 +385,13 @@ export default function DashboardPage() {
       try {
         const horizonNum = parseInt(dashboardTimeframe);
         let modelName = 'sota';
-        if (horizonNum === 168) modelName = 'patchtst_168';
-        if (horizonNum === 720) modelName = 'patchtst_720';
+        if (horizonNum === 168) {
+          modelName = user?.preferences?.default_model_168 || 'itransformer_168';
+        } else if (horizonNum === 720) {
+          modelName = user?.preferences?.default_model_720 || 'itransformer_720';
+        } else {
+          modelName = user?.preferences?.default_model_24 || 'sota';
+        }
 
         const result = await forecastApi.predictSmartMeter(modelName, horizonNum);
         const processed = processDashboardForecastData(
