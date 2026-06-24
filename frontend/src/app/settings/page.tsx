@@ -9,17 +9,62 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
-import { authApi, alertsApi, settingsApi, billingApi } from '@/lib/api';
+import { authApi, alertsApi, settingsApi, billingApi, forecastApi } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard, AlertCircle, Zap } from 'lucide-react';
+import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard, AlertCircle, Zap, Cpu, Sparkles, Brain } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useI18n();
   const router = useRouter();
+
+  // Model settings state
+  const [modelsList, setModelsList] = useState<any[]>([]);
+  const [selectedModel24, setSelectedModel24] = useState('sota');
+  const [selectedModel168, setSelectedModel168] = useState('itransformer_168');
+  const [selectedModel720, setSelectedModel720] = useState('itransformer_720');
+  const [isSavingModels, setIsSavingModels] = useState(false);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const data = await forecastApi.getModels();
+        setModelsList(data);
+      } catch (err) {
+        console.error("Failed to load models for settings page:", err);
+      }
+    };
+    fetchModels();
+  }, []);
+
+  useEffect(() => {
+    if (user?.preferences) {
+      if (user.preferences.default_model_24) setSelectedModel24(user.preferences.default_model_24);
+      if (user.preferences.default_model_168) setSelectedModel168(user.preferences.default_model_168);
+      if (user.preferences.default_model_720) setSelectedModel720(user.preferences.default_model_720);
+    }
+  }, [user]);
+
+  const handleSaveModels = async () => {
+    setIsSavingModels(true);
+    try {
+      await settingsApi.updatePreferences({
+        default_model_24: selectedModel24,
+        default_model_168: selectedModel168,
+        default_model_720: selectedModel720,
+      });
+      await refreshUser();
+      toast.success("Default forecasting models updated successfully!");
+    } catch (err) {
+      console.error("Failed to save default models:", err);
+      toast.error("Failed to save model configurations.");
+    } finally {
+      setIsSavingModels(false);
+    }
+  };
   const [isCancelling, setIsCancelling] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
 
@@ -170,6 +215,10 @@ export default function SettingsPage() {
             <TabsTrigger value="subscription" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
               <CreditCard className="w-4 h-4 mr-2" />
               Subscription
+            </TabsTrigger>
+            <TabsTrigger value="models" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">
+              <Cpu className="w-4 h-4 mr-2" />
+              Models
             </TabsTrigger>
           </TabsList>
 
@@ -490,6 +539,162 @@ export default function SettingsPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Models Tab */}
+          <TabsContent value="models" className="space-y-6">
+            <Card className="bg-[#111827]/50 border-white/[0.06]">
+              <CardHeader>
+                <CardTitle className="text-lg text-white flex items-center gap-2">
+                  <Cpu className="w-5 h-5 text-blue-400" />
+                  Default Forecasting Models
+                </CardTitle>
+                <CardDescription className="text-slate-400">
+                  Select which state-of-the-art machine learning model to use for each forecasting horizon by default.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* 24h Horizon Selector */}
+                  <div className="space-y-2">
+                    <Label htmlFor="model-24h" className="text-slate-300 font-medium">Day Forecast (24 Hours)</Label>
+                    <select
+                      id="model-24h"
+                      value={selectedModel24}
+                      onChange={(e) => setSelectedModel24(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-[#0A0F1C] border border-white/[0.08] text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-sm"
+                    >
+                      {modelsList.filter(m => {
+                        const h = m.parameters?.forecast_horizon;
+                        return h?.includes('24') || h?.toLowerCase().includes('day') || (!m.name.includes('_168') && !m.name.includes('_720'));
+                      }).map(m => (
+                        <option key={m.name} value={m.name} className="bg-[#111827]">{m.display_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 168h Horizon Selector */}
+                  <div className="space-y-2">
+                    <Label htmlFor="model-168h" className="text-slate-300 font-medium">Week Forecast (1 Week)</Label>
+                    <select
+                      id="model-168h"
+                      value={selectedModel168}
+                      onChange={(e) => setSelectedModel168(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-[#0A0F1C] border border-white/[0.08] text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-sm"
+                    >
+                      {modelsList.filter(m => {
+                        const h = m.parameters?.forecast_horizon;
+                        return h?.includes('168') || h?.toLowerCase().includes('week') || m.name.includes('_168');
+                      }).map(m => (
+                        <option key={m.name} value={m.name} className="bg-[#111827]">{m.display_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 720h Horizon Selector */}
+                  <div className="space-y-2">
+                    <Label htmlFor="model-720h" className="text-slate-300 font-medium">Month Forecast (1 Month)</Label>
+                    <select
+                      id="model-720h"
+                      value={selectedModel720}
+                      onChange={(e) => setSelectedModel720(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-[#0A0F1C] border border-white/[0.08] text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-sm"
+                    >
+                      {modelsList.filter(m => {
+                        const h = m.parameters?.forecast_horizon;
+                        return h?.includes('720') || h?.toLowerCase().includes('month') || m.name.includes('_720');
+                      }).map(m => (
+                        <option key={m.name} value={m.name} className="bg-[#111827]">{m.display_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-white/[0.06]">
+                  <Button
+                    onClick={handleSaveModels}
+                    disabled={isSavingModels}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl transition-all font-medium text-xs h-10"
+                  >
+                    {isSavingModels ? "Saving..." : "Save Model Preferences"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Performance Registry Grid */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
+                  Model Performance Registry
+                </h3>
+                <p className="text-sm text-slate-400 mt-1">
+                  Inspect the official training accuracy, loss metrics, and architecture configuration parameters for each model.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {modelsList.map((model) => {
+                  const is24 = !model.name.includes('_168') && !model.name.includes('_720');
+                  const is168 = model.name.includes('_168');
+                  const horizonText = is24 ? "24 Hours" : is168 ? "1 Week (168 Hours)" : "1 Month (720 Hours)";
+                  const horizonColor = is24 ? "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" : is168 ? "text-purple-400 bg-purple-500/10 border-purple-500/20" : "text-amber-400 bg-amber-500/10 border-amber-500/20";
+                  
+                  return (
+                    <Card key={model.id} className="bg-[#111827]/30 border-white/[0.06] hover:border-white/[0.1] transition-all flex flex-col justify-between">
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-base text-white font-bold">{model.display_name}</CardTitle>
+                            <CardDescription className="text-xs text-slate-500 mt-0.5 capitalize">{model.architecture_type} Architecture</CardDescription>
+                          </div>
+                          <span className={`text-[10px] px-2.5 py-0.5 rounded-full border font-medium ${horizonColor}`}>
+                            {horizonText}
+                          </span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4 text-sm pb-5">
+                        <p className="text-xs text-slate-400 leading-relaxed">{model.description}</p>
+                        
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.04]">
+                          <div>
+                            <span className="text-xs text-slate-500 block">Lookback Window</span>
+                            <span className="font-semibold text-slate-300">{model.parameters?.lookback_window || '96 Hours'}</span>
+                          </div>
+                          <div>
+                            <span className="text-xs text-slate-500 block">Training Accuracy</span>
+                            <span className="font-semibold text-emerald-400">{model.accuracy}%</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-white/[0.04] space-y-1.5">
+                          <span className="text-xs text-slate-500 block font-medium">Evaluation Metrics</span>
+                          <div className="grid grid-cols-4 gap-2 text-xs">
+                            <div className="bg-[#0A0F1C]/40 p-1.5 rounded-lg text-center">
+                              <span className="text-slate-500 block scale-90">MAE</span>
+                              <span className="text-slate-300 font-semibold">{model.training_metrics?.mae?.toFixed(4) || '—'}</span>
+                            </div>
+                            <div className="bg-[#0A0F1C]/40 p-1.5 rounded-lg text-center">
+                              <span className="text-slate-500 block scale-90">RMSE</span>
+                              <span className="text-slate-300 font-semibold">{model.training_metrics?.rmse?.toFixed(4) || '—'}</span>
+                            </div>
+                            <div className="bg-[#0A0F1C]/40 p-1.5 rounded-lg text-center">
+                              <span className="text-slate-500 block scale-90">MAPE</span>
+                              <span className="text-slate-300 font-semibold">{model.training_metrics?.mape ? `${model.training_metrics.mape.toFixed(2)}%` : '—'}</span>
+                            </div>
+                            <div className="bg-[#0A0F1C]/40 p-1.5 rounded-lg text-center">
+                              <span className="text-slate-500 block scale-90">R²</span>
+                              <span className="text-slate-300 font-semibold">{model.training_metrics?.r2_score?.toFixed(4) || '—'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
