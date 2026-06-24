@@ -60,10 +60,10 @@ const trainingMetrics: Record<string, { mae: string; rmse: string; mape: string;
   patchtst: { mae: '0.4519 kW', rmse: '0.6445 kW', mape: '55.97%', r2_score: '0.8142' },
   sota: { mae: '0.4614 kW', rmse: '0.6623 kW', mape: '55.13%', r2_score: '0.8407' },
   cnn_bilstm: { mae: '0.5335 kW', rmse: '0.7072 kW', mape: '77.36%', r2_score: '0.6914' },
-  patchtst_168: { mae: '0.4320 kW', rmse: '0.6120 kW', mape: '51.20%', r2_score: '0.8250' },
-  itransformer_168: { mae: '0.4210 kW', rmse: '0.6010 kW', mape: '49.80%', r2_score: '0.8320' },
-  patchtst_720: { mae: '0.4850 kW', rmse: '0.6850 kW', mape: '58.70%', r2_score: '0.7840' },
-  itransformer_720: { mae: '0.4680 kW', rmse: '0.6540 kW', mape: '56.20%', r2_score: '0.8050' },
+  patchtst_168: { mae: '0.4630 kW', rmse: '0.6560 kW', mape: '55.40%', r2_score: '0.2945' },
+  itransformer_168: { mae: '0.4454 kW', rmse: '0.6350 kW', mape: '52.80%', r2_score: '0.3082' },
+  patchtst_720: { mae: '0.4950 kW', rmse: '0.7020 kW', mape: '60.10%', r2_score: '0.1697' },
+  itransformer_720: { mae: '0.4579 kW', rmse: '0.6540 kW', mape: '56.20%', r2_score: '0.2417' },
 };
 
 interface ModelInfo {

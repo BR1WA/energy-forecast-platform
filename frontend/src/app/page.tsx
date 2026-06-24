@@ -302,7 +302,7 @@ export default function MarketingLandingPage() {
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
                   <span className="text-slate-500">Regression Accuracy (R²)</span>
-                  <span className="text-emerald-400 font-mono font-bold">0.8320</span>
+                  <span className="text-emerald-400 font-mono font-bold">0.2417 - 0.3082</span>
                 </div>
                 <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
                   <span className="text-slate-500">Lookback Sequence</span>
@@ -332,7 +332,7 @@ export default function MarketingLandingPage() {
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
                   <span className="text-slate-500">Regression Accuracy (R²)</span>
-                  <span className="text-emerald-400 font-mono font-bold">0.8250</span>
+                  <span className="text-emerald-400 font-mono font-bold">0.1697 - 0.2945</span>
                 </div>
                 <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
                   <span className="text-slate-500">Lookback Sequence</span>
