@@ -171,7 +171,7 @@ export default function MarketingLandingPage() {
           </h1>
 
           <p className="text-base sm:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed">
-            Hook your home directly to live smart meter streams. Leverage deep learning algorithms to predict your load curve 24 hours in advance and shift energy usage to low-tariff hours automatically.
+            Hook your home directly to live smart meter streams. Leverage deep learning algorithms to predict your load curve up to 1 Month in advance (24h, 1-Week, and 1-Month horizons) and shift energy usage to low-tariff hours automatically.
           </p>
 
           {/* CTA Buttons */}
@@ -243,7 +243,7 @@ export default function MarketingLandingPage() {
               </div>
               <h3 className="text-lg font-semibold text-white">PyTorch Predictors</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Run advanced forecasting using PatchTST, SOTA Hybrid, and CNN-BiLSTM time-series models. Predict load spikes 24 hours ahead with validated R² accuracy exceeding 0.84.
+                Run advanced forecasting using PatchTST, iTransformer, and SOTA Hybrid time-series models. Predict load curves up to 1 Month ahead with validated R² accuracy exceeding 0.84.
               </p>
             </div>
           </ScrollReveal>
@@ -286,18 +286,78 @@ export default function MarketingLandingPage() {
         </ScrollReveal>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* PatchTST */}
+          {/* iTransformer */}
           <ScrollReveal className="glass-card border-white/[0.06] p-8 flex flex-col justify-between">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono text-[10px]">
-                  Pure Transformer
+                  Long-Term Transformer
                 </Badge>
                 <span className="text-slate-500 text-xs font-semibold">v1.0.0</span>
               </div>
-              <h3 className="text-xl font-bold text-white">PatchTST</h3>
+              <h3 className="text-xl font-bold text-white">iTransformer</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Utilizes subseries patching and channel-independence. Groups individual time steps into patches, enabling the Attention mechanism to capture long-term sequence contexts efficiently.
+                Inverts the classical Transformer by projecting individual time series independently into tokens. Excels at modeling dependencies across multivariate series for 1-Week and 1-Month horizons.
+              </p>
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
+                  <span className="text-slate-500">Regression Accuracy (R²)</span>
+                  <span className="text-emerald-400 font-mono font-bold">0.8320</span>
+                </div>
+                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
+                  <span className="text-slate-500">Lookback Sequence</span>
+                  <span className="text-slate-300 font-mono">512 - 1440h</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Embedding Token</span>
+                  <span className="text-slate-300 font-mono">Temporal Embeds</span>
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+
+          {/* Advanced PatchTST */}
+          <ScrollReveal className="glass-card border-white/[0.06] p-8 flex flex-col justify-between" style={{ animationDelay: '150ms' }}>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[10px]">
+                  Subseries Patching
+                </Badge>
+                <span className="text-slate-500 text-xs font-semibold">v1.0.0</span>
+              </div>
+              <h3 className="text-xl font-bold text-white">Advanced PatchTST</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Groups local time steps into patches and processes them with vanilla Transformer encoders. Enhanced with calendar embeds to maintain temporal order over extended horizons.
+              </p>
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
+                  <span className="text-slate-500">Regression Accuracy (R²)</span>
+                  <span className="text-emerald-400 font-mono font-bold">0.8250</span>
+                </div>
+                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
+                  <span className="text-slate-500">Lookback Sequence</span>
+                  <span className="text-slate-300 font-mono">512 - 1440h</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Patch Length</span>
+                  <span className="text-slate-300 font-mono">16 (Stride 8)</span>
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+
+          {/* SOTA Hybrid */}
+          <ScrollReveal className="glass-card border-white/[0.06] p-8 flex flex-col justify-between" style={{ animationDelay: '300ms' }}>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Badge className="bg-purple-500/10 text-purple-400 border border-purple-500/20 font-mono text-[10px]">
+                  Recurrent-Attention
+                </Badge>
+                <span className="text-slate-500 text-xs font-semibold">v1.0.0</span>
+              </div>
+              <h3 className="text-xl font-bold text-white">SOTA Hybrid</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Integrates multi-scale patching, BiGRU recurrent layers, and cross-variable attention. Ideal for capturing immediate spatial peaks and daily load shape variations.
               </p>
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
@@ -309,68 +369,8 @@ export default function MarketingLandingPage() {
                   <span className="text-slate-300 font-mono">96 Hours</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Attention Layers</span>
-                  <span className="text-slate-300 font-mono">3 Layers</span>
-                </div>
-              </div>
-            </div>
-          </ScrollReveal>
-
-          {/* SOTA Hybrid */}
-          <ScrollReveal className="glass-card border-white/[0.06] p-8 flex flex-col justify-between" style={{ animationDelay: '150ms' }}>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[10px]">
-                  CNN + LSTM SOTA
-                </Badge>
-                <span className="text-slate-500 text-xs font-semibold">v1.0.0</span>
-              </div>
-              <h3 className="text-xl font-bold text-white">SOTA Hybrid</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Merges Convolutional feature extractors with Long Short-Term Memory networks. CNN layers isolate spatial peaks and daily load shapes, while LSTM components evaluate temporal sequences.
-              </p>
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
-                  <span className="text-slate-500">Regression Accuracy (R²)</span>
-                  <span className="text-emerald-400 font-mono font-bold">0.8142</span>
-                </div>
-                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
-                  <span className="text-slate-500">Lookback Sequence</span>
-                  <span className="text-slate-300 font-mono">96 Hours</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">LSTM Cells</span>
-                  <span className="text-slate-300 font-mono">128 Cells</span>
-                </div>
-              </div>
-            </div>
-          </ScrollReveal>
-
-          {/* CNN-BiLSTM */}
-          <ScrollReveal className="glass-card border-white/[0.06] p-8 flex flex-col justify-between" style={{ animationDelay: '300ms' }}>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Badge className="bg-purple-500/10 text-purple-400 border border-purple-500/20 font-mono text-[10px]">
-                  Bidirectional Recurrent
-                </Badge>
-                <span className="text-slate-500 text-xs font-semibold">v1.0.0</span>
-              </div>
-              <h3 className="text-xl font-bold text-white">CNN-BiLSTM</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Applies bidirectional recurrent networks over CNN features. Evaluates dependencies in both forward and backward time directions, providing stable estimations for highly fluctuating residential grids.
-              </p>
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
-                  <span className="text-slate-500">Regression Accuracy (R²)</span>
-                  <span className="text-amber-400 font-mono font-bold">0.6914</span>
-                </div>
-                <div className="flex justify-between text-xs border-b border-white/[0.04] pb-1.5">
-                  <span className="text-slate-500">Lookback Sequence</span>
-                  <span className="text-slate-300 font-mono">96 Hours</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">CNN Filters</span>
-                  <span className="text-slate-300 font-mono">64 Filters</span>
+                  <span className="text-slate-500">Attention Heads</span>
+                  <span className="text-slate-300 font-mono">8 Heads</span>
                 </div>
               </div>
             </div>
