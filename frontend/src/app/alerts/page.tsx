@@ -29,10 +29,12 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { alertsApi, settingsApi } from '@/lib/api';
+import { alertsApi, settingsApi, getAccessToken } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { Alert } from '@/types';
 import { toast } from 'sonner';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import { useAuth } from '@/lib/auth';
 
 const severityConfig: Record<string, any> = {
   critical: {
@@ -66,6 +68,7 @@ const severityConfig: Record<string, any> = {
 };
 
 export default function AlertsPage() {
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all');
   const [threshold, setThreshold] = useState('3.0');
   const [sensitivity, setSensitivity] = useState('medium');
@@ -75,6 +78,45 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [systemSettings, setSystemSettings] = useState<any>(null);
+
+  // WS Connection for real-time alerts
+  const [wsUrl, setWsUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && user) {
+      const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const host = window.location.host;
+      const token = getAccessToken();
+      setWsUrl(`${wsProto}://${host}/api/v1/alerts/ws/${user.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+    } else {
+      setWsUrl(null);
+    }
+  }, [user]);
+
+  useWebSocket(wsUrl, {
+    onMessage: (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'alert') {
+          const mappedAlert: Alert = {
+            id: payload.id || String(Date.now()),
+            type: payload.alert_type as any || 'peak_demand',
+            severity: payload.severity || 'medium',
+            title: payload.title || 'Peak Consumption Warning',
+            message: payload.message || '',
+            is_read: false,
+            created_at: payload.created_at || new Date().toISOString(),
+          };
+          setAlerts((prev) => {
+            if (prev.some(a => a.id === mappedAlert.id)) return prev;
+            return [mappedAlert, ...prev];
+          });
+        }
+      } catch (err) {
+        console.error('[WS] Error parsing message in alerts page:', err);
+      }
+    }
+  });
 
   useEffect(() => {
     const fetchAlertsAndConfig = async () => {
