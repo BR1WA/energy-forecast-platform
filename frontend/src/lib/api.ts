@@ -412,6 +412,9 @@ export const settingsApi = {
     language?: string;
     email_alerts?: boolean;
     push_alerts?: boolean;
+    default_model_24?: string;
+    default_model_168?: string;
+    default_model_720?: string;
   }): Promise<{ message: string; preferences: UserPreferences }> =>
     apiFetch('/api/v1/settings/preferences', {
       method: 'PUT',
