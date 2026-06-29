@@ -171,12 +171,7 @@ export default function LoginPage() {
                     Sign up
                   </Link>
                 </p>
-                <div className="border-t border-white/[0.04] pt-3">
-                  <p className="text-xs text-slate-500">
-                    Demo Credentials: <br />
-                    <span className="font-mono text-slate-400">admin@energyforecast.com</span> / <span className="font-mono text-slate-400">admin123</span>
-                  </p>
-                </div>
+
               </div>
             </CardContent>
           </Card>
