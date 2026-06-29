@@ -47,7 +47,6 @@ async def lifespan(app: FastAPI):
 
     try:
         logger.info("[DB] Running database migrations...")
-        Base.metadata.create_all(bind=engine)
         backend_dir = os.path.dirname(os.path.dirname(__file__))
         alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
         alembic_cfg = Config(alembic_ini_path)
@@ -106,7 +105,7 @@ async def lifespan(app: FastAPI):
                                 uid = int(user_id_str)
                                 # Query AlertConfig for this user
                                 config = db_session.query(AlertConfig).filter(AlertConfig.user_id == uid).first()
-                                threshold = config.threshold_kw if config else 4.0
+                                threshold = config.threshold_kw if config else 3.0
                                 
                                 # Peak Consumption Alert
                                 if val > threshold:
