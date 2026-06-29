@@ -794,6 +794,15 @@ elif page == "📊 Sub-Metering":
 
     breakdown, total_wh = AppPredictor.compute_sub_metering_breakdown(forecast_df)
 
+    # Compute "other" per hour safely in main module scope to prevent NameError in heatmap
+    gap_wh_per_hour = forecast_df['Global_active_power'].clip(lower=0).values * 1000.0
+    sub_total_per_hour = (
+        forecast_df['Sub_metering_1'].clip(lower=0).values +
+        forecast_df['Sub_metering_2'].clip(lower=0).values +
+        forecast_df['Sub_metering_3'].clip(lower=0).values
+    )
+    other_per_hour = np.maximum(0, gap_wh_per_hour - sub_total_per_hour)
+
     # KPI cards
     kpis = []
     for name, data in breakdown.items():
@@ -853,14 +862,7 @@ elif page == "📊 Sub-Metering":
                 hovertemplate=f'<b>{label}</b><br>%{{x}}: %{{y:.1f}} Wh<extra></extra>',
             ))
 
-        # Compute "other" per hour
-        gap_wh_per_hour = forecast_df['Global_active_power'].clip(lower=0).values * 1000.0 / 60.0
-        sub_total_per_hour = (
-            forecast_df['Sub_metering_1'].clip(lower=0).values +
-            forecast_df['Sub_metering_2'].clip(lower=0).values +
-            forecast_df['Sub_metering_3'].clip(lower=0).values
-        )
-        other_per_hour = np.maximum(0, gap_wh_per_hour - sub_total_per_hour)
+        # Use other_per_hour calculated in main scope
 
         fig_stack.add_trace(go.Bar(
             x=hours_str, y=other_per_hour,

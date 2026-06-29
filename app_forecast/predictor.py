@@ -213,8 +213,8 @@ class AppPredictor:
         s2 = forecast_df['Sub_metering_2'].clip(lower=0).sum()
         s3 = forecast_df['Sub_metering_3'].clip(lower=0).sum()
 
-        # "Other" = total active power (kW → Wh/min *60 for hourly) minus metered
-        gap_wh = forecast_df['Global_active_power'].clip(lower=0).sum() * 1000.0 / 60.0
+        # "Other" = total active power (kW → Wh * 1000 for hourly) minus metered
+        gap_wh = forecast_df['Global_active_power'].clip(lower=0).sum() * 1000.0
         sub_total = s1 + s2 + s3
         other = max(0, gap_wh - sub_total)
         total = sub_total + other
