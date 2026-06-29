@@ -33,7 +33,8 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(data: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, data: UserRegister, db: Session = Depends(get_db)):
     """Register a new user account."""
     # Check if email already exists
     existing = db.query(User).filter(User.email == data.email).first()
@@ -127,7 +128,12 @@ def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
         )
 
     user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == user_id).first()
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+    user = db.query(User).filter(User.id == int(user_id)).first()
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
