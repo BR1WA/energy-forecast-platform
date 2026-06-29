@@ -621,9 +621,25 @@ class ForecastService:
                     outputs = model(inputs)
                     loss = criterion(outputs, targets_real)
                 else:
-                    # Calendar features (shape [4, 96, 6])
-                    calendar_dummy = torch.randn(inputs.shape[0], 96, 6).to(self.device)
-                    outputs = model(inputs, calendar_dummy)
+                    # Generate realistic calendar features instead of random noise
+                    import random
+                    calendar_list = []
+                    for _ in range(inputs.shape[0]):
+                        # Pick a random starting hour, day, month
+                        start_h = random.randint(0, 23)
+                        start_d = random.randint(0, 6)
+                        start_m = random.randint(1, 12)
+                        
+                        # Generate consecutive hourly values for 96 steps
+                        hours = np.array([(start_h + i) % 24 for i in range(96)])
+                        days = np.array([(start_d + (start_h + i) // 24) % 7 for i in range(96)])
+                        months = np.array([start_m for _ in range(96)])
+                        
+                        cal_feat = generate_calendar_features(hours, days, months)
+                        calendar_list.append(cal_feat)
+                    
+                    calendar_real = torch.FloatTensor(np.array(calendar_list)).to(self.device)
+                    outputs = model(inputs, calendar_real)
                     loss = criterion(outputs, targets_real)
                 
                 optimizer.zero_grad()
@@ -752,6 +768,12 @@ class ForecastService:
             horizon: forecast horizon (24, 168, or 720)
             timestamps: pandas DatetimeIndex for generating temporal embedding integer labels
         """
+        # Handle NaN values in targets (e.g. forward fill, backward fill, then default to 0.0)
+        if np.isnan(targets).any():
+            df_temp = pd.DataFrame(targets)
+            df_temp = df_temp.ffill().bfill().fillna(0.0)
+            targets = df_temp.values.astype(np.float32)
+
         # Map flat model_name to self.models key depending on horizon
         full_model_key = model_name
         if horizon != 24 and not model_name.endswith(f"_{horizon}"):
@@ -780,8 +802,10 @@ class ForecastService:
                 scaled_targets = scaler.transform(targets)
                 x_targets = torch.FloatTensor(scaled_targets).unsqueeze(0).to(self.device)
             else:
-                print(f"[ML] Warning: Scaler for horizon {horizon} not found! Operating on raw values.")
-                x_targets = torch.FloatTensor(targets).unsqueeze(0).to(self.device)
+                raise ValueError(
+                    f"Scaler for horizon {horizon}h is required but not loaded. "
+                    "Make sure the scaler pickle file is present in the models/active directory."
+                )
         else:
             # 24h SOTA / PatchTST operate directly on raw kW scale
             x_targets = torch.FloatTensor(targets).unsqueeze(0).to(self.device)
