@@ -1,7 +1,7 @@
 """
 Forecast router — model inference, history, samples.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import numpy as np
@@ -21,6 +21,8 @@ from app.config import get_settings
 settings = get_settings()
 
 router = APIRouter(prefix="/api/v1/forecast", tags=["Forecasting"])
+
+HORIZON_TO_LOOKBACK = {24: 96, 168: 512, 720: 1440}
 
 
 @router.get("/models", response_model=List[ModelInfo])
@@ -42,6 +44,7 @@ def list_samples(current_user: User = Depends(get_current_user)):
 def predict(
     request: Request,
     payload: ForecastRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
 ):
@@ -54,11 +57,7 @@ def predict(
         )
 
     # Determine lookback based on horizon
-    lookback = 96
-    if payload.horizon == 168:
-        lookback = 512
-    elif payload.horizon == 720:
-        lookback = 1440
+    lookback = HORIZON_TO_LOOKBACK.get(payload.horizon, 96)
 
     # Get input data
     start_hour = None
@@ -148,16 +147,14 @@ def predict(
         db.add(alert)
 
         if email_enabled and current_user.email:
-            try:
-                from app.services.alert_service import send_alert_email
-                send_alert_email(
-                    email_to=current_user.email,
-                    alert_type=alert_data['alert_type'],
-                    severity=alert_data['severity'],
-                    message=alert_data['message'],
-                )
-            except Exception as email_err:
-                print(f"Failed to dispatch alert email in route: {email_err}")
+            from app.services.alert_service import send_alert_email
+            background_tasks.add_task(
+                send_alert_email,
+                email_to=current_user.email,
+                alert_type=alert_data['alert_type'],
+                severity=alert_data['severity'],
+                message=alert_data['message'],
+            )
 
     db.commit()
     db.refresh(forecast)
@@ -185,11 +182,7 @@ def compare_models(
     service = get_forecast_service()
 
     # Determine lookback based on horizon
-    lookback = 96
-    if request.horizon == 168:
-        lookback = 512
-    elif request.horizon == 720:
-        lookback = 1440
+    lookback = HORIZON_TO_LOOKBACK.get(request.horizon, 96)
 
     timestamps = None
 
@@ -234,6 +227,7 @@ def compare_models(
 @limiter.limit(settings.RATE_LIMIT)
 def predict_upload(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     model_name: str = Form(...),
     horizon: int = Form(24),
@@ -344,16 +338,14 @@ def predict_upload(
         )
         db.add(alert)
         if email_enabled and current_user.email:
-            try:
-                from app.services.alert_service import send_alert_email
-                send_alert_email(
-                    email_to=current_user.email,
-                    alert_type=alert_data['alert_type'],
-                    severity=alert_data['severity'],
-                    message=alert_data['message'],
-                )
-            except Exception:
-                pass
+            from app.services.alert_service import send_alert_email
+            background_tasks.add_task(
+                send_alert_email,
+                email_to=current_user.email,
+                alert_type=alert_data['alert_type'],
+                severity=alert_data['severity'],
+                message=alert_data['message'],
+            )
 
     db.commit()
     db.refresh(forecast)
@@ -436,6 +428,7 @@ def compare_upload(
 @router.post("/smart-meter/sync", response_model=ForecastResponse)
 def sync_smart_meter_forecast(
     payload: ForecastRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
 ):
@@ -453,11 +446,7 @@ def sync_smart_meter_forecast(
     horizon = payload.horizon or 24
     
     # Determine lookback based on horizon
-    lookback = 96
-    if horizon == 168:
-        lookback = 512
-    elif horizon == 720:
-        lookback = 1440
+    lookback = HORIZON_TO_LOOKBACK.get(horizon, 96)
 
     service = get_forecast_service()
     
@@ -542,16 +531,14 @@ def sync_smart_meter_forecast(
         db.add(alert)
         
         if email_enabled and current_user.email:
-            try:
-                from app.services.alert_service import send_alert_email
-                send_alert_email(
-                    email_to=current_user.email,
-                    alert_type=alert_data['alert_type'],
-                    severity=alert_data['severity'],
-                    message=alert_data['message'],
-                )
-            except Exception as email_err:
-                print(f"[Smart Meter Sync] Failed to dispatch alert email: {email_err}")
+            from app.services.alert_service import send_alert_email
+            background_tasks.add_task(
+                send_alert_email,
+                email_to=current_user.email,
+                alert_type=alert_data['alert_type'],
+                severity=alert_data['severity'],
+                message=alert_data['message'],
+            )
 
     db.commit()
     db.refresh(forecast)
@@ -592,11 +579,7 @@ def compare_smart_meter_forecasts(
     horizon = payload.horizon or 24
     
     # Determine lookback based on horizon
-    lookback = 96
-    if horizon == 168:
-        lookback = 512
-    elif horizon == 720:
-        lookback = 1440
+    lookback = HORIZON_TO_LOOKBACK.get(horizon, 96)
 
     # Fetch live readings with dynamic lookback
     meter_service = get_smart_meter_service()
@@ -707,13 +690,13 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
     meter_service = get_smart_meter_service()
     forecast_service = get_forecast_service()
     
+    db_session = SessionLocal()
     try:
         while True:
             # 1. Fetch live reading
             reading = meter_service.fetch_single_live_reading()
             
-            # 2. Save reading to database
-            db_session = SessionLocal()
+            # 2. Save reading to database using the active db_session
             try:
                 db_reading = SmartMeterReading(
                     gap=reading["gap"],
@@ -728,9 +711,8 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
                 db_session.add(db_reading)
                 db_session.commit()
             except Exception as db_err:
+                db_session.rollback()
                 print(f"[WS-LIVE] Error saving reading to database: {db_err}")
-            finally:
-                db_session.close()
             
             # 3. Generate 96h lookback and run model prediction
             try:
@@ -748,4 +730,6 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
             await asyncio.sleep(2.0)
     except Exception as e:
         print(f"[WS-LIVE] Telemetry stream ended: {e}")
+    finally:
+        db_session.close()
 
