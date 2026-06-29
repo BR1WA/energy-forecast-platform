@@ -267,13 +267,13 @@ def predict_upload(
 
     service = get_forecast_service()
 
-    # Take last rows matching lookback size
-    df = df.tail(lookback)
+    # Validate rows count before slicing
     if len(df) < lookback:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"CSV must have at least {lookback} rows for horizon {horizon}h, got {len(df)}.",
         )
+    df = df.tail(lookback)
 
     # Validate columns
     missing = [c for c in TARGET_COLS if c not in df.columns]
@@ -403,12 +403,12 @@ def compare_upload(
         lookback = 1440
 
     service = get_forecast_service()
-    df = df.tail(lookback)
     if len(df) < lookback:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"CSV must have at least {lookback} rows for horizon {horizon}h, got {len(df)}.",
         )
+    df = df.tail(lookback)
 
     missing = [c for c in TARGET_COLS if c not in df.columns]
     if missing:
