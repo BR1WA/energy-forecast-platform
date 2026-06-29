@@ -663,8 +663,14 @@ export default function SettingsPage() {
                             <span className="font-semibold text-slate-300">{model.parameters?.lookback_window || '96 Hours'}</span>
                           </div>
                           <div>
-                            <span className="text-xs text-slate-500 block">Training Accuracy</span>
-                            <span className="font-semibold text-emerald-400">{model.accuracy}%</span>
+                            <span className="text-xs text-slate-500 block">
+                              {model.training_metrics?.r2_score !== undefined ? 'R² Score' : 'Training Accuracy'}
+                            </span>
+                            <span className="font-semibold text-emerald-400">
+                              {model.training_metrics?.r2_score !== undefined 
+                                ? model.training_metrics.r2_score.toFixed(4) 
+                                : `${model.accuracy}%`}
+                            </span>
                           </div>
                         </div>
 
