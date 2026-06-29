@@ -66,6 +66,11 @@ class ForecastService:
         self.scaler = None
         self.samples: Dict[str, dict] = {}
         
+        # Cache for SystemSettings to prevent excessive DB reads on inference
+        import time
+        self._cached_settings = None
+        self._settings_last_fetched = 0.0
+        
         # Initialize persistent models metadata for display and tracking
         self.available_models_metadata = {
             'patchtst': {
@@ -877,28 +882,51 @@ class ForecastService:
             from datetime import datetime
             start_hour = datetime.utcnow().hour
 
-        # Fetch custom settings from database
-        from app.database import SessionLocal
-        from app.models.settings import SystemSettings
-        
-        db = SessionLocal()
-        try:
-            settings_db = db.query(SystemSettings).first()
-            if settings_db:
-                currency = settings_db.currency
-                off_peak = settings_db.off_peak_rate
-                peak = settings_db.peak_rate
-                peak_start = settings_db.peak_start_hour
-                peak_end = settings_db.peak_end_hour
-            else:
-                # Default fallback
-                currency = "MAD"
-                off_peak = 1.0
-                peak = 1.5
-                peak_start = 6
-                peak_end = 22
-        finally:
-            db.close()
+        # Fetch custom settings from database (cached for 60 seconds)
+        import time
+        now_ts = time.time()
+        if self._cached_settings is None or now_ts - self._settings_last_fetched > 60.0:
+            from app.database import SessionLocal
+            from app.models.settings import SystemSettings
+            
+            db = SessionLocal()
+            try:
+                settings_db = db.query(SystemSettings).first()
+                if settings_db:
+                    self._cached_settings = {
+                        "currency": settings_db.currency,
+                        "off_peak_rate": settings_db.off_peak_rate,
+                        "peak_rate": settings_db.peak_rate,
+                        "peak_start_hour": settings_db.peak_start_hour,
+                        "peak_end_hour": settings_db.peak_end_hour,
+                    }
+                else:
+                    self._cached_settings = {
+                        "currency": "MAD",
+                        "off_peak_rate": 1.0,
+                        "peak_rate": 1.5,
+                        "peak_start_hour": 6,
+                        "peak_end_hour": 22,
+                    }
+                self._settings_last_fetched = now_ts
+            except Exception as e:
+                print(f"[ML] Error fetching system settings, using default/cached: {e}")
+                if self._cached_settings is None:
+                    self._cached_settings = {
+                        "currency": "MAD",
+                        "off_peak_rate": 1.0,
+                        "peak_rate": 1.5,
+                        "peak_start_hour": 6,
+                        "peak_end_hour": 22,
+                    }
+            finally:
+                db.close()
+
+        currency = self._cached_settings["currency"]
+        off_peak = self._cached_settings["off_peak_rate"]
+        peak = self._cached_settings["peak_rate"]
+        peak_start = self._cached_settings["peak_start_hour"]
+        peak_end = self._cached_settings["peak_end_hour"]
 
         estimated_cost = 0.0
         total_kwh = float(np.sum(gap_predictions))
