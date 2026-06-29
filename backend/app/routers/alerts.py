@@ -146,8 +146,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     await manager.connect(client_id, websocket)
     try:
         while True:
-            data = await websocket.receive_text()
-            await websocket.send_text(f"Echo: {data}")
+            # Keep connection open, ignore any incoming client messages
+            await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(client_id, websocket)
     except Exception as e:
