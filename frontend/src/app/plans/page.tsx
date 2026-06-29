@@ -31,9 +31,11 @@ export default function PlansPage() {
 
   const handleSelectPlan = async (tier: string) => {
     const isCurrent = currentTier === tier;
-    if (isCurrent || tier === "free") {
+    if (isCurrent && tier === "pro") {
       setShowCancelModal(true);
-    } else {
+    } else if (tier === "free" && currentTier !== "free") {
+      setShowCancelModal(true);
+    } else if (!isCurrent && tier === "pro") {
       // Find the plan object
       const targetPlan = plans.find(p => p.id === tier);
       if (targetPlan) {
@@ -325,9 +327,14 @@ export default function PlansPage() {
                     </div>
                   </div>
 
-                  <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-blue-400" /> Payment Details
-                  </h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-blue-400" /> Payment Details
+                    </h3>
+                    <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                      Simulated Sandbox
+                    </span>
+                  </div>
 
                   {/* Inputs */}
                   <div className="space-y-3">
