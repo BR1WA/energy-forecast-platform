@@ -114,6 +114,11 @@ export default function Navbar() {
           setAlerts((prev) => [payload, ...prev].slice(0, 8));
           setUnreadCount((prev) => prev + 1);
           
+          // Dispatch a custom browser event for the Alerts page to listen to
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('app-alert-received', { detail: payload }));
+          }
+          
           // Deduplicate toasts (cooldown of 8 seconds per unique message body)
           const now = Date.now();
           const lastTime = globalLastToastTimes[payload.message] || 0;
