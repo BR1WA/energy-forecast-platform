@@ -115,22 +115,35 @@ class SmartMeterService:
             gi = (gap * 1000.0) / voltage
             
             # Sub-meterings (in Wh equivalent, scaled to kW active power)
-            sub1 = 0.0
-            sub2 = 0.0
-            sub3 = 0.0
+            total_wh = gap * 1000.0
             
             # Kitchen (Sub1) active during cooking hours
             if 11 <= hour <= 13 or 18 <= hour <= 20:
-                sub1 = max(0.0, gap * 5.0 + np.random.uniform(-1.0, 1.0))
+                sub1 = total_wh * np.random.uniform(0.15, 0.25)
+            else:
+                sub1 = total_wh * np.random.uniform(0.01, 0.04)
             
             # Laundry (Sub2) active mostly during weekends/mornings
             if is_weekend and (9 <= hour <= 15):
-                sub2 = max(0.0, gap * 8.0 + np.random.uniform(-1.0, 1.0))
+                sub2 = total_wh * np.random.uniform(0.15, 0.30)
             elif 8 <= hour <= 11:
-                sub2 = max(0.0, gap * 3.0 + np.random.uniform(-0.5, 0.5))
+                sub2 = total_wh * np.random.uniform(0.08, 0.15)
+            else:
+                sub2 = total_wh * np.random.uniform(0.01, 0.03)
                 
             # HVAC / Water Heater (Sub3) active based on time
-            sub3 = max(0.0, gap * 12.0 + np.random.uniform(-2.0, 2.0))
+            if 6 <= hour <= 9 or 18 <= hour <= 23:
+                sub3 = total_wh * np.random.uniform(0.35, 0.50)
+            else:
+                sub3 = total_wh * np.random.uniform(0.15, 0.25)
+                
+            # Guarantee that sub1 + sub2 + sub3 <= total_wh
+            sub_sum = sub1 + sub2 + sub3
+            if sub_sum > total_wh * 0.95:
+                scale = (total_wh * 0.90) / sub_sum
+                sub1 *= scale
+                sub2 *= scale
+                sub3 *= scale
             
             readings.append([
                 float(gap),
@@ -164,9 +177,33 @@ class SmartMeterService:
         gi = (gap * 1000.0) / voltage
         
         # Sub-meterings (Wh equivalents, active load)
-        sub1 = max(0.0, gap * 6.2 + random.uniform(-0.5, 0.5)) if (11 <= hour <= 13 or 18 <= hour <= 20) else max(0.0, random.uniform(0.0, 0.2))
-        sub2 = max(0.0, gap * 5.5 + random.uniform(-0.5, 0.5)) if (is_weekend and 9 <= hour <= 15) else max(0.0, random.uniform(0.0, 0.1))
-        sub3 = max(0.0, gap * 14.2 + random.uniform(-1.0, 1.0))
+        total_wh = gap * 1000.0
+        
+        # Kitchen (Sub1) active during cooking hours
+        if 11 <= hour <= 13 or 18 <= hour <= 20:
+            sub1 = total_wh * random.uniform(0.15, 0.25)
+        else:
+            sub1 = total_wh * random.uniform(0.01, 0.04)
+            
+        # Laundry (Sub2) active mostly during weekends/mornings
+        if is_weekend and (9 <= hour <= 15):
+            sub2 = total_wh * random.uniform(0.15, 0.30)
+        else:
+            sub2 = total_wh * random.uniform(0.01, 0.03)
+            
+        # HVAC / Water Heater (Sub3) active based on time
+        if 6 <= hour <= 9 or 18 <= hour <= 23:
+            sub3 = total_wh * random.uniform(0.35, 0.50)
+        else:
+            sub3 = total_wh * random.uniform(0.15, 0.25)
+            
+        # Guarantee that sub1 + sub2 + sub3 <= total_wh
+        sub_sum = sub1 + sub2 + sub3
+        if sub_sum > total_wh * 0.95:
+            scale = (total_wh * 0.90) / sub_sum
+            sub1 *= scale
+            sub2 *= scale
+            sub3 *= scale
         
         return {
             "timestamp": now.isoformat().replace("+00:00", "Z"),
