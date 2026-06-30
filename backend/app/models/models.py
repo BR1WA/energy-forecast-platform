@@ -144,13 +144,14 @@ class SmartMeterReading(Base):
 class ModelRegistry(Base):
     __tablename__ = "model_registry"
 
-    id = Column(String(50), primary_key=True, index=True) # e.g. "hybrid_v2_24h"
-    horizon = Column(Integer, nullable=False) # 24, 168, 720
-    model_name = Column(String(50), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False) # e.g. Hybrid_v2
     version = Column(String(20), default="1.0.0", nullable=False)
-    checkpoint_path = Column(String(255), nullable=True)
-    metrics = Column(JSON, nullable=True) # r2, mae, rmse
-    status = Column(String(20), default="active", nullable=False)
+    experiment_path = Column(String(255), nullable=False)
+    model_fingerprint = Column(String(64), nullable=True) # SHA-256 hash
+    active = Column(Boolean, default=False, nullable=False)
+    mae = Column(Float, nullable=True)
+    rmse = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

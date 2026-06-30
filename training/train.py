@@ -1,6 +1,7 @@
 import os
 import time
 import torch
+import hashlib
 import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
@@ -258,6 +259,12 @@ def train():
     pipeline_path = os.path.join(out_dir, "pipeline.pkl")
     pipeline.save(pipeline_path)
     
+    # Calculate Model Fingerprint (SHA-256)
+    hasher = hashlib.sha256()
+    with open(model_path, 'rb') as f:
+        hasher.update(f.read())
+    model_fingerprint = hasher.hexdigest()
+    
     # Save feature columns
     import json
     with open(os.path.join(out_dir, "feature_columns.json"), "w") as f:
@@ -267,6 +274,9 @@ def train():
     summary = {
         "experiment_id": tracker.experiment_id,
         "model_name": model_name,
+        "model_fingerprint": model_fingerprint,
+        "pipeline_version": "1.0", # Can be bumped as feature sets evolve
+        "feature_set": pipeline.feature_columns,
         "lookback": lookback,
         "horizon": horizon,
         "metrics": val_metrics,
