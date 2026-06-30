@@ -275,7 +275,7 @@ const processForecastChartData = (
 };
 
 export default function ForecastPage() {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const { user } = useAuth();
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [sampleDatasets, setSampleDatasets] = useState<SampleInfo[]>([]);
@@ -359,6 +359,7 @@ export default function ForecastPage() {
     forecastApi.getSamples()
       .then((data) => setSampleDatasets(data as unknown as SampleInfo[]))
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileUpload = useCallback(

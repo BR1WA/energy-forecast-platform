@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -48,7 +48,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { adminApi, forecastApi, API_BASE_URL } from '@/lib/api';
+import { adminApi, API_BASE_URL } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { AdminUser, SystemHealth, ModelRegistry } from '@/types';
 import { toast } from 'sonner';
@@ -74,7 +74,7 @@ const isOnline = (lastActivity: string | undefined | null) => {
     // every 10s, active tabs will have a last_activity update within 20s.
     // Set threshold to 25 seconds for highly responsive offline detection.
     return Date.now() - activityDate.getTime() < 25 * 1000;
-  } catch (e) {
+  } catch {
     return false;
   }
 };

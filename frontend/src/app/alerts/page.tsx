@@ -33,7 +33,6 @@ import { alertsApi, settingsApi } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { Alert } from '@/types';
 import { toast } from 'sonner';
-import { useAuth } from '@/lib/auth';
 
 const severityConfig: Record<string, any> = {
   critical: {
@@ -67,7 +66,6 @@ const severityConfig: Record<string, any> = {
 };
 
 export default function AlertsPage() {
-  const { user } = useAuth();
   const [filter, setFilter] = useState('all');
   const [threshold, setThreshold] = useState('3.0');
   const [sensitivity, setSensitivity] = useState('medium');

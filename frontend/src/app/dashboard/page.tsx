@@ -9,22 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { can, Feature } from '@/lib/entitlements';
-import { analyticsApi, settingsApi, forecastApi, getAccessToken } from '@/lib/api';
+import { settingsApi, forecastApi, getAccessToken } from '@/lib/api';
 import { EnergyBudget } from '@/types';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { formatTimeAgo, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import {
-  BarChart3,
-  TrendingUp,
-  Bell,
   Zap,
-  ArrowUpRight,
-  ArrowRight,
   Activity,
-  Clock,
-  LineChart as LucideLineChart,
-  Target,
   Loader2,
   ShieldAlert,
   Cpu,
@@ -62,7 +54,7 @@ interface TelemetryFrame {
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t, language } = useI18n();
+  const { language } = useI18n();
   const [mounted, setMounted] = useState(false);
   // Settings data
   const [systemSettings, setSystemSettings] = useState<any>(null);
@@ -77,7 +69,7 @@ export default function DashboardPage() {
   // Live Telemetry data
   const [liveData, setLiveData] = useState<TelemetryFrame | null>(null);
   const [history, setHistory] = useState<TelemetryFrame[]>([]);
-  const [historyWindow, setHistoryWindow] = useState<number>(20);
+  const [historyWindow] = useState<number>(20);
   const [framesLog, setFramesLog] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
@@ -411,7 +403,7 @@ export default function DashboardPage() {
     };
 
     fetchForecast();
-  }, [dashboardTimeframe]);
+  }, [dashboardTimeframe, user?.preferences?.default_model_168, user?.preferences?.default_model_24, user?.preferences?.default_model_720]);
 
   const handleSaveBudget = async () => {
     const val = parseFloat(budgetValue);

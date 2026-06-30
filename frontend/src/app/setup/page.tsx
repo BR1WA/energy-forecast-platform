@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Zap, Settings, ArrowRight, Loader2, Database, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { authApi, getAccessToken, billingApi, settingsApi } from "@/lib/api";
+import { billingApi, settingsApi } from "@/lib/api";
 
 export default function SetupWizard() {
   const router = useRouter();

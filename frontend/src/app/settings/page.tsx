@@ -13,7 +13,7 @@ import { authApi, alertsApi, settingsApi, billingApi, forecastApi } from '@/lib/
 import { useTheme } from 'next-themes';
 import { useI18n, Language } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard, AlertCircle, Zap, Cpu, Sparkles, Brain } from 'lucide-react';
+import { Shield, Bell, Lock, Moon, Sun, Monitor, AlertTriangle, CheckCircle, Globe, CreditCard, AlertCircle, Zap, Cpu, Sparkles } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();

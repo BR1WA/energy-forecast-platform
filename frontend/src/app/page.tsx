@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { Zap, ArrowRight, ShieldCheck, Activity, Cpu, Sparkles, Database, Layers, CheckCircle2, TrendingUp } from 'lucide-react';
+import { Zap, ArrowRight, ShieldCheck, Activity, Cpu } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,7 @@ function ScrollReveal({ children, className = "", style }: { children: React.Rea
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    const currentRef = ref.current;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -24,13 +25,13 @@ function ScrollReveal({ children, className = "", style }: { children: React.Rea
       { threshold: 0.08 }
     );
 
-    if (ref.current) {
-      observer.observe(ref.current);
+    if (currentRef) {
+      observer.observe(currentRef);
     }
 
     return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current);
+      if (currentRef) {
+        observer.unobserve(currentRef);
       }
     };
   }, []);

@@ -4,12 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/app-layout";
 import { useAuth } from "@/lib/auth";
-import { authApi, billingApi } from "@/lib/api";
+import { billingApi } from "@/lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, Zap, Building, Loader2, CreditCard, Lock, ShieldCheck, AlertCircle } from "lucide-react";
+import { Check, Sparkles, Zap, Loader2, CreditCard, Lock, ShieldCheck, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+
 
 export default function PlansPage() {
   const router = useRouter();

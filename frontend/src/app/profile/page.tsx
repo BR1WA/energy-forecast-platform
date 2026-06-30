@@ -19,10 +19,8 @@ import {
   Calendar,
   Cpu,
   BarChart3,
-  BarChart3 as BarChartIcon, // If needed, keeping style
   Loader2,
   Trash2,
-  Clock,
   CreditCard,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

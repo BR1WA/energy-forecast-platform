@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { alertsApi, getAccessToken, API_BASE_URL } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Activity, Sparkles } from 'lucide-react';
+import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -39,7 +39,6 @@ export default function Navbar() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef<HTMLDivElement>(null);
-  const lastToastTimes = useRef<Record<string, number>>({});
 
   const getPageTitle = () => {
     switch (pathname) {

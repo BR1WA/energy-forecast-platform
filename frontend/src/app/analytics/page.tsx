@@ -115,7 +115,7 @@ export default function AnalyticsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);

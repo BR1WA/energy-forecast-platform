@@ -62,13 +62,11 @@ export default function MultiSitePage() {
   const [selectedSiteId, setSelectedSiteId] = useState('site-casablanca');
   const [isBatteryBackupActive, setIsBatteryBackupActive] = useState(false);
   const [demandResponseStatus, setDemandResponseStatus] = useState<'connected' | 'shedding'>('connected');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const [systemSettings, setSystemSettings] = useState<any>(null);
 
   const isPro = can(user, Feature.MULTI_SITE);
   const [sitesData, setSitesData] = useState<SiteData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
   useEffect(() => {
     // Fetch multi-site telemetry data
     const fetchSites = async () => {
@@ -77,15 +75,11 @@ export default function MultiSitePage() {
         if (json.data) setSitesData(json.data);
       } catch (err) {
         console.error('Failed to fetch multi-site data', err);
-      } finally {
-        setIsLoading(false);
       }
     };
     
     if (isPro) {
       fetchSites();
-    } else {
-      setIsLoading(false);
     }
   }, [isPro]);
 
