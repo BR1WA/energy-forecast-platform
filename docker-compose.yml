@@ -35,7 +35,6 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       PYTHONUNBUFFERED: "1"
     volumes:
-      - ./backend:/app
       - ./models:/app/models
       - ./app_forecast/samples:/app/app_forecast/samples
     depends_on:
@@ -53,11 +52,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm run dev
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       - backend
 
