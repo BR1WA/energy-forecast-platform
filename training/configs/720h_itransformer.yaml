@@ -1,0 +1,33 @@
+# 720h iTransformer Baseline Configuration
+experiment_name: "720h_itransformer_baseline"
+model:
+  name: "iTransformer"
+  lookback: 720
+  forecast_horizon: 720
+  num_targets: 7
+  d_model: 512
+  n_heads: 8
+  e_layers: 3
+  d_ff: 2048
+  dropout: 0.1
+
+data:
+  dataset_name: "uci_electricity"
+  batch_size: 16
+  use_weather: true
+  use_cyclical_calendar: true
+  latitude: 48.8566
+  longitude: 2.3522
+
+training:
+  epochs: 100
+  learning_rate: 0.0001
+  loss: "huber"
+  early_stopping_patience: 10
+  mixed_precision: true
+  gradient_clipping: 1.0
+  weight_decay: 1e-4
+
+evaluation:
+  metrics: ["MAE", "RMSE", "MAPE", "sMAPE", "R2"]
+  walk_forward_splits: 3
