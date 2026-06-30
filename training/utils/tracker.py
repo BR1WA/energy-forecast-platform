@@ -59,21 +59,33 @@ class ExperimentTracker:
         }, checkpoint_path)
         return checkpoint_path
 
-    def end_experiment(self):
+    def end_experiment(self, final_metrics=None, save_dir=None):
         duration = time.time() - self.start_time
         
+        if final_metrics:
+            self.metrics["final"] = final_metrics
+            
         report = {
             "experiment_id": self.experiment_id,
             "timestamp": datetime.now().isoformat(),
             "duration_seconds": duration,
+            "metadata": self.metrics.get("metadata", {}),
             "config": self.config,
             "environment": self.env_details,
             "metrics": self.metrics
         }
         
-        report_path = os.path.join(self.experiment_dir, f"{self.experiment_id}.json")
+        target_dir = save_dir if save_dir else self.experiment_dir
+        os.makedirs(target_dir, exist_ok=True)
+        
+        report_path = os.path.join(target_dir, "metrics.json")
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=4)
+            
+        import yaml
+        config_path = os.path.join(target_dir, "config.yaml")
+        with open(config_path, 'w') as f:
+            yaml.dump(self.config, f)
             
         return report_path
 

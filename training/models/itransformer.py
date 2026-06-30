@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
+from .base import ForecastModel
 from training.features.scaling import RevIN
 
-class iTransformer(nn.Module):
+class iTransformer(ForecastModel):
     """
     iTransformer: Inverted Transformers are Effective for Time Series Forecasting (ICLR 2024).
     Treats each variable (time series channel) as an independent token.

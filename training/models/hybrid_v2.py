@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from .base import ForecastModel
 
 class RevIN(nn.Module):
     """Reversible Instance Normalization."""
@@ -27,7 +28,7 @@ class RevIN(nn.Module):
             x = x * stdev + mean
             return x
 
-class Hybrid_v2(nn.Module):
+class Hybrid_v2(ForecastModel):
     """
     SOTA Hybrid v2: RevIN + Multi-Scale Patching + Transformer Encoder + Cross-Variable Attention.
     (BiGRU has been removed to unblock sequence length limits for long horizons).

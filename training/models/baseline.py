@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
+from .base import ForecastModel
 
-class NaivePersistence(nn.Module):
+class NaivePersistence(ForecastModel):
     """
     Naïve Persistence Baseline.
     Predicts that the next H steps will simply repeat the last observed value (or sequence).

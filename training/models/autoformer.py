@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from .base import ForecastModel
 
 class moving_avg(nn.Module):
     """
@@ -34,7 +35,7 @@ class series_decomp(nn.Module):
         res = x - moving_mean
         return res, moving_mean
 
-class Autoformer(nn.Module):
+class Autoformer(ForecastModel):
     """
     Simplified Autoformer for demonstration and baseline testing.
     Predicts residuals after decomposing the trend.

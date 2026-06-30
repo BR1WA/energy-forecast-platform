@@ -1,0 +1,35 @@
+data:
+  batch_size: 64
+  dataset_name: uci_electricity
+  latitude: 48.8566
+  longitude: 2.3522
+  use_cyclical_calendar: true
+  use_weather: true
+evaluation:
+  metrics:
+  - MAE
+  - RMSE
+  - MAPE
+  - sMAPE
+  - R2
+  walk_forward_splits: 3
+experiment_name: 24h_hybrid_v2_baseline
+model:
+  d_channel: 256
+  d_model: 64
+  d_temporal: 4
+  forecast_horizon: 24
+  lookback: 96
+  name: Hybrid_v2
+  num_targets: 1
+  patch_len: 16
+  stride: 8
+out_dir: experiments\24h_hybrid_v2_baseline_1782855695
+training:
+  early_stopping_patience: 10
+  epochs: 100
+  gradient_clipping: 1.0
+  learning_rate: 0.001
+  loss: huber
+  mixed_precision: true
+  weight_decay: 1e-4
