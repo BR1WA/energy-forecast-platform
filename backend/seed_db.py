@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from datetime import datetime, timedelta, timezone
 import random
 import json
+import numpy as np
 
 from app.database import SessionLocal
 from app.models import User, Forecast, Alert
@@ -61,9 +62,9 @@ def seed_database():
         sample_name = list(service.samples.keys())[0]
         sample_data = service.samples[sample_name]
         
-        models = list(service.models.keys())
+        models = [m for m in list(service.models.keys()) if m in ["patchtst", "sota", "cnn_bilstm"]]
         if not models:
-            print("No models loaded.")
+            print("No 24h models loaded.")
             return
 
         print(f"Seeding with {len(models)} models using sample '{sample_name}'...")
@@ -79,9 +80,9 @@ def seed_database():
             # Random model
             model_name = random.choice(models)
             
-            # Run prediction
-            targets = sample_data['targets']
-            calendar = sample_data['calendar']
+            # Truncate to 96 steps for 24h models
+            targets = sample_data['targets'][-96:]
+            calendar = sample_data['calendar'][-96:]
             
             # Add some random noise to make them look different
             noise = np.random.normal(0, 0.05, targets.shape)
@@ -120,11 +121,12 @@ def seed_database():
         print("Successfully seeded 20 historical forecasts and alerts!")
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error seeding database: {e}")
         db.rollback()
     finally:
         db.close()
 
 if __name__ == "__main__":
-    import numpy as np
     seed_database()
