@@ -4,8 +4,26 @@ Alert service — handles alert creation, verification, and email notifications.
 import smtplib
 from email.mime.text import MIMEText
 from app.config import get_settings
+from sqlalchemy.orm import Session
+from app.models.models import Alert
 
 settings = get_settings()
+
+class AlertService:
+    def get_recent_alerts(self, db: Session, user_id: int, limit: int = 5):
+        alerts = db.query(Alert).filter(Alert.user_id == user_id).order_by(Alert.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": a.id,
+                "type": a.alert_type,
+                "severity": a.severity,
+                "message": a.message,
+                "timestamp": a.created_at.isoformat() if a.created_at else None
+            }
+            for a in alerts
+        ]
+
+alert_service = AlertService()
 
 
 def send_alert_email(email_to: str, alert_type: str, severity: str, message: str):

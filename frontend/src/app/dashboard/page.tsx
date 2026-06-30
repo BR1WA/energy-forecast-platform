@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { can, Feature } from '@/lib/entitlements';
 import { settingsApi, forecastApi, getAccessToken } from '@/lib/api';
+import { dashboardService, DashboardOverview } from '@/services/dashboard';
 import { EnergyBudget } from '@/types';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/hooks/useWebSocket';
@@ -23,7 +24,9 @@ import {
   Thermometer,
   Flame,
   PlayCircle,
-  Lock
+  Lock,
+  TrendingUp,
+  Database
 } from 'lucide-react';
 import {
   AreaChart,
@@ -58,12 +61,35 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   // Settings data
   const [systemSettings, setSystemSettings] = useState<any>(null);
+  
+  // Dashboard Overview
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
 
   useEffect(() => {
     settingsApi
       .getSettings()
       .then(data => setSystemSettings(data))
       .catch(console.error);
+      
+    const fetchOverview = async () => {
+      try {
+        setOverviewLoading(true);
+        const data = await dashboardService.getOverview();
+        setOverview(data);
+        setOverviewError(null);
+      } catch (err) {
+        setOverviewError('Failed to load overview data');
+      } finally {
+        setOverviewLoading(false);
+      }
+    };
+    
+    fetchOverview();
+    // Refresh every 60s
+    const intervalId = setInterval(fetchOverview, 60000);
+    return () => clearInterval(intervalId);
   }, []);
 
   // Live Telemetry data
@@ -996,6 +1022,59 @@ export default function DashboardPage() {
                       />
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Current Data Source */}
+              <Card className="glass-card border-white/[0.06]">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
+                    <Database className="w-4 h-4 text-slate-400" />
+                    Current Data Source
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/80">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">Mode</span>
+                    <Badge variant="outline" className={overview?.system?.status === 'ok' ? 'border-blue-500/20 text-blue-400 bg-blue-500/10 text-[9px]' : 'border-slate-500/20 text-slate-400 bg-slate-500/10 text-[9px]'}>
+                      {overviewLoading ? '...' : (overview?.system?.mode || 'LIVE')}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/80">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">Provider</span>
+                    <span className="text-xs text-white font-mono">{overviewLoading ? '...' : 'Simulation Engine'}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-white/[0.04] bg-[#0A0F1C]/80">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">Last update</span>
+                    <span className="text-xs text-slate-400 font-mono">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Forecast Confidence */}
+              <Card className="glass-card border-white/[0.06]">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-purple-400" />
+                    Forecast Confidence
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-3.5 rounded-xl border border-purple-500/20 bg-purple-500/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] text-purple-400/80 font-bold uppercase">Model</span>
+                      <span className="text-xs text-white font-mono">{overview?.models?.active || 'Hybrid_v2'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-purple-400/80 font-bold uppercase">Status</span>
+                      <Badge className="bg-purple-500/20 text-purple-300 border-none shadow-none text-[9px] uppercase tracking-wider">
+                        Coming in ML Phase
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Confidence bands (P10/P50/P90) will appear here after model training is complete.
+                  </p>
                 </CardContent>
               </Card>
 

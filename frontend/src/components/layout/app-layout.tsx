@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from './sidebar';
 import Navbar from './navbar';
 import { useI18n } from '@/lib/i18n';
+import { DataModeProvider } from '@/contexts/DataModeContext';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -42,16 +43,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     : (sidebarCollapsed ? 'ml-[72px]' : 'ml-[260px]');
 
   return (
-    <div className="flex h-screen bg-[#0A0F1C] overflow-hidden" suppressHydrationWarning>
-      <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
-      <div className={`flex flex-col flex-1 transition-all duration-300 ${marginClass}`}>
-        <Navbar />
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {children}
-          </div>
-        </main>
+    <DataModeProvider>
+      <div className="flex h-screen bg-[#0A0F1C] overflow-hidden" suppressHydrationWarning>
+        <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+        <div className={`flex flex-col flex-1 transition-all duration-300 ${marginClass}`}>
+          <Navbar />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </DataModeProvider>
   );
 }

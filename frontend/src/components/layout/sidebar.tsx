@@ -20,6 +20,7 @@ import {
   Settings,
   User,
   Building,
+  Cpu,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -40,23 +41,21 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    label: 'ML Sandbox',
-    translationKey: 'nav.forecast',
+    label: 'Forecasts',
+    translationKey: 'nav.forecasts',
     href: '/forecast',
     icon: LineChart,
-    analystOrAdminOnly: true,
   },
   {
-    label: 'Multi-Site',
-    translationKey: 'nav.multi_site',
-    href: '/multi-site',
-    icon: Building,
-    featureGate: Feature.MULTI_SITE,
+    label: 'Consumption',
+    translationKey: 'nav.consumption',
+    href: '/consumption',
+    icon: Zap,
   },
   {
-    label: 'Analytics',
-    translationKey: 'nav.analytics',
-    href: '/analytics',
+    label: 'Simulation',
+    translationKey: 'nav.simulation',
+    href: '/simulation',
     icon: BarChart3,
   },
   {
@@ -66,11 +65,16 @@ const navItems = [
     icon: Bell,
   },
   {
-    label: 'Admin',
-    translationKey: 'nav.admin',
-    href: '/admin',
-    icon: Shield,
-    adminOnly: true,
+    label: 'Models',
+    translationKey: 'nav.models',
+    href: '/models',
+    icon: Cpu,
+  },
+  {
+    label: 'Settings',
+    translationKey: 'nav.settings',
+    href: '/settings',
+    icon: Settings,
   },
 ];
 

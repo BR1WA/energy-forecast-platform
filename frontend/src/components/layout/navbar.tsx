@@ -6,7 +6,8 @@ import { useAuth } from '@/lib/auth';
 import { alertsApi, getAccessToken, API_BASE_URL } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Sparkles } from 'lucide-react';
+import { useDataMode } from '@/contexts/DataModeContext';
+import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Sparkles, Activity, PlayCircle, History, Database } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -27,6 +28,19 @@ export default function Navbar() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { t, isRTL, language } = useI18n();
+  const { mode } = useDataMode();
+
+  const getModeBadge = () => {
+    switch(mode) {
+      case 'LIVE': return { color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20', icon: Activity, label: 'LIVE' };
+      case 'SIMULATION': return { color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20', icon: PlayCircle, label: 'SIMULATION' };
+      case 'HISTORICAL': return { color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20', icon: History, label: 'HISTORICAL' };
+      case 'TRAINING': return { color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20', icon: Database, label: 'TRAINING' };
+      default: return { color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20', icon: Database, label: 'DEMO' };
+    }
+  };
+
+  const badgeProps = getModeBadge();
 
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -106,24 +120,19 @@ export default function Navbar() {
     onMessage: (event) => {
       try {
         const payload = JSON.parse(event.data);
-        console.log('[WS] Received payload:', payload);
         
         if (payload.type === 'alert') {
-          // Prepend new alert to dropdown in real time
           setAlerts((prev) => [payload, ...prev].slice(0, 8));
           setUnreadCount((prev) => prev + 1);
           
-          // Dispatch a custom browser event for the Alerts page to listen to
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('app-alert-received', { detail: payload }));
           }
           
-          // Deduplicate toasts (cooldown of 8 seconds per unique message body)
           const now = Date.now();
           const lastTime = globalLastToastTimes[payload.message] || 0;
           if (now - lastTime > 8000) {
             globalLastToastTimes[payload.message] = now;
-            // Show sonner toast
             toast.warning(payload.title, {
               description: payload.message,
               duration: 8000,
@@ -153,7 +162,6 @@ export default function Navbar() {
     loadAlerts();
   }, [router]);
 
-  // Keyboard shortcut ⌘K / Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -169,7 +177,6 @@ export default function Navbar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Focus search input when opened
   useEffect(() => {
     if (searchOpen) {
       setTimeout(() => searchInputRef.current?.focus(), 50);
@@ -178,7 +185,6 @@ export default function Navbar() {
     }
   }, [searchOpen]);
 
-  // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -236,7 +242,6 @@ export default function Navbar() {
       id="navbar"
       className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 border-b border-white/[0.06] bg-[#0A0F1C]/60 backdrop-blur-xl"
     >
-      {/* Left: Page Title */}
       <div>
         <h2 className="text-lg font-semibold text-white">{getPageTitle()}</h2>
         {getPageDescription() && (
@@ -244,9 +249,14 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* Right: Actions */}
+      <div className="flex-1 flex justify-center">
+        <div className={cn('flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold tracking-wider uppercase', badgeProps.bg, badgeProps.color)}>
+          <badgeProps.icon className="w-3 h-3" />
+          {badgeProps.label}
+        </div>
+      </div>
+
       <div className="flex items-center gap-3">
-        {/* Subscription Plan Badge / Upgrade Button */}
         {user?.subscription_tier === 'pro' ? (
           <button
             onClick={() => router.push('/plans')}
@@ -267,7 +277,6 @@ export default function Navbar() {
           </button>
         )}
 
-        {/* Search */}
         <div className="relative" ref={searchRef}>
           <button
             id="navbar-search"
@@ -281,7 +290,6 @@ export default function Navbar() {
             </kbd>
           </button>
 
-          {/* Search Dropdown */}
           {searchOpen && (
             <div className={cn(
               "absolute top-full mt-2 w-80 bg-[#111827] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200",
@@ -337,7 +345,6 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button
             id="navbar-notifications"

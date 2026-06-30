@@ -25,6 +25,7 @@ class User(Base):
     last_activity = Column(DateTime(timezone=True), nullable=True)
     is_setup_complete = Column(Boolean, default=False, nullable=False)
     preferences = Column(JSON, nullable=True, default=dict)
+    data_mode = Column(String(20), default="SIMULATION", nullable=False) # LIVE, HISTORICAL, SIMULATION, TRAINING, DEMO
 
     # Relationships
     forecasts = relationship("Forecast", back_populates="user", cascade="all, delete-orphan")
@@ -143,18 +144,14 @@ class SmartMeterReading(Base):
 class ModelRegistry(Base):
     __tablename__ = "model_registry"
 
-    id = Column(String(50), primary_key=True, index=True)
-    name = Column(String(50), nullable=False)
-    display_name = Column(String(100), nullable=True)
-    architecture_type = Column(String(50), nullable=True)
-    description = Column(Text, nullable=True)
-    training_metrics = Column(JSON, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
+    id = Column(String(50), primary_key=True, index=True) # e.g. "hybrid_v2_24h"
+    horizon = Column(Integer, nullable=False) # 24, 168, 720
+    model_name = Column(String(50), nullable=False)
     version = Column(String(20), default="1.0.0", nullable=False)
-    accuracy = Column(Float, nullable=False)
-    last_trained = Column(String(50), nullable=True)
-    parameters = Column(JSON, nullable=True)
+    checkpoint_path = Column(String(255), nullable=True)
+    metrics = Column(JSON, nullable=True) # r2, mae, rmse
     status = Column(String(20), default="active", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class EnergyBudget(Base):
