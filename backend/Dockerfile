@@ -14,6 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY backend/ .
 
+# Copy training package for imports
+COPY training /app/training
+
 # Copy model weights
 COPY models /app/models
 

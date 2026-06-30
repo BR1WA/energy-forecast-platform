@@ -60,9 +60,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[DB] Migration warning on startup (can be ignored if database is already at head): {e}")
 
-    # Pre-load ML models
-    service = get_forecast_service()
-    logger.info(f"[ML] Models ready: {list(service.models.keys())}")
+    # Initialise the forecast service singleton (lazy — no model is loaded until a request comes in)
+    get_forecast_service()
+    logger.info("[ML] ForecastService singleton initialised (model will be loaded on first request).")
 
     # Seed admin user if none exists
     from app.database import SessionLocal
@@ -268,7 +268,6 @@ def health_check():
     service = get_forecast_service()
     return {
         "status": "healthy",
-        "models_loaded": list(service.models.keys()),
-        "models_count": len(service.models),
-        "samples_loaded": len(service.samples),
+        "active_model_id": service._active_model_id,
+        "model_loaded": service._model is not None,
     }

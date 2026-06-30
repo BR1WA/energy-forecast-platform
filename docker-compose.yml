@@ -37,6 +37,7 @@ services:
     volumes:
       - ./models:/app/models
       - ./app_forecast/samples:/app/app_forecast/samples
+      - ./experiments:/app/experiments
     depends_on:
       db:
         condition: service_healthy

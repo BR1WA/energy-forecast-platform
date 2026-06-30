@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.models import ModelRegistry
 from training.features.feature_engineering import FeaturePipeline
-from training.train import prepare_tensors
+
+TARGET_COLS = ["gap"]
 
 class ForecastService:
     def __init__(self):
