@@ -269,6 +269,10 @@ def predict_upload(
         )
     df = df.tail(lookback)
 
+    # Rename Global_active_power to gap for compatibility with exported samples
+    if 'Global_active_power' in df.columns:
+        df = df.rename(columns={'Global_active_power': 'gap'})
+
     # Validate columns
     missing = [c for c in TARGET_COLS if c not in df.columns]
     if missing:
@@ -402,6 +406,10 @@ def compare_upload(
         )
     df = df.tail(lookback)
 
+    # Rename Global_active_power to gap for compatibility with exported samples
+    if 'Global_active_power' in df.columns:
+        df = df.rename(columns={'Global_active_power': 'gap'})
+
     missing = [c for c in TARGET_COLS if c not in df.columns]
     if missing:
         raise HTTPException(
@@ -444,25 +452,12 @@ def sync_smart_meter_forecast(
     
     model_name = payload.model_name or 'sota'
     horizon = payload.horizon or 24
-    
+
     # Determine lookback based on horizon
     lookback = HORIZON_TO_LOOKBACK.get(horizon, 96)
 
     service = get_forecast_service()
-    
-    # Map model name based on horizon if not ended with it
     full_model_key = model_name
-    if horizon != 24 and not model_name.endswith(f"_{horizon}"):
-        full_model_key = f"{model_name}_{horizon}"
-        
-    if full_model_key not in service.models:
-        if model_name in service.models:
-            full_model_key = model_name
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Model '{model_name}' for horizon {horizon}h is not loaded. Available: {list(service.models.keys())}"
-            )
 
     # Fetch live readings with dynamic lookback
     meter_service = get_smart_meter_service()
@@ -717,7 +712,7 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
             # 3. Generate 96h lookback and run model prediction
             try:
                 targets = meter_service.fetch_live_readings() # returns [96, 7]
-                preds, _ = forecast_service.predict(model_name='sota', targets=targets)
+                preds, _ = forecast_service.predict('sota', targets)
                 gap_predictions = [round(float(p), 3) for p in preds[:, 0]]
             except Exception as pred_err:
                 print(f"[WS-LIVE] Forecast prediction error: {pred_err}")

@@ -11,6 +11,9 @@ const translations: Record<Language, Translations> = {
     // Nav & Sidebar
     'nav.dashboard': 'Dashboard',
     'nav.forecast': 'ML Sandbox',
+    'nav.consumption': 'Consumption',
+    'nav.simulation': 'Simulation',
+    'nav.models': 'Models',
     'nav.multi_site': 'Multi-Site Grid',
     'nav.analytics': 'Analytics',
     'nav.alerts': 'Alerts',
@@ -114,6 +117,9 @@ const translations: Record<Language, Translations> = {
     // Nav & Sidebar
     'nav.dashboard': 'Tableau de bord',
     'nav.forecast': 'Bac à sable ML',
+    'nav.consumption': 'Consommation',
+    'nav.simulation': 'Simulation',
+    'nav.models': 'Modèles',
     'nav.multi_site': 'Réseau Multi-Sites',
     'nav.analytics': 'Analyses',
     'nav.alerts': 'Alertes',
@@ -217,6 +223,9 @@ const translations: Record<Language, Translations> = {
     // Nav & Sidebar
     'nav.dashboard': 'لوحة التحكم',
     'nav.forecast': 'بيئة اختبار ML',
+    'nav.consumption': 'الاستهلاك',
+    'nav.simulation': 'المحاكاة',
+    'nav.models': 'النماذج',
     'nav.multi_site': 'شبكة مواقع متعددة',
     'nav.analytics': 'التحليلات',
     'nav.alerts': 'التنبيهات',

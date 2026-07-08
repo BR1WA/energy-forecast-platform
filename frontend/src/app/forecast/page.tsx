@@ -535,13 +535,14 @@ export default function ForecastPage() {
               <span className="text-xs text-slate-400 px-2 font-medium">Forecast Horizon:</span>
               <div className="flex gap-1">
                 {[
-                  { label: '24 Hours', value: 24 },
-                  { label: '1 Week', value: 168 },
-                  { label: '1 Month', value: 720 },
+                  { label: '24 Hours', value: 24, disabled: false },
+                  { label: '1 Week (Coming Soon)', value: 168, disabled: true },
+                  { label: '1 Month (Coming Soon)', value: 720, disabled: true },
                 ].map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => setSelectedHorizon(opt.value)}
+                    onClick={() => !opt.disabled && setSelectedHorizon(opt.value)}
+                    disabled={opt.disabled}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                       selectedHorizon === opt.value
                         ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'

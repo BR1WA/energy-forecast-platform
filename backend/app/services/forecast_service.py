@@ -1,131 +1,586 @@
-import os
-import torch
+"""
+Forecast service — registry-based lazy-loading with a full public API.
+
+Public surface expected by the routers
+───────────────────────────────────────
+  ForecastService.get_available_models()      → List[dict]  (ModelInfo-shaped)
+  ForecastService.get_sample_datasets()       → List[dict]  (SampleDataset-shaped)
+  ForecastService.samples                     → dict        (keyed by sample name)
+  ForecastService.predict(model_name, ...)    → (np.ndarray, List[dict])
+  ForecastService.predict_comparison(...)     → Dict[str, np.ndarray]
+  ForecastService.load_active_model(db)       → bool        (used by health-check / startup)
+
+  generate_calendar_features(hours, days, months) → np.ndarray  (imported by router)
+"""
+
+from __future__ import annotations
+
 import json
-import pandas as pd
+import os
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
-from typing import Optional, List, Dict, Any
+import pandas as pd
+import torch
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models.models import ModelRegistry
 from training.features.feature_engineering import FeaturePipeline
 
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
 TARGET_COLS = ["gap"]
 
-class ForecastService:
-    def __init__(self):
-        self._active_model_id = None
-        self._model = None
-        self._pipeline = None
-        self._config = None
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self._cached_settings = None
-        self._settings_last_fetched = 0
+# The experiments directory is mounted into the container at /app/experiments.
+EXPERIMENTS_DIR = os.environ.get("EXPERIMENTS_DIR", "/app/experiments")
 
-    def load_active_model(self, db: Session):
-        active_model = db.query(ModelRegistry).filter(ModelRegistry.active == True).first()
-        if not active_model:
-            return False
-            
-        if self._active_model_id == active_model.id:
-            return True # Already loaded
-            
-        # Need to load new model
-        exp_path = active_model.experiment_path
-        pipeline_path = os.path.join(exp_path, 'pipeline.pkl')
-        model_path = os.path.join(exp_path, 'model.pt')
-        config_path = os.path.join(exp_path, 'config.yaml')
-        
+
+# ---------------------------------------------------------------------------
+# Module-level helpers (imported by the routers)
+# ---------------------------------------------------------------------------
+
+def generate_calendar_features(
+    hours: np.ndarray,
+    days: np.ndarray,
+    months: np.ndarray,
+) -> np.ndarray:
+    """Return cyclical calendar features for a sequence of timestamps.
+
+    Output shape: (N, 6) — [sin_h, cos_h, sin_d, cos_d, sin_m, cos_m]
+    """
+    sin_hour  = np.sin(2 * np.pi * hours / 24)
+    cos_hour  = np.cos(2 * np.pi * hours / 24)
+    sin_day   = np.sin(2 * np.pi * days / 7)
+    cos_day   = np.cos(2 * np.pi * days / 7)
+    sin_month = np.sin(2 * np.pi * (months - 1) / 12)
+    cos_month = np.cos(2 * np.pi * (months - 1) / 12)
+    return np.stack(
+        [sin_hour, cos_hour, sin_day, cos_day, sin_month, cos_month], axis=1
+    ).astype(np.float32)
+
+
+def _display_name(exp_name: str) -> str:
+    """Convert an experiment directory name to a human-readable label."""
+    lower = exp_name.lower()
+    horizon = "24h"
+    for h in ("168", "720"):
+        if h in lower:
+            horizon = f"{h}h"
+            break
+    if "hybrid" in lower:
+        return f"Hybrid V2 ({horizon})"
+    if "itransformer" in lower:
+        return f"iTransformer ({horizon})"
+    # Fallback: title-case after replacing underscores, capped at 40 chars
+    return exp_name.replace("_", " ").title()[:40]
+
+
+def _architecture(exp_name: str) -> str:
+    lower = exp_name.lower()
+    if "hybrid" in lower:
+        return "Hybrid (CNN + BiLSTM + Attention)"
+    if "itransformer" in lower:
+        return "iTransformer"
+    return "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# ForecastService
+# ---------------------------------------------------------------------------
+
+class ForecastService:
+    """Registry-backed inference service with lazy model loading.
+
+    A single model is kept in memory at a time. When a request arrives for a
+    different model the previous one is evicted and the new one loaded.  The
+    identity of the cached model is tracked by its registry ``id``.
+    """
+
+    def __init__(self) -> None:
+        self._cached_model_id: Optional[int] = None
+        self._model = None
+        self._pipeline: Optional[FeaturePipeline] = None
+        self._config: Optional[dict] = None
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Lazy-loaded sample datasets
+        self._samples: Optional[Dict[str, Any]] = None
+
+    # ── Registry helpers ────────────────────────────────────────────────────
+
+    def _seed_registry_from_disk(self, db: Session) -> None:
+        """Auto-register experiments found on disk when the registry is empty.
+
+        This makes the service usable immediately after training without
+        requiring a separate manual API call.  The most recently created
+        experiment is set as the default active model.
+        """
+        if db.query(ModelRegistry).count() > 0:
+            return
+
+        if not os.path.isdir(EXPERIMENTS_DIR):
+            return
+
+        required_files = ("model.pt", "pipeline.pkl", "config.yaml", "metrics.json")
+        candidates = sorted(
+            name for name in os.listdir(EXPERIMENTS_DIR)
+            if all(
+                os.path.exists(os.path.join(EXPERIMENTS_DIR, name, f))
+                for f in required_files
+            )
+        )
+        if not candidates:
+            return
+
+        registered = False
+        for exp_name in candidates:
+            exp_path = os.path.join(EXPERIMENTS_DIR, exp_name)
+            try:
+                import yaml
+                with open(os.path.join(exp_path, "config.yaml")) as fh:
+                    cfg = yaml.safe_load(fh)
+                with open(os.path.join(exp_path, "metrics.json")) as fh:
+                    summary = json.load(fh)
+
+                m = summary.get("final_unscaled") or summary.get("metrics", {}).get("final_unscaled") or summary.get("final") or summary.get("metrics", {}).get("final", {})
+                entry = ModelRegistry(
+                    name=exp_name,
+                    version=cfg.get("version", "1.0.0"),
+                    experiment_path=exp_path,
+                    model_fingerprint=summary.get("model_fingerprint"),
+                    active=not registered,   # first candidate becomes active
+                    mae=m.get("mae"),
+                    rmse=m.get("rmse"),
+                )
+                db.add(entry)
+                registered = True
+            except Exception:
+                continue
+
+        if registered:
+            db.commit()
+
+    def _resolve_entry(self, model_name: str, db: Session) -> ModelRegistry:
+        """Return the registry entry for *model_name*, falling back to active."""
+        entry = (
+            db.query(ModelRegistry)
+            .filter(ModelRegistry.name == model_name)
+            .first()
+        )
+        if entry is None:
+            entry = (
+                db.query(ModelRegistry)
+                .filter(ModelRegistry.active == True)
+                .first()
+            )
+        if entry is None:
+            raise ValueError(
+                "No model found in the registry. "
+                "Train a model and register it via POST /api/v1/models, "
+                "or place experiments in the experiments/ directory."
+            )
+        return entry
+
+    # ── Model loading ────────────────────────────────────────────────────────
+
+    def _ensure_loaded(self, entry: ModelRegistry) -> None:
+        """Load model and pipeline from *entry* into memory if not already cached."""
+        if self._cached_model_id == entry.id:
+            return
+
+        exp_path = entry.experiment_path
+        model_path    = os.path.join(exp_path, "model.pt")
+        pipeline_path = os.path.join(exp_path, "pipeline.pkl")
+        config_path   = os.path.join(exp_path, "config.yaml")
+
         if not os.path.exists(model_path):
-            raise Exception(f"Model path missing: {model_path}")
-            
-        # Load config
+            raise FileNotFoundError(f"Model artifact not found: {model_path}")
+
         import yaml
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-            
+        with open(config_path) as fh:
+            config = yaml.safe_load(fh)
         self._config = config
-        
-        # Load pipeline
-        self._pipeline = FeaturePipeline(time_col='timestamp', target_cols=['gap'])
-        self._pipeline.load(pipeline_path)
-        
-        # Load Model
-        model_name = config['model']['name']
-        if model_name == 'Hybrid_v2':
+
+        pipeline = FeaturePipeline(time_col="timestamp", target_cols=["gap"])
+        pipeline.load(pipeline_path)
+        self._pipeline = pipeline
+
+        arch = config["model"]["name"]
+        if arch == "Hybrid_v2":
             from training.models.hybrid_v2 import Hybrid_v2
-            model = Hybrid_v2(config['model'])
-        elif model_name == 'iTransformer':
+            model = Hybrid_v2(config["model"])
+        elif arch == "iTransformer":
             from training.models.itransformer import iTransformer
-            model = iTransformer(config['model'])
+            model = iTransformer(config["model"])
         else:
-            raise ValueError(f"Unknown model architecture: {model_name}")
-            
+            raise ValueError(f"Unknown model architecture in config: {arch!r}")
+
         model.to(self.device)
         model.load(model_path, self.device)
         model.eval()
-        
+
         self._model = model
-        self._active_model_id = active_model.id
+        self._cached_model_id = entry.id
+
+    def load_active_model(self, db: Session) -> bool:
+        """Load the currently active model.  Returns True if one was found."""
+        entry = db.query(ModelRegistry).filter(ModelRegistry.active == True).first()
+        if not entry:
+            return False
+        self._ensure_loaded(entry)
         return True
-        
-    def predict(self, raw_df: pd.DataFrame, db: Session, threshold_kw: float = 3.0):
-        # raw_df expects timestamp and gap columns
-        if not self.load_active_model(db):
-            raise Exception("No active model available in registry.")
-            
-        # process through pipeline
-        missing_strat = self._config['training'].get('missing_strategy', 'interpolate')
-        processed_df = self._pipeline.transform(raw_df, validate=True, missing_strategy=missing_strat)
-        
-        lookback = self._config['model']['lookback']
-        horizon = self._config['model']['forecast_horizon']
-        
-        if len(processed_df) < lookback:
-            raise ValueError(f"Not enough data. Need at least {lookback} points, got {len(processed_df)}.")
-        
-        # generate tensors
-        # X: [1, lookback, 1]
-        x_last = torch.tensor(processed_df['gap'].values, dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
-        
-        # Temp: [1, lookback, num_features]
-        features_df = processed_df.drop(columns=['timestamp', 'gap'])
-        temp_last = torch.tensor(features_df.values, dtype=torch.float32).unsqueeze(0)
-        
-        x_last = x_last.to(self.device)
-        temp_last = temp_last.to(self.device)
-        
+
+    # ── Public API ───────────────────────────────────────────────────────────
+
+    def get_available_models(self) -> List[dict]:
+        """Return every registered experiment as a ``ModelInfo``-compatible dict."""
+        db = SessionLocal()
+        try:
+            self._seed_registry_from_disk(db)
+            entries = (
+                db.query(ModelRegistry)
+                .order_by(ModelRegistry.created_at.desc())
+                .all()
+            )
+            result = []
+            for entry in entries:
+                training_metrics = None
+                summary_path = os.path.join(entry.experiment_path, "metrics.json")
+                if os.path.exists(summary_path):
+                    try:
+                        with open(summary_path) as fh:
+                            summary = json.load(fh)
+                        m = summary.get("final_unscaled") or summary.get("metrics", {}).get("final_unscaled") or summary.get("final") or summary.get("metrics", {}).get("final", {})
+                        training_metrics = {
+                            "mae":     float(m.get("mae",  0.0)),
+                            "rmse":    float(m.get("rmse", 0.0)),
+                            "mape":    float(m.get("mape", 0.0)),
+                            "r2_score": float(m.get("r2",  0.0)),
+                        }
+                    except Exception:
+                        pass
+
+                result.append({
+                    "id":                str(entry.id),
+                    "name":              entry.name,
+                    "display_name":      _display_name(entry.name),
+                    "architecture_type": _architecture(entry.name),
+                    "description":       f"Experiment: {entry.name}",
+                    "training_metrics":  training_metrics,
+                    "is_active":         entry.active,
+                    "version":           entry.version,
+                    # accuracy is a proxy: invert normalised MAE (capped at [0, 1])
+                    "accuracy":          round(max(0.0, 1.0 - (entry.mae or 0.5)), 4),
+                    "last_trained":      (
+                        entry.created_at.isoformat() if entry.created_at else None
+                    ),
+                    "parameters": {},
+                    "status":    "active" if entry.active else "registered",
+                })
+            return result
+        finally:
+            db.close()
+
+    def get_sample_datasets(self) -> List[dict]:
+        """Return metadata about the built-in sample datasets."""
+        return [
+            {
+                "name":        key,
+                "description": val["description"],
+                "season":      val["season"],
+                "date_range":  val["date_range"],
+            }
+            for key, val in self.samples.items()
+        ]
+
+    @property
+    def samples(self) -> Dict[str, Any]:
+        """Lazy-loaded sample datasets keyed by name."""
+        if self._samples is None:
+            self._samples = self._load_samples()
+        return self._samples
+
+    # ── Inference ────────────────────────────────────────────────────────────
+
+    def predict(
+        self,
+        model_name: str,
+        targets: np.ndarray,
+        calendar: Optional[np.ndarray] = None,
+        threshold_kw: float = 3.0,
+        start_hour: Optional[int] = None,
+        horizon: int = 24,
+        timestamps=None,
+    ) -> Tuple[np.ndarray, List[dict]]:
+        """Run inference for a named model on pre-sliced input arrays.
+
+        Parameters
+        ----------
+        model_name:
+            Registry entry name to use.  Falls back to the active model if
+            not found.
+        targets:
+            Shape ``(lookback,)`` or ``(lookback, N)``.  Column 0 is always
+            Global Active Power (GAP) in kW.
+        calendar:
+            Ignored — the ``FeaturePipeline`` derives all calendar features
+            from the timestamp index.  Accepted for call-site compatibility.
+        timestamps:
+            Timestamps aligned with *targets*.  When ``None`` a synthetic
+            lookback window ending at *now* (UTC) is used.
+
+        Returns
+        -------
+        predictions : np.ndarray, shape ``(horizon, num_targets)``
+        alerts      : List[dict]
+        """
+        # 1. Resolve and load the requested model
+        db = SessionLocal()
+        try:
+            self._seed_registry_from_disk(db)
+            entry = self._resolve_entry(model_name, db)
+            self._ensure_loaded(entry)
+        finally:
+            db.close()
+
+        # 2. Extract GAP column (column 0 for multi-column arrays)
+        gap = targets[:, 0] if targets.ndim > 1 else targets
+
+        # 3. Build a timestamp index
+        if timestamps is not None:
+            ts = pd.DatetimeIndex(timestamps)
+            if ts.tz is None:
+                ts = ts.tz_localize("UTC")
+        else:
+            ts = pd.date_range(
+                end=pd.Timestamp.now(tz="UTC"),
+                periods=len(gap),
+                freq="h",
+            )
+
+        # 4. Run through FeaturePipeline
+        raw_df = pd.DataFrame({"timestamp": ts, "gap": gap.astype(np.float32)})
+        missing_strat = self._config["training"].get("missing_strategy", "interpolate")
+        processed = self._pipeline.transform(
+            raw_df, validate=True, missing_strategy=missing_strat
+        )
+
+        lookback = self._config["model"]["lookback"]
+        processed = processed.tail(lookback)
+
+        if len(processed) < lookback:
+            raise ValueError(
+                f"Not enough data: need {lookback} rows, got {len(processed)}."
+            )
+
+        # 5. Build tensors
+        x = (
+            torch.tensor(processed["gap"].values, dtype=torch.float32)
+            .unsqueeze(0).unsqueeze(-1).to(self.device)
+        )
+        feat_cols = [c for c in processed.columns if c not in ("timestamp", "gap")]
+        temp = (
+            torch.tensor(processed[feat_cols].values, dtype=torch.float32)
+            .unsqueeze(0).to(self.device)
+        )
+
+        # 6. Forward pass
         with torch.no_grad():
-            preds = self._model.predict(x_last, temp_last)
+            preds = self._model.predict(x, temp)
+
+        preds_np: np.ndarray = preds.cpu().numpy()[0]   # (horizon, num_targets)
+        
+        # 7. Inverse transform to return real kW values
+        if hasattr(self._pipeline, 'scaler'):
+            preds_np = self._pipeline.scaler.inverse_transform(preds_np)
             
-        preds_np = preds.cpu().numpy()[0] # shape [horizon, num_targets]
-        
-        # generate alerts
         alerts = self._check_alerts(preds_np, threshold_kw)
-        
         return preds_np, alerts
 
-    def _check_alerts(self, predictions: np.ndarray, threshold_kw: float = 3.0) -> List[dict]:
-        """Check predictions against alert thresholds."""
-        alerts = []
-        gap_predictions = predictions[:, 0]  # Global Active Power is target 0
-        peak_power = float(np.max(gap_predictions))
+    def predict_comparison(
+        self,
+        targets: np.ndarray,
+        calendar: Optional[np.ndarray] = None,
+        horizon: int = 24,
+        timestamps=None,
+    ) -> Dict[str, np.ndarray]:
+        """Run ``predict`` for every registered model.
 
-        if peak_power > threshold_kw:
-            severity = 'high' if peak_power > threshold_kw * 1.5 else 'medium'
-            alerts.append({
-                'alert_type': 'peak_demand',
-                'severity': severity,
-                'message': f'Predicted peak demand of {peak_power:.2f} kW exceeds threshold of {threshold_kw:.1f} kW',
-                'peak_kw': peak_power,
-            })
-        return alerts
+        Models that fail to load or infer are silently skipped.  Callers
+        always receive at least one result or a ``ValueError`` if the registry
+        is empty.
+        """
+        db = SessionLocal()
+        try:
+            self._seed_registry_from_disk(db)
+            names = [e.name for e in db.query(ModelRegistry).all()]
+        finally:
+            db.close()
 
-# Singleton instance
+        if not names:
+            raise ValueError(
+                "No models registered. "
+                "Train a model and register it via POST /api/v1/models."
+            )
+
+        results: Dict[str, np.ndarray] = {}
+        for name in names:
+            try:
+                preds, _ = self.predict(
+                    name, targets, calendar=calendar,
+                    horizon=horizon, timestamps=timestamps,
+                )
+                results[name] = preds
+            except Exception:
+                continue   # skip models with missing artifacts or config errors
+        return results
+
+    # ── Internal helpers ─────────────────────────────────────────────────────
+
+    def _check_alerts(
+        self, predictions: np.ndarray, threshold_kw: float = 3.0
+    ) -> List[dict]:
+        """Return a list of alert dicts if the predicted peak exceeds the threshold."""
+        gap_preds = predictions[:, 0]
+        peak = float(np.max(gap_preds))
+        if peak <= threshold_kw:
+            return []
+        severity = "high" if peak > threshold_kw * 1.5 else "medium"
+        return [
+            {
+                "alert_type": "peak_demand",
+                "severity": severity,
+                "message": (
+                    f"Predicted peak demand of {peak:.2f} kW "
+                    f"exceeds threshold of {threshold_kw:.1f} kW"
+                ),
+                "peak_kw": peak,
+            }
+        ]
+
+    # ── Sample loading ───────────────────────────────────────────────────────
+
+    def _load_samples(self) -> Dict[str, Any]:
+        """Load sample datasets from the UCI CSV or fall back to synthetic data."""
+        candidates = [
+            "/app/data/household_power_consumption.txt",
+            os.path.join(
+                os.path.dirname(__file__),
+                "../../../data/household_power_consumption.txt",
+            ),
+        ]
+        data_path = next((p for p in candidates if os.path.exists(p)), None)
+        if data_path:
+            result = self._samples_from_csv(data_path)
+            if result:
+                return result
+        return self._synthetic_samples()
+
+    def _samples_from_csv(self, path: str) -> Dict[str, Any]:
+        """Extract summer and winter 96-h slices from the UCI household dataset."""
+        try:
+            df = pd.read_csv(path, sep=";", na_values=["?"], low_memory=False)
+            df["datetime"] = pd.to_datetime(
+                df["Date"] + " " + df["Time"], dayfirst=True
+            )
+            df = (
+                df.dropna(subset=["Global_active_power"])
+                .rename(columns={"Global_active_power": "gap"})
+                .set_index("datetime")
+                .sort_index()
+            )
+            df = df.resample("h").mean(numeric_only=True)
+            df["gap"] = df["gap"].interpolate(method="time")
+            df.index = df.index.tz_localize("UTC")
+
+            lookback = 96   # 4 days
+
+            def _slice(start: str, description: str, season: str, date_range: str):
+                ts_start = pd.Timestamp(start, tz="UTC")
+                ts_end   = ts_start + pd.Timedelta(hours=lookback - 1)
+                chunk = df.loc[ts_start:ts_end, "gap"]
+                if len(chunk) < lookback:
+                    return None
+                gap = chunk.values[:lookback].astype(np.float32)
+                ts  = chunk.index[:lookback]
+                return {
+                    "targets":     gap.reshape(-1, 1),
+                    "calendar":    None,   # FeaturePipeline handles features
+                    "start_hour":  int(ts[0].hour),
+                    "input_start": ts[0].to_pydatetime(),
+                    "input_end":   ts[-1].to_pydatetime(),
+                    "timestamps":  ts,
+                    "description": description,
+                    "season":      season,
+                    "date_range":  date_range,
+                }
+
+            samples: Dict[str, Any] = {}
+            summer = _slice(
+                "2007-08-06 00:00",
+                "Summer week — high AC load, low heating.",
+                "Summer", "Aug 6–9, 2007",
+            )
+            winter = _slice(
+                "2008-01-07 00:00",
+                "Winter week — peak heating demand.",
+                "Winter", "Jan 7–10, 2008",
+            )
+            if summer:
+                samples["sample_summer"] = summer
+            if winter:
+                samples["sample_winter"] = winter
+            return samples
+        except Exception:
+            return {}
+
+    def _synthetic_samples(self) -> Dict[str, Any]:
+        """Generate two deterministic 96-h profiles as a fallback."""
+        rng = np.random.default_rng(42)
+        ts_summer = pd.date_range("2007-08-06", periods=96, freq="h", tz="UTC")
+        ts_winter = pd.date_range("2008-01-07", periods=96, freq="h", tz="UTC")
+
+        def _profile(ts, base: float, scale: float) -> np.ndarray:
+            h = np.array([t.hour for t in ts])
+            v = base + scale * np.sin(np.pi * h / 24) + rng.normal(0, 0.05, 96)
+            return np.clip(v, 0.1, None).astype(np.float32)
+
+        def _make(ts, gap, description, season, date_range):
+            return {
+                "targets":     gap.reshape(-1, 1),
+                "calendar":    None,
+                "start_hour":  int(ts[0].hour),
+                "input_start": ts[0].to_pydatetime(),
+                "input_end":   ts[-1].to_pydatetime(),
+                "timestamps":  ts,
+                "description": description,
+                "season":      season,
+                "date_range":  date_range,
+            }
+
+        return {
+            "sample_summer": _make(
+                ts_summer, _profile(ts_summer, 0.8, 0.6),
+                "Synthetic summer profile (fallback).", "Summer", "Aug 2007",
+            ),
+            "sample_winter": _make(
+                ts_winter, _profile(ts_winter, 1.8, 0.9),
+                "Synthetic winter profile (fallback).", "Winter", "Jan 2008",
+            ),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Singleton
+# ---------------------------------------------------------------------------
+
 _forecast_service: Optional[ForecastService] = None
 
+
 def get_forecast_service() -> ForecastService:
-    """Get or create the forecast service singleton."""
+    """Return (or create) the module-level singleton."""
     global _forecast_service
     if _forecast_service is None:
         _forecast_service = ForecastService()
