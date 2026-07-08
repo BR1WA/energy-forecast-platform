@@ -34,28 +34,35 @@ def compute_metrics(actual, predicted):
         "R2": float(r2)
     }
 
-def generate_comparison_table(experiments_dir="training/experiments"):
+def generate_comparison_table(experiments_dir="experiments"):
     """
     Scans the experiments directory, aggregates results, and generates Markdown tables.
     """
     results = []
-    for file in glob.glob(f"{experiments_dir}/*.json"):
+    import yaml
+    for file in glob.glob(f"{experiments_dir}/*/metrics.json"):
         with open(file, 'r') as f:
             data = json.load(f)
             
-        metrics = data.get("metrics", {}).get("final", {})
-        config = data.get("config", {})
+        metrics_data = data.get("metrics", {})
+        metrics = data.get("final_unscaled") or metrics_data.get("final_unscaled") or metrics_data.get("final", {})
+        
+        config_path = file.replace("metrics.json", "config.yaml")
+        config = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
         
         # We assume the best/final metrics are recorded
         results.append({
             "Model": config.get("model", {}).get("name", "Unknown"),
             "Horizon": config.get("model", {}).get("forecast_horizon", "Unknown"),
             "Lookback": config.get("model", {}).get("lookback", "Unknown"),
-            "MAE": metrics.get("MAE", 0),
-            "RMSE": metrics.get("RMSE", 0),
-            "MAPE": metrics.get("MAPE", 0),
-            "sMAPE": metrics.get("sMAPE", 0),
-            "R2": metrics.get("R2", 0)
+            "MAE": metrics.get("mae", 0),
+            "RMSE": metrics.get("rmse", 0),
+            "MAPE": metrics.get("mape", 0),
+            "sMAPE": metrics.get("smape", 0),
+            "R2": metrics.get("r2", 0)
         })
         
     df = pd.DataFrame(results)

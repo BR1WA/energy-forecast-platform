@@ -210,14 +210,20 @@ def train():
         print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
         
         # Calculate full metrics on validation set
-        y_pred = torch.cat(all_preds, dim=0)
-        y_true = torch.cat(all_trues, dim=0)
+        y_pred = torch.cat(all_preds, dim=0).detach().cpu().numpy()
+        y_true = torch.cat(all_trues, dim=0).detach().cpu().numpy()
+        
+        # Inverse transform to compute metrics on real kW values
+        orig_shape = y_pred.shape
+        y_pred_inv = pipeline.scaler.inverse_transform(y_pred.reshape(-1, len(pipeline.target_cols))).reshape(orig_shape)
+        y_true_inv = pipeline.scaler.inverse_transform(y_true.reshape(-1, len(pipeline.target_cols))).reshape(orig_shape)
+        
         num_samples = len(y_pred)
         num_batches = len(val_loader)
         
         val_metrics = compute_metrics(
-            y_true, 
-            y_pred, 
+            y_true_inv, 
+            y_pred_inv, 
             inference_time_total=total_val_time, 
             num_samples=num_samples, 
             num_batches=num_batches
