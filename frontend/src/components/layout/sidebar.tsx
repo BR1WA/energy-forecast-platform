@@ -33,7 +33,17 @@ import {
 
 import { API_BASE_URL } from '@/lib/api';
 
-const navItems = [
+interface NavItem {
+  label: string;
+  translationKey: string;
+  href: string;
+  icon: any;
+  adminOnly?: boolean;
+  analystOrAdminOnly?: boolean;
+  featureGate?: Feature;
+}
+
+const navItems: NavItem[] = [
   {
     label: 'Dashboard',
     translationKey: 'nav.dashboard',

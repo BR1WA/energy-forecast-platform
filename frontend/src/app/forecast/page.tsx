@@ -26,6 +26,7 @@ import {
   Sparkles,
   TrendingUp,
   AlertCircle,
+  CalendarClock,
 } from 'lucide-react';
 import {
   LineChart,
@@ -567,48 +568,64 @@ export default function ForecastPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {models
-                  .filter((m) => getHorizonForModel(m) === selectedHorizon)
-                  .map((model) => {
-                  const meta = modelMeta[model.name] || { icon: Brain, color: '#3B82F6' };
-                  const Icon = meta.icon;
-                  return (
-                    <button
-                      key={model.name}
-                      id={`model-${model.name}`}
-                      onClick={() => setSelectedModel(model.name)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
-                        selectedModel === model.name
-                          ? 'border-blue-500/30 bg-blue-500/10'
-                          : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      <div
-                        className="flex items-center justify-center w-9 h-9 rounded-lg"
-                        style={{ backgroundColor: `${meta.color}20` }}
+                {selectedHorizon !== 24 ? (
+                  <div className="flex flex-col items-center justify-center py-8 space-y-3 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
+                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                      <CalendarClock className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-slate-300">Coming Soon</p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-[200px]">This forecast horizon is scheduled for the next development phase.</p>
+                    </div>
+                  </div>
+                ) : models.filter((m) => getHorizonForModel(m) === selectedHorizon).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 space-y-2 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
+                    <p className="text-xs text-slate-500">No models available for this horizon.</p>
+                  </div>
+                ) : (
+                  models
+                    .filter((m) => getHorizonForModel(m) === selectedHorizon)
+                    .map((model) => {
+                    const meta = modelMeta[model.name] || { icon: Brain, color: '#3B82F6' };
+                    const Icon = meta.icon;
+                    return (
+                      <button
+                        key={model.name}
+                        id={`model-${model.name}`}
+                        onClick={() => setSelectedModel(model.name)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
+                          selectedModel === model.name
+                            ? 'border-blue-500/30 bg-blue-500/10'
+                            : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'
+                        }`}
                       >
-                        <Icon
-                          className="w-4 h-4"
-                          style={{ color: meta.color }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">
-                          {model.display_name}
-                        </p>
-                        <p className="text-xs text-slate-500 truncate">
-                          {model.description}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[10px] shrink-0"
-                      >
-                        MAE: {model.training_metrics?.mae !== undefined ? model.training_metrics.mae.toFixed(3) : 'N/A'}
-                      </Badge>
-                    </button>
-                  );
-                })}
+                        <div
+                          className="flex items-center justify-center w-9 h-9 rounded-lg"
+                          style={{ backgroundColor: `${meta.color}20` }}
+                        >
+                          <Icon
+                            className="w-4 h-4"
+                            style={{ color: meta.color }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white">
+                            {model.display_name}
+                          </p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {model.description}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 text-[10px] shrink-0"
+                        >
+                          MAE: {model.training_metrics?.mae !== undefined ? model.training_metrics.mae.toFixed(3) : 'N/A'}
+                        </Badge>
+                      </button>
+                    );
+                  })
+                )}
               </CardContent>
             </Card>
 

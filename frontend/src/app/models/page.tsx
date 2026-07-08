@@ -68,7 +68,7 @@ export default function ModelsPage() {
                       <th className="px-6 py-4 font-semibold">Horizon</th>
                       <th className="px-6 py-4 font-semibold">Version</th>
                       <th className="px-6 py-4 font-semibold">MAE</th>
-                      <th className="px-6 py-4 font-semibold">R²</th>
+                      <th className="px-6 py-4 font-semibold">RMSE</th>
                       <th className="px-6 py-4 font-semibold">Trained</th>
                       <th className="px-6 py-4 font-semibold">Status</th>
                     </tr>
@@ -78,16 +78,16 @@ export default function ModelsPage() {
                       <tr key={m.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="px-6 py-4 font-medium text-white flex items-center gap-2">
                           <Cpu className="w-4 h-4 text-slate-500" />
-                          {m.model_name}
+                          {m.name}
                         </td>
                         <td className="px-6 py-4 text-slate-300">
                           <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20">
-                            {m.horizon}h
+                            {m.name ? m.name.split('_')[0] : '24h'}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 font-mono text-xs text-slate-400">{m.version}</td>
-                        <td className="px-6 py-4 text-slate-300">{m.metrics?.mae?.toFixed(3) || '—'}</td>
-                        <td className="px-6 py-4 text-slate-300">{m.metrics?.r2?.toFixed(3) || '—'}</td>
+                        <td className="px-6 py-4 text-slate-300">{m.mae?.toFixed(3) || '—'}</td>
+                        <td className="px-6 py-4 text-slate-300">{m.rmse?.toFixed(3) || '—'}</td>
                         <td className="px-6 py-4 text-slate-400 flex items-center gap-1.5">
                           <CalendarClock className="w-3.5 h-3.5" />
                           {m.created_at ? new Date(m.created_at).toISOString().split('T')[0] : 'N/A'}
