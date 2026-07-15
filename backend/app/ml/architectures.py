@@ -33,7 +33,18 @@ class RevIN(nn.Module):
             return x
 
 
-class PatchTST(nn.Module):
+class ForecastModel(nn.Module):
+    """Base class providing unified load and predict interfaces for inference."""
+    def predict(self, x, temporal=None):
+        self.eval()
+        with torch.no_grad():
+            return self.forward(x, temporal)
+
+    def load(self, filepath: str, device: torch.device):
+        self.load_state_dict(torch.load(filepath, map_location=device))
+
+
+class PatchTST(ForecastModel):
     """
     PatchTST: A Time Series is Worth 64 Words (Nie et al., ICLR 2023).
     Pure Transformer with channel-independent patching.
@@ -94,7 +105,7 @@ class PatchTST(nn.Module):
         return pred_final
 
 
-class SOTAForecastingModel(nn.Module):
+class SOTAForecastingModel(ForecastModel):
     """
     SOTA Hybrid: RevIN + Multi-Scale Patching + BiGRU + Transformer + Cross-Variable Attention.
     """
@@ -171,7 +182,7 @@ class SOTAForecastingModel(nn.Module):
         return pred_final
 
 
-class CNN_BiLSTM(nn.Module):
+class CNN_BiLSTM(ForecastModel):
     """Baseline CNN-BiLSTM for multi-step forecasting."""
     def __init__(self, num_targets=7, forecast_horizon=24, cnn_filters=64, lstm_hidden=64):
         super(CNN_BiLSTM, self).__init__()
@@ -272,7 +283,7 @@ class Flatten_Head(nn.Module):
         return x
 
 
-class AdvancedPatchTST(nn.Module):
+class AdvancedPatchTST(ForecastModel):
     """Upgraded PatchTST with Temporal Features and stateless RevIN"""
     def __init__(self, c_in=7, context_window=336, target_window=168, 
                  patch_len=16, stride=8, d_model=128, n_heads=8, 
@@ -356,7 +367,7 @@ class AdvancedPatchTST(nn.Module):
         return x
 
 
-class iTransformer(nn.Module):
+class iTransformer(ForecastModel):
     """iTransformer with Calendar Embeddings as Channels/Tokens"""
     def __init__(self, c_in=7, lookback=336, forecast_horizon=168, 
                  d_model=128, n_heads=8, n_layers=3, d_ff=256, 

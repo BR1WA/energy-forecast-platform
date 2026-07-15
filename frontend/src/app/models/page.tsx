@@ -78,11 +78,11 @@ export default function ModelsPage() {
                       <tr key={m.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="px-6 py-4 font-medium text-white flex items-center gap-2">
                           <Cpu className="w-4 h-4 text-slate-500" />
-                          {m.name}
+                          {m.display_name || m.name}
                         </td>
                         <td className="px-6 py-4 text-slate-300">
                           <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20">
-                            {m.name ? m.name.split('_')[0] : '24h'}
+                            {m.version ? m.version.split('_')[0] : '24h'}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 font-mono text-xs text-slate-400">{m.version}</td>

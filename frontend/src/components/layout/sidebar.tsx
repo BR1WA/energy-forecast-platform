@@ -21,6 +21,9 @@ import {
   User,
   Building,
   Cpu,
+  Sparkles,
+  Target,
+  FileText,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -41,6 +44,7 @@ interface NavItem {
   adminOnly?: boolean;
   analystOrAdminOnly?: boolean;
   featureGate?: Feature;
+  disabled?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -51,25 +55,43 @@ const navItems: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    label: 'Forecasts',
-    translationKey: 'nav.forecasts',
-    href: '/forecast',
-    icon: LineChart,
-  },
-  {
-    label: 'Consumption',
+    label: 'Energy Analytics',
     translationKey: 'nav.consumption',
     href: '/consumption',
     icon: Zap,
   },
   {
-    label: 'Simulation',
+    label: 'Forecast Center',
+    translationKey: 'nav.forecasts',
+    href: '/forecast',
+    icon: LineChart,
+  },
+  {
+    label: 'AI Recommendations',
+    translationKey: 'nav.recommendations',
+    href: '/recommendations',
+    icon: Sparkles,
+  },
+  {
+    label: 'Budget & Goals',
+    translationKey: 'nav.budget',
+    href: '/budget',
+    icon: Target,
+  },
+  {
+    label: 'Reports',
+    translationKey: 'nav.reports',
+    href: '/reports',
+    icon: FileText,
+  },
+  {
+    label: 'Virtual House',
     translationKey: 'nav.simulation',
     href: '/simulation',
     icon: BarChart3,
   },
   {
-    label: 'Alerts',
+    label: 'Notifications',
     translationKey: 'nav.alerts',
     href: '/alerts',
     icon: Bell,
@@ -148,13 +170,14 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={item.disabled ? '#' : item.href}
                 id={`nav-${item.label.toLowerCase()}`}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative',
                   isActive
                     ? 'bg-blue-500/15 text-blue-400'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]',
+                  item.disabled && 'opacity-50 cursor-not-allowed pointer-events-none'
                 )}
               >
                 {isActive && (
@@ -174,6 +197,11 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
                 {!collapsed && (
                   <span className="truncate animate-in fade-in slide-in-from-left-2 duration-200">
                     {t(item.translationKey)}
+                  </span>
+                )}
+                {item.disabled && !collapsed && (
+                  <span className="ml-auto text-[9px] uppercase tracking-wider bg-white/10 text-slate-400 px-1.5 py-0.5 rounded">
+                    Soon
                   </span>
                 )}
                 {isActive && !collapsed && (

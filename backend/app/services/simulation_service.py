@@ -6,6 +6,21 @@ class SimulationService:
     def __init__(self):
         self.is_running = False
         self.start_time = None
+        self.day_part = "evening"
+        self.occupants = 2
+        self.temperature = 25.0
+        self.ac_level = "medium"
+        self.washing_machine = False
+        self.solar = "off"
+
+    def configure_simulation(self, config: dict):
+        self.day_part = config.get("day_part", self.day_part)
+        self.occupants = config.get("occupants", self.occupants)
+        self.temperature = config.get("temperature", self.temperature)
+        self.ac_level = config.get("ac_level", self.ac_level)
+        self.washing_machine = config.get("washing_machine", self.washing_machine)
+        self.solar = config.get("solar", self.solar)
+        return {"status": "configured"}
 
     def start_simulation(self):
         self.is_running = True

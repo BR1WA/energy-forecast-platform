@@ -1,21 +1,26 @@
 # Data files (too large for git)
 data/household_power_consumption.txt
 
-# Python
+# Python cache & build directories
 __pycache__/
 *.pyc
 *.pyo
 .ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+htmlcov/
 
 # Models (binary, tracked via Git LFS or stored externally)
 models/*.pt
 models/*.pkl
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE settings
 .vscode/
 .idea/
 
@@ -23,6 +28,24 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+backend/.env
 
 # SQLite DB
 backend/energy_forecast.db
+energy_forecast.db
+
+# Node.js dependencies
+node_modules/
+
+# Local build artifacts
+frontend/.next/
+frontend/out/
+
+# Research/Experiments outputs
+experiments/
+backend/experiments/
+results/
+benchmark_report.json
+logs_*.txt
+test.csv
+lint_results.txt

@@ -1,48 +1,107 @@
-import numpy as np
-import torch
-from sklearn.metrics import r2_score
+"""
+training/utils/metrics.py
 
-def compute_metrics(y_true, y_pred, inference_time_total=None, num_samples=None, num_batches=None):
+Unified evaluation metrics for all forecasting models.
+Every experiment reports this same set so comparisons are apples-to-apples.
+"""
+from __future__ import annotations
+
+import time
+from typing import Dict, Optional
+import numpy as np
+
+
+def calculate_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+) -> Dict[str, float]:
     """
-    Computes a comprehensive suite of forecasting metrics.
-    Works with both numpy arrays and torch tensors.
+    Calculate standard time-series forecasting metrics.
+
+    Parameters
+    ----------
+    y_true : (n_samples, horizon, n_targets)  or  (horizon, n_targets)
+    y_pred : same shape as y_true
+
+    Returns
+    -------
+    dict with keys:
+        mae, rmse, mape, smape, r2,
+        median_ae, max_ae
     """
-    if isinstance(y_true, torch.Tensor):
-        y_true = y_true.detach().cpu().numpy()
-    if isinstance(y_pred, torch.Tensor):
-        y_pred = y_pred.detach().cpu().numpy()
-        
-    y_true_flat = y_true.flatten()
-    y_pred_flat = y_pred.flatten()
-    
-    # MAE
-    mae = np.mean(np.abs(y_true_flat - y_pred_flat))
-    
-    # RMSE
-    rmse = np.sqrt(np.mean(np.square(y_true_flat - y_pred_flat)))
-    
-    # MAPE (Mean Absolute Percentage Error)
-    # Adding a small epsilon to avoid division by zero
-    epsilon = np.finfo(np.float64).eps
-    mape = np.mean(np.abs((y_true_flat - y_pred_flat) / (np.maximum(np.abs(y_true_flat), epsilon)))) * 100
-    
-    # sMAPE (Symmetric Mean Absolute Percentage Error)
-    smape = np.mean(2.0 * np.abs(y_true_flat - y_pred_flat) / (np.abs(y_true_flat) + np.abs(y_pred_flat) + epsilon)) * 100
-    
-    # R2
-    r2 = r2_score(y_true_flat, y_pred_flat)
-    
-    metrics = {
-        "mae": float(mae),
-        "rmse": float(rmse),
-        "mape": float(mape),
-        "smape": float(smape),
-        "r2": float(r2)
+    if y_true.shape != y_pred.shape:
+        raise ValueError(
+            f"Shape mismatch: y_true {y_true.shape} vs y_pred {y_pred.shape}"
+        )
+
+    eps = 1e-8
+    err = y_pred - y_true
+    abs_err = np.abs(err)
+
+    mae    = float(np.mean(abs_err))
+    rmse   = float(np.sqrt(np.mean(np.square(err))))
+
+    # MAPE: mask near-zero ground truth values to prevent division explosion
+    nonzero_mask = np.abs(y_true) > 0.01  # threshold: 10W for energy data
+    if nonzero_mask.any():
+        mape = float(np.mean(abs_err[nonzero_mask] / np.abs(y_true[nonzero_mask])) * 100)
+    else:
+        mape = float("nan")
+
+    smape  = float(
+        np.mean(
+            2.0 * abs_err / (np.abs(y_true) + np.abs(y_pred) + eps)
+        ) * 100
+    )
+
+    ss_res = np.sum(np.square(err))
+    ss_tot = np.sum(np.square(y_true - np.mean(y_true)))
+    r2     = float(1.0 - ss_res / (ss_tot + eps))
+
+    median_ae = float(np.median(abs_err))
+    max_ae    = float(np.max(abs_err))   # worst-case miss — critical for energy utilities
+
+    return {
+        "mae":       mae,
+        "rmse":      rmse,
+        "mape":      mape,
+        "smape":     smape,
+        "r2":        r2,
+        "median_ae": median_ae,
+        "max_ae":    max_ae,
     }
-    
-    if inference_time_total is not None and num_samples is not None:
-        metrics["inference_time_per_sample_ms"] = (inference_time_total / num_samples) * 1000
-    if inference_time_total is not None and num_batches is not None:
-        metrics["inference_time_per_batch_ms"] = (inference_time_total / num_batches) * 1000
-        
-    return metrics
+
+
+def measure_inference_time(
+    model,
+    X: np.ndarray,
+    n_repeats: int = 5,
+) -> float:
+    """
+    Measure median inference time in milliseconds per sample.
+
+    Parameters
+    ----------
+    model     : any object with a `.predict(X)` method
+    X         : input array (n_samples, ...)
+    n_repeats : number of timed repetitions (median used for stability)
+
+    Returns
+    -------
+    float — ms per sample
+    """
+    times = []
+    for _ in range(n_repeats):
+        t0 = time.perf_counter()
+        model.predict(X)
+        times.append(time.perf_counter() - t0)
+    total_seconds = float(np.median(times))
+    return (total_seconds / len(X)) * 1000   # ms / sample
+
+
+def model_size_mb(path) -> Optional[float]:
+    """Return the size of a saved model artifact in MB, or None if path missing."""
+    import os
+    if not os.path.exists(path):
+        return None
+    return os.path.getsize(path) / (1024 ** 2)

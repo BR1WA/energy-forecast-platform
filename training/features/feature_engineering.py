@@ -18,6 +18,7 @@ class FeaturePipeline:
         self.validator = DatasetValidator(time_col=time_col, target_cols=target_cols)
         self.is_fitted = False
         self.feature_columns = []
+        self.scale_cols = []
 
     def fit(self, df: pd.DataFrame, freq: str = 'h', missing_strategy: str = 'fail'):
         # Validate data quality before fitting
@@ -26,7 +27,11 @@ class FeaturePipeline:
         df_sorted = df.sort_values(by=self.time_col)
         df_sorted = self._handle_missing(df_sorted, freq, missing_strategy)
         
-        self.scaler.fit(df_sorted[self.target_cols])
+        # Scale all numeric columns (excluding time column)
+        numeric_cols = df_sorted.select_dtypes(include=[np.number]).columns.tolist()
+        self.scale_cols = [c for c in numeric_cols if c != self.time_col]
+        
+        self.scaler.fit(df_sorted[self.scale_cols])
         self.is_fitted = True
         
         # Process once to get feature columns
@@ -45,8 +50,8 @@ class FeaturePipeline:
         df_out = df_out.sort_values(by=self.time_col)
         df_out = self._handle_missing(df_out, freq, missing_strategy)
         
-        # Scale targets
-        df_out[self.target_cols] = self.scaler.transform(df_out[self.target_cols])
+        # Scale all continuous features
+        df_out[self.scale_cols] = self.scaler.transform(df_out[self.scale_cols])
         
         # Add time features
         df_out = self._add_time_features(df_out)
@@ -56,6 +61,16 @@ class FeaturePipeline:
     def fit_transform(self, df: pd.DataFrame, freq: str = 'h', missing_strategy: str = 'fail') -> pd.DataFrame:
         self.fit(df, freq, missing_strategy)
         return self.transform(df, validate=False, freq=freq, missing_strategy=missing_strategy)
+
+    def inverse_transform_targets(self, y: np.ndarray) -> np.ndarray:
+        """
+        Inverse transform an array of predictions or ground truths that correspond
+        exactly to self.target_cols.
+        """
+        indices = [self.scale_cols.index(c) for c in self.target_cols]
+        means = self.scaler.mean_[indices]
+        scales = self.scaler.scale_[indices]
+        return y * scales + means
 
     def _handle_missing(self, df: pd.DataFrame, freq: str, strategy: str) -> pd.DataFrame:
         if strategy == 'fail' or strategy == 'ignore':
@@ -90,7 +105,8 @@ class FeaturePipeline:
                 'scaler': self.scaler,
                 'feature_columns': self.feature_columns,
                 'time_col': self.time_col,
-                'target_cols': self.target_cols
+                'target_cols': self.target_cols,
+                'scale_cols': getattr(self, 'scale_cols', []),
             }, f)
 
     def load(self, filepath: str):
@@ -100,4 +116,5 @@ class FeaturePipeline:
             self.feature_columns = data['feature_columns']
             self.time_col = data['time_col']
             self.target_cols = data['target_cols']
+            self.scale_cols = data.get('scale_cols', [])
             self.is_fitted = True

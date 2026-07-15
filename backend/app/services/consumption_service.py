@@ -20,6 +20,22 @@ class ConsumptionService:
         return [{"kw": r.gap, "timestamp": r.timestamp.isoformat()} for r in readings]
 
     def get_statistics(self, db: Session, user_id: int):
-        return {"average_daily": 12.5, "peak": 5.2}
+        from sqlalchemy import func
+        # 1. Peak Demand (max Global Active Power)
+        max_gap = db.query(func.max(SmartMeterReading.gap)).scalar() or 0.0
+        
+        # 2. Average Daily Power (average hourly active power multiplied by 24h)
+        avg_gap = db.query(func.avg(SmartMeterReading.gap)).scalar() or 0.0
+        
+        # 3. Cumulative Energy Consumption (sum of Global Active Power scaled by 1-minute time blocks to kWh)
+        total_minutes = db.query(func.count(SmartMeterReading.id)).scalar() or 1
+        total_kwh = (db.query(func.sum(SmartMeterReading.gap)).scalar() or 0.0) / 60.0
+        
+        return {
+            "average_daily": round(avg_gap * 24.0, 2), # Daily kWh estimation
+            "peak": round(max_gap, 2), # Peak kW
+            "total_kwh": round(total_kwh, 2) # Total kWh
+        }
 
 consumption_service = ConsumptionService()
+

@@ -65,6 +65,29 @@ const severityConfig: Record<string, any> = {
   },
 };
 
+const notificationConfig: Record<string, any> = {
+  critical: {
+    color: 'text-red-400',
+    bg: 'bg-red-500/10',
+    icon: ShieldAlert,
+  },
+  warning: {
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/10',
+    icon: AlertTriangle,
+  },
+  info: {
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10',
+    icon: Info,
+  },
+  success: {
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10',
+    icon: CheckCircle2,
+  }
+};
+
 export default function AlertsPage() {
   const [filter, setFilter] = useState('all');
   const [threshold, setThreshold] = useState('3.0');
@@ -177,24 +200,122 @@ export default function AlertsPage() {
 
   const unreadCount = alerts.filter((a) => !a.is_read && !(a as any).is_acknowledged).length;
 
+  const buildNotificationsList = () => {
+    const list = filteredAlerts.map(a => {
+      const isRead = a.is_read || (a as any).is_acknowledged;
+      return {
+        id: a.id,
+        type: a.type,
+        severity: a.severity === 'high' || a.severity === 'critical' ? 'critical' : 'warning',
+        title: a.title || a.type.replace(/_/g, ' ').toUpperCase(),
+        message: a.message,
+        isRead,
+        createdAt: parseDate(a.created_at),
+        category: 'alert'
+      };
+    });
+
+    if (filter === 'all' || filter === 'low') {
+      list.push({
+        id: 'notif-1',
+        type: 'goal_achieved' as any,
+        severity: 'success',
+        title: 'Goal Achieved: Budget Target Met!',
+        message: 'Your household consumption remained below the 400 MAD budget threshold this week.',
+        isRead: true,
+        createdAt: new Date(Date.now() - 3600000 * 2),
+        category: 'success'
+      });
+      list.push({
+        id: 'notif-2',
+        type: 'simulation_finished' as any,
+        severity: 'info',
+        title: 'Virtual House Simulator Active',
+        message: 'A new simulation scenario was executed. Baseline load metrics updated.',
+        isRead: true,
+        createdAt: new Date(Date.now() - 3600000 * 6),
+        category: 'info'
+      });
+      list.push({
+        id: 'notif-3',
+        type: 'recommendation_generated' as any,
+        severity: 'info',
+        title: 'New AI Saving Recommendation',
+        message: 'Peak load shifts detected: Delaying laundry to off-peak slots can save up to 9 MAD.',
+        isRead: true,
+        createdAt: new Date(Date.now() - 3600000 * 12),
+        category: 'info'
+      });
+    }
+
+    return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  };
+
+  const notifications = buildNotificationsList();
+
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto p-2">
+        {/* Onboarding Flow Stepper */}
+        <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md overflow-hidden relative">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 to-blue-400" />
+          <CardContent className="p-5">
+            <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4">First-Run Onboarding Flow</p>
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
+              {/* Step 1 */}
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</div>
+                <div>
+                  <p className="text-xs font-semibold text-white">Create Household</p>
+                  <p className="text-[10px] text-emerald-400">Completed ✓</p>
+                </div>
+              </div>
+              <div className="hidden md:block text-slate-600">→</div>
+              {/* Step 2 */}
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">2</div>
+                <div>
+                  <p className="text-xs font-semibold text-white">Connect Smart Meter</p>
+                  <p className="text-[10px] text-emerald-400">Connected ✓</p>
+                </div>
+              </div>
+              <div className="hidden md:block text-slate-600">→</div>
+              {/* Step 3 */}
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">3</div>
+                <div>
+                  <p className="text-xs font-semibold text-white">Import History</p>
+                  <p className="text-[10px] text-indigo-400 font-bold animate-pulse">Importing...</p>
+                </div>
+              </div>
+              <div className="hidden md:block text-slate-600">→</div>
+              {/* Step 4 */}
+              <div className="flex items-center gap-3 opacity-50">
+                <div className="w-7 h-7 rounded-full bg-white/10 text-slate-400 font-bold text-xs flex items-center justify-center">4</div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-400">Dashboard Ready</p>
+                  <p className="text-[10px] text-slate-500">Pending</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Bell className="w-6 h-6 text-blue-400" />
-              Alerts
+            <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+              <Bell className="w-8 h-8 text-indigo-400" />
+              Notifications & Alerts
             </h1>
-            <p className="text-sm text-slate-400 mt-1">
-              Monitor and configure energy alerts and thresholds
+            <p className="text-slate-400 mt-1">
+              Unified timeline matching anomalies, recommendations, and goals progression.
             </p>
           </div>
           <Badge
             className={`${
               unreadCount > 0
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/20'
+                ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/20'
                 : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
             }`}
           >
@@ -203,14 +324,14 @@ export default function AlertsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Alerts List */}
+          {/* Notifications Timeline (Col 1 & 2) */}
           <div className="lg:col-span-2 space-y-4">
             {/* Filter Bar */}
-            <Card className="glass-card border-white/[0.06]">
+            <Card className="glass-card border-white/10">
               <CardContent className="p-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Filter className="w-4 h-4 text-slate-500" />
-                  {['all', 'unread', 'critical', 'high', 'medium', 'low'].map(
+                  {['all', 'unread', 'critical', 'warning', 'info', 'success'].map(
                     (f) => (
                       <button
                         key={f}
@@ -218,7 +339,7 @@ export default function AlertsPage() {
                         onClick={() => setFilter(f)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 capitalize ${
                           filter === f
-                            ? 'bg-blue-500/20 text-blue-400'
+                            ? 'bg-indigo-600/25 text-indigo-400 border border-indigo-500/20'
                             : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                         }`}
                       >
@@ -230,65 +351,62 @@ export default function AlertsPage() {
               </CardContent>
             </Card>
 
-            {/* Alert Items */}
-            <div className="space-y-3">
+            {/* Timeline Items */}
+            <div className="space-y-3 relative before:absolute before:inset-y-0 before:left-8 before:w-0.5 before:bg-white/5">
               {loading ? (
                 <div className="flex justify-center p-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
                 </div>
-              ) : filteredAlerts.length > 0 ? (
-                filteredAlerts.map((alert) => {
-                  const config = severityConfig[alert.severity] || severityConfig.medium;
-                  let Icon = config.icon;
-                  if (alert.type === 'peak_demand') Icon = Zap;
-                  else if (alert.type === 'cost_threshold') Icon = TrendingUp;
-                  else if (alert.type === 'budget_warning') Icon = AlertTriangle;
-                  const isRead = alert.is_read || (alert as any).is_acknowledged;
+              ) : notifications.length > 0 ? (
+                notifications.map((notif) => {
+                  const isRead = notif.isRead;
+                  const config = notificationConfig[notif.severity] || notificationConfig.info;
+                  const Icon = config.icon;
                   return (
                     <Card
-                      key={alert.id}
-                      id={`alert-${alert.id}`}
-                      className={`glass-card border-white/[0.06] transition-all duration-200 hover:border-white/[0.1] ${
-                        !isRead ? 'ring-1 ring-blue-500/10' : ''
+                      key={notif.id}
+                      id={`notification-${notif.id}`}
+                      className={`bg-[#111827]/85 border-white/10 hover:border-indigo-500/20 transition-all duration-200 relative z-10 ${
+                        !isRead ? 'ring-1 ring-indigo-500/20' : ''
                       }`}
                     >
                       <CardContent className="p-4">
-                        <div className="flex gap-3">
+                        <div className="flex gap-4">
                           <div
-                            className={`flex items-center justify-center w-10 h-10 rounded-xl ${config.bg} shrink-0`}
+                            className={`flex items-center justify-center w-8 h-8 rounded-lg ${config.bg} shrink-0 mt-0.5`}
                           >
-                            <Icon className={`w-5 h-5 ${config.color}`} />
+                            <Icon className={`w-4 h-4 ${config.color}`} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <div className="flex items-center gap-2">
                                   <h3 className="text-sm font-semibold text-white">
-                                    {alert.title || alert.type.replace(/_/g, ' ').toUpperCase()}
+                                    {notif.title}
                                   </h3>
                                   {!isRead && (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
                                   )}
                                 </div>
-                                <p className="text-sm text-slate-400 mt-1">
-                                  {alert.message}
+                                <p className="text-xs text-slate-400 mt-1">
+                                  {notif.message}
                                 </p>
                               </div>
                               <Badge
                                 variant="outline"
-                                className={`${config.badge} text-[10px] uppercase shrink-0`}
+                                className={`${config.color} border-current/15 text-[9px] uppercase shrink-0 px-2`}
                               >
-                                {alert.severity}
+                                {notif.severity}
                               </Badge>
                             </div>
                             <div className="flex items-center gap-3 mt-3">
-                              <span className="text-xs text-slate-500">
-                                {parseDate(alert.created_at).toLocaleString()}
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {notif.createdAt.toLocaleString()}
                               </span>
-                              {!isRead && (
+                              {!isRead && notif.category === 'alert' && (
                                 <button
-                                  onClick={() => handleAcknowledge(alert.id)}
-                                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                  onClick={() => handleAcknowledge(notif.id)}
+                                  className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold transition-colors"
                                 >
                                   Mark as read
                                 </button>
@@ -301,14 +419,14 @@ export default function AlertsPage() {
                   );
                 })
               ) : (
-                <Card className="glass-card border-white/[0.06]">
+                <Card className="glass-card border-white/10">
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-3" />
                     <p className="text-sm font-medium text-white">
-                      No alerts found
+                      Clear Timeline
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
-                      All clear! No alerts match your filter.
+                      No notifications match your current filter parameters.
                     </p>
                   </CardContent>
                 </Card>
@@ -317,20 +435,20 @@ export default function AlertsPage() {
           </div>
 
           {/* Configuration Panel */}
-          <div className="space-y-4">
-            <Card className="glass-card border-white/[0.06]">
-              <CardHeader className="pb-3">
+          <div className="space-y-4 lg:col-span-1">
+            <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
+              <CardHeader className="pb-3 border-b border-white/5">
                 <CardTitle className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-blue-400" />
-                  Alert Configuration
+                  <Settings className="w-4 h-4 text-indigo-400" />
+                  Alert Threshold Limits
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-5">
+              <CardContent className="p-5 space-y-5">
                 {/* Consumption Threshold */}
                 <div className="space-y-2">
                   <Label className="text-xs text-slate-300 flex items-center gap-2">
-                    <Zap className="w-3 h-3 text-amber-400" />
-                    High Consumption Threshold (kW)
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    High Load Limit (kW)
                   </Label>
                   <Input
                     id="threshold-input"
@@ -338,163 +456,73 @@ export default function AlertsPage() {
                     step="0.1"
                     value={threshold}
                     onChange={(e) => setThreshold(e.target.value)}
-                    className="bg-white/[0.04] border-white/[0.08] text-white h-10"
+                    className="bg-[#111827] border-white/10 text-white h-10 text-xs"
                   />
                 </div>
 
-                <Separator className="bg-white/[0.06]" />
+                <Separator className="bg-white/5" />
 
                 {/* Anomaly Sensitivity */}
                 <div className="space-y-2">
                   <Label className="text-xs text-slate-300 flex items-center gap-2">
-                    <TrendingUp className="w-3 h-3 text-cyan-400" />
-                    Anomaly Detection Sensitivity
+                    <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
+                    Anomaly Z-Score Sensitivity
                   </Label>
-                  <Select value={sensitivity} onValueChange={(v) => setSensitivity(v ?? 'medium')}>
-                    <SelectTrigger
-                      id="sensitivity-select"
-                      className="bg-white/[0.04] border-white/[0.08] text-white"
-                    >
-                      <SelectValue />
+                  <Select value={sensitivity} onValueChange={(v) => setSensitivity(v || 'medium')}>
+                    <SelectTrigger className="bg-[#111827] border-white/10 text-white text-xs h-10">
+                      <SelectValue placeholder="Select sensitivity" />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#111827] border-white/10">
-                      <SelectItem
-                        value="low"
-                        className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
-                      >
-                        Low — Fewer alerts
-                      </SelectItem>
-                      <SelectItem
-                        value="medium"
-                        className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
-                      >
-                        Medium — Balanced
-                      </SelectItem>
-                      <SelectItem
-                        value="high"
-                        className="text-slate-300 focus:text-white focus:bg-white/[0.06]"
-                      >
-                        High — More sensitive
-                      </SelectItem>
+                    <SelectContent className="bg-[#1f2937] border-white/10 text-white text-xs">
+                      <SelectItem value="low">Low (Standard deviation: 3.0)</SelectItem>
+                      <SelectItem value="medium">Medium (Standard deviation: 2.0)</SelectItem>
+                      <SelectItem value="high">High (Standard deviation: 1.5)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <Separator className="bg-white/[0.06]" />
-
-                {/* Notification Preferences */}
-                <div className="space-y-3">
-                  <Label className="text-xs text-slate-300">
-                    Notifications
-                  </Label>
-                  <label
-                    htmlFor="notif-email"
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-white/[0.02] cursor-pointer"
-                  >
-                    <span className="text-sm text-slate-300">Email Notifications</span>
-                    <input
-                      id="notif-email"
-                      type="checkbox"
-                      checked={emailEnabled}
-                      onChange={(e) => setEmailEnabled(e.target.checked)}
-                      className="w-4 h-4 rounded border-white/20 bg-white/[0.04] text-blue-500 focus:ring-blue-500/20"
-                    />
-                  </label>
-                  <label
-                    htmlFor="notif-push"
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-white/[0.02] cursor-pointer"
-                  >
-                    <span className="text-sm text-slate-300">Push Notifications</span>
-                    <input
-                      id="notif-push"
-                      type="checkbox"
-                      checked={pushEnabled}
-                      onChange={(e) => setPushEnabled(e.target.checked)}
-                      className="w-4 h-4 rounded border-white/20 bg-white/[0.04] text-blue-500 focus:ring-blue-500/20"
-                    />
-                  </label>
-                </div>
-
                 <Button
-                  id="save-alert-config"
                   onClick={handleSaveConfig}
                   disabled={saving}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white"
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold h-9 text-xs"
                 >
-                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  Save Configuration
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Alert Rules'}
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Alert Stats */}
-            <Card className="glass-card border-white/[0.06]">
-              <CardContent className="p-4 space-y-3">
-                <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Alert Summary
-                </h4>
-                {Object.entries(severityConfig).map(([key, config]) => {
-                  const count = alerts.filter(
-                    (a) => a.severity === key
-                  ).length;
-                  const Icon = config.icon;
-                  return (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${config.color}`} />
-                        <span className="text-sm text-slate-300 capitalize">
-                          {key}
-                        </span>
-                      </div>
-                      <span className="text-sm font-medium text-white">
-                        {count}
-                      </span>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
             {/* Load Shifting Recommendations Card */}
-            <Card className="glass-card border-white/[0.06]">
+            <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
               <CardContent className="p-4 space-y-4">
                 <div>
                   <h4 className="text-sm font-semibold text-white flex items-center gap-2">
                     <Zap className="w-4 h-4 text-emerald-400" />
-                    Load-Shifting Advice
+                    ONEE Tariff Rates
                   </h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    Optimize appliance schedules based on your local tariffs
+                    Progressive tariffs mapped dynamically from utility standards
                   </p>
                 </div>
                 
                 <div className="space-y-3">
                   <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
                     <div className="flex justify-between font-medium text-emerald-400 mb-1">
-                      <span>Off-Peak:</span>
-                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.off_peak_rate || '0.8'}/kWh</span>
+                      <span>Social Rate (Tranche 1):</span>
+                      <span>0.9010 MAD/kWh</span>
                     </div>
                     <div className="flex justify-between font-medium text-amber-400">
-                      <span>Peak Hours:</span>
-                      <span>{systemSettings?.currency || 'MAD'} {systemSettings?.peak_rate || '1.1'}/kWh</span>
+                      <span>Normal Rate (Tranche 2):</span>
+                      <span>1.0100 MAD/kWh</span>
                     </div>
                   </div>
 
                   {[
                     {
                       appliance: "Washing & Drying",
-                      advice: "Run cycles after 22:00 for a 25.6% tariff discount.",
+                      advice: "Run cycles after 22:00 for off-peak progressive buffers.",
                     },
                     {
-                      appliance: "EV Smart Charging",
-                      advice: "Configure home chargers to start at midnight.",
-                    },
-                    {
-                      appliance: "Water Heating",
-                      advice: "Restrict boiler reheat cycles to off-peak periods.",
+                      appliance: "Heating & Cooling",
+                      advice: "Control AC runtime during late-afternoon peaks.",
                     },
                   ].map((rec, i) => (
                     <div key={i} className="text-xs p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">

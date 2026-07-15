@@ -434,5 +434,127 @@ export const settingsApi = {
     }),
 };
 
+// ============================================================
+// Consumption API
+// ============================================================
+export const consumptionApi = {
+  getCurrent: (): Promise<{ kw: number; status: string; voltage?: number; intensity?: number; timestamp?: string }> =>
+    apiFetch('/api/v1/consumption/current'),
+
+  getHistory: (): Promise<Array<{ kw: number; timestamp: string }>> =>
+    apiFetch('/api/v1/consumption/history'),
+
+  getStatistics: (): Promise<{ average_daily: number; peak: number; total_kwh: number }> =>
+    apiFetch('/api/v1/consumption/statistics'),
+
+  exportUrl: (): Promise<{ url: string }> =>
+    apiFetch('/api/v1/consumption/export'),
+};
+
+// ============================================================
+// Simulation API
+// ============================================================
+export const simulationApi = {
+  start: (): Promise<{ status: string }> =>
+    apiFetch('/api/v1/simulation/start', { method: 'POST' }),
+
+  stop: (): Promise<{ status: string }> =>
+    apiFetch('/api/v1/simulation/stop', { method: 'POST' }),
+
+  getStatus: (): Promise<{ 
+    status: string; 
+    is_running: boolean; 
+    uptime: number;
+    day_part?: string;
+    occupants?: number;
+    temperature?: number;
+    ac_level?: string;
+    washing_machine?: boolean;
+    solar?: string;
+  }> =>
+    apiFetch('/api/v1/simulation/status'),
+
+  reset: (): Promise<{ status: string }> =>
+    apiFetch('/api/v1/simulation/reset', { method: 'POST' }),
+
+  configure: (config: {
+    day_part: string;
+    occupants: number;
+    temperature: number;
+    ac_level: string;
+    washing_machine: boolean;
+    solar: string;
+  }): Promise<{ status: string }> =>
+    apiFetch('/api/v1/simulation/configure', { 
+      method: 'POST',
+      body: JSON.stringify(config)
+    }),
+};
+
+export const dashboardApi = {
+  getSummary: (): Promise<{
+    kpis: {
+      energy_score: number;
+      estimated_bill: number;
+      monthly_savings: number;
+      carbon_saved: number;
+      forecast_reliability: string;
+    };
+    tariff: {
+      tier: number;
+      name: string;
+      rate: string;
+      pct: number;
+      total_kwh: number;
+    };
+    forecast: {
+      points: Array<{ time: string; predicted: number }>;
+      peak_hour: string;
+      estimated_daily_cost: number;
+      temp_correlation: string;
+      validation: {
+        available: boolean;
+        predicted?: number;
+        actual?: number;
+        error_pct?: number;
+        message?: string;
+      };
+    };
+    recommendations: Array<{
+      id: string;
+      title: string;
+      savings: number;
+      difficulty: string;
+      impact: string;
+      reliability: string;
+      stars: number;
+      reason: string;
+    }>;
+    alerts: Array<{
+      id: string;
+      title: string;
+      message: string;
+      severity: string;
+      created_at: string | null;
+      is_read: boolean;
+    }>;
+    weather: any;
+    simulation: {
+      running: boolean;
+      day_part?: string;
+      occupants?: number;
+      temperature?: number;
+      ac_level?: string;
+      washing_machine?: boolean;
+      solar?: string;
+    };
+    budget: {
+      target: number;
+      daily_limit: number;
+    };
+  }> => apiFetch('/api/v1/dashboard/summary'),
+};
+
 // Export helpers for use in auth context
 export { setTokens, clearTokens, getAccessToken };
+

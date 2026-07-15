@@ -1,344 +1,470 @@
+"""
+training/train.py — Unified training entrypoint for all forecasting models.
+
+Usage
+-----
+  python training/train.py --dataset ihepc --model persistence --horizon 24
+  python training/train.py --dataset ihepc --model xgboost     --horizon 168 --lookback 96 --seed 42
+  python training/train.py --dataset ecl   --model random_forest --horizon 24
+
+Every model — baseline or deep learning — runs through this same pipeline.
+That ensures any performance differences are attributable to the model,
+not to differences in preprocessing, splitting, or evaluation.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import logging
 import os
+import sys
 import time
-import torch
-import hashlib
-import torch.nn as nn
-import torch.optim as optim
-import pandas as pd
+import random
+from datetime import datetime, timezone
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")  # headless rendering
+import matplotlib.pyplot as plt
 import numpy as np
-from torch.cuda.amp import autocast, GradScaler
-from torch.utils.data import DataLoader, TensorDataset
+import pandas as pd
+import yaml
 
-from training.utils.config import get_args_and_config
-from training.utils.tracker import ExperimentTracker
-from training.utils.seed import set_seed
-from training.utils.metrics import compute_metrics
-from training.features.feature_engineering import FeaturePipeline
+# ---------------------------------------------------------------------------
+# Path setup so this can be run from the project root
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
-# Dynamic loading of models
-from training.models.baseline import NaivePersistence
-from training.models.autoformer import Autoformer
-from training.models.hybrid_v2 import Hybrid_v2
-from training.models.itransformer import iTransformer
+from training.baselines import get_model, list_models
+from training.splitters.chronological import ChronologicalSplitter
+from training.utils.metrics import calculate_metrics, measure_inference_time, model_size_mb
+from backend.app.ml.datasets import get_dataset
 
-def load_real_data(filepath, limit_rows=None):
-    """Loads the real UCI household power consumption dataset."""
-    print(f"Loading real dataset from {filepath}...")
-    
-    # The dataset uses ';' as delimiter and '?' for missing values
-    df = pd.read_csv(filepath, sep=';', na_values=['?'], nrows=limit_rows)
-    
-    # Combine Date and Time into a single timestamp column
-    df['timestamp'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], format='%d/%m/%Y %H:%M:%S')
-    
-    # Rename target column to 'gap' for consistency with our pipeline
-    df = df.rename(columns={'Global_active_power': 'gap'})
-    
-    # Keep only relevant columns to save memory
-    df = df[['timestamp', 'gap']]
-    
-    # Resample to hourly frequency since the original is minutely
-    print("Resampling to hourly frequency...")
-    df = df.set_index('timestamp').resample('1h').mean().reset_index()
-    
-    return df
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+log = logging.getLogger(__name__)
 
-def prepare_tensors(df: pd.DataFrame, time_col: str, target_col: str, lookback: int, horizon: int):
-    # This is a very simplified windowing approach
-    features = df.drop(columns=[time_col, target_col]).values
-    targets = df[target_col].values
-    
-    X, Y, Temporal = [], [], []
-    for i in range(len(df) - lookback - horizon):
-        X.append(targets[i:i+lookback])
-        Y.append(targets[i+lookback:i+lookback+horizon])
-        Temporal.append(features[i:i+lookback])
-        
-    # Shape: (B, Lookback, 1)
-    X = torch.tensor(np.array(X), dtype=torch.float32).unsqueeze(-1)
-    # Shape: (B, Horizon, 1)
-    Y = torch.tensor(np.array(Y), dtype=torch.float32).unsqueeze(-1)
-    # Shape: (B, Lookback, NumFeatures)
-    Temporal = torch.tensor(np.array(Temporal), dtype=torch.float32)
-    return X, Y, Temporal
 
-def train():
-    args, config = get_args_and_config()
-    
-    # 1. Set seed
-    set_seed(config.get('seed', 42))
-    
-    tracker = ExperimentTracker(config)
-    
-    # Setup training log capture
-    import sys
-    out_dir = os.path.join(tracker.experiment_dir, tracker.experiment_id)
-    os.makedirs(out_dir, exist_ok=True)
-    log_file = open(os.path.join(out_dir, "training.log"), "w")
-    class LoggerWriter:
-        def __init__(self, stdout, file):
-            self.stdout = stdout
-            self.file = file
-        def write(self, message):
-            self.stdout.write(message)
-            self.file.write(message)
-            self.file.flush()
-        def flush(self):
-            self.stdout.flush()
-            self.file.flush()
-    sys.stdout = LoggerWriter(sys.stdout, log_file)
-    
-    # 2. Data Validation & Feature Engineering
-    data_path = os.path.join(os.path.dirname(__file__), "..", "data", "household_power_consumption.txt")
-    limit = config['training'].get('limit_rows', 10000) # Process 10k hourly rows by default to save time in tests
-    # Note: limit in read_csv applies to raw minutely data, so 600,000 minutely = 10,000 hourly rows.
-    df = load_real_data(data_path, limit_rows=limit * 60) 
-    
-    # We choose interpolate strategy for missing timestamps/NaNs
-    missing_strategy = config['training'].get('missing_strategy', 'interpolate')
-    pipeline = FeaturePipeline(time_col='timestamp', target_cols=['gap'])
-    
-    # Split into train/val
-    train_size = int(len(df) * 0.8)
-    train_df = df.iloc[:train_size].copy()
-    val_df = df.iloc[train_size:].copy()
-    
-    # Validate leakage
-    pipeline.validator.check_leakage(train_df, val_df)
-    
-    # Fit transform train, transform val
-    print(f"Fitting pipeline on train data (strategy: {missing_strategy})...")
-    train_processed = pipeline.fit_transform(train_df, freq='1h', missing_strategy=missing_strategy)
-    val_processed = pipeline.transform(val_df, freq='1h', missing_strategy=missing_strategy)
-    
-    lookback = config['model']['lookback']
-    horizon = config['model']['forecast_horizon']
-    
-    X_train, Y_train, Temp_train = prepare_tensors(train_processed, 'timestamp', 'gap', lookback, horizon)
-    X_val, Y_val, Temp_val = prepare_tensors(val_processed, 'timestamp', 'gap', lookback, horizon)
-    
-    train_loader = DataLoader(TensorDataset(X_train, Y_train, Temp_train), batch_size=config['data']['batch_size'], shuffle=True)
-    val_loader = DataLoader(TensorDataset(X_val, Y_val, Temp_val), batch_size=config['data']['batch_size'])
-    
-    # 3. Setup Model
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    config['model']['num_targets'] = 1 # Force for mock data
-    config['model']['d_temporal'] = Temp_train.shape[-1]
-    model_name = config['model']['name']
-    if model_name == 'Autoformer':
-        model = Autoformer(config['model'])
-    elif model_name == 'Hybrid_v2':
-        model = Hybrid_v2(config['model'])
-    elif model_name == 'iTransformer':
-        model = iTransformer(config['model'])
-    else:
-        model = NaivePersistence(horizon, config['model'].get('num_targets', 1))
-        
-    model.to(device)
-    
-    # 4. Setup Loss & Optimizer
-    criterion = nn.HuberLoss() if config['training']['loss'] == 'huber' else nn.MSELoss()
-    print(f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
-    metadata = {
-        "device": str(device),
-        "trainable_parameters": sum(p.numel() for p in model.parameters() if p.requires_grad),
-        "model_size_mb": sum(p.element_size() * p.nelement() for p in model.parameters()) / (1024 * 1024)
-    }
-    
-    # 4. Optimizer and Loss
-    optimizer = optim.Adam(model.parameters(), lr=float(config['training'].get('learning_rate', 1e-3)), weight_decay=float(config['training'].get('weight_decay', 1e-4)))
-                            
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=config['training'].get('lr_patience', 3), factor=0.5)
-    scaler = GradScaler(enabled=config['training'].get('mixed_precision', False))
-    
-    # 5. Training Loop
-    best_val_loss = float('inf')
-    best_epoch = 0
-    patience = config['training'].get('early_stopping_patience', 10)
-    patience_counter = 0
-    
-    total_train_time = 0
-    total_val_time = 0
-    epochs_run = 0
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
 
-    print("Starting training loop...")
-    for epoch in range(config['training'].get('epochs', 100)):
-        epochs_run += 1
-        model.train()
-        train_loss = 0.0
-        
-        epoch_start_time = time.time()
-        for batch_x, batch_y, batch_temp in train_loader:
-            batch_x, batch_y, batch_temp = batch_x.to(device), batch_y.to(device), batch_temp.to(device)
-            optimizer.zero_grad()
-            
-            with autocast(enabled=config['training'].get('mixed_precision', False)):
-                output = model(batch_x, batch_temp)
-                loss = criterion(output, batch_y)
-                
-            scaler.scale(loss).backward()
-            nn.utils.clip_grad_norm_(model.parameters(), config['training'].get('gradient_clipping', 1.0))
-            scaler.step(optimizer)
-            scaler.update()
-            
-            train_loss += loss.item()
-            
-        train_loss /= len(train_loader)
-        total_train_time += time.time() - epoch_start_time
-            
-        # Validation
-        val_start_time = time.time()
-        model.eval()
-        val_loss = 0.0
-        all_preds = []
-        all_trues = []
-        
-        with torch.no_grad():
-            for batch_x, batch_y, batch_temp in val_loader:
-                batch_x, batch_y, batch_temp = batch_x.to(device), batch_y.to(device), batch_temp.to(device)
-                with autocast(enabled=config['training'].get('mixed_precision', False)):
-                    output = model(batch_x, batch_temp)
-                    loss = criterion(output, batch_y)
-                val_loss += loss.item()
-                all_preds.append(output)
-                all_trues.append(batch_y)
-                
-        val_loss /= len(val_loader)
-        total_val_time += time.time() - val_start_time
-        scheduler.step(val_loss)
-        
-        print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-        
-        # Calculate full metrics on validation set
-        y_pred = torch.cat(all_preds, dim=0).detach().cpu().numpy()
-        y_true = torch.cat(all_trues, dim=0).detach().cpu().numpy()
-        
-        # Inverse transform to compute metrics on real kW values
-        orig_shape = y_pred.shape
-        y_pred_inv = pipeline.scaler.inverse_transform(y_pred.reshape(-1, len(pipeline.target_cols))).reshape(orig_shape)
-        y_true_inv = pipeline.scaler.inverse_transform(y_true.reshape(-1, len(pipeline.target_cols))).reshape(orig_shape)
-        
-        num_samples = len(y_pred)
-        num_batches = len(val_loader)
-        
-        val_metrics = compute_metrics(
-            y_true_inv, 
-            y_pred_inv, 
-            inference_time_total=total_val_time, 
-            num_samples=num_samples, 
-            num_batches=num_batches
+
+# ---------------------------------------------------------------------------
+# Window generation
+# ---------------------------------------------------------------------------
+
+def make_windows(
+    data: pd.DataFrame,
+    target_cols: list,
+    lookback: int,
+    horizon: int,
+    step: int = 1,
+):
+    """
+    Slide a window over `data` to produce (X, Y, timestamps) arrays.
+
+    Parameters
+    ----------
+    data        : scaled DataFrame, must be sorted chronologically
+    target_cols : column names used for Y (targets)
+    lookback    : encoder length (input steps)
+    horizon     : decoder length (output steps)
+    step        : slide step (1 = dense, horizon = non-overlapping)
+
+    Returns
+    -------
+    X          : (n_windows, lookback, n_features)  — all columns
+    Y          : (n_windows, horizon, n_targets)    — target columns only
+    timestamps : list of pd.Timestamp — start of each Y window
+    """
+    feature_cols = [c for c in data.columns if c != "Datetime"]
+    values = data[feature_cols].values.astype(np.float32)
+    target_idx = [feature_cols.index(c) for c in target_cols]
+
+    X_list, Y_list, ts_list = [], [], []
+    n = len(values)
+    for i in range(0, n - lookback - horizon + 1, step):
+        X_list.append(values[i : i + lookback])
+        Y_list.append(values[i + lookback : i + lookback + horizon][:, target_idx])
+        if "Datetime" in data.columns:
+            ts_list.append(data["Datetime"].iloc[i + lookback])
+
+    if not X_list:
+        raise ValueError(
+            f"Dataset too small to generate any windows "
+            f"(need >= {lookback + horizon} rows, got {n})."
         )
-        val_metrics["train_loss"] = train_loss
-        val_metrics["val_loss"] = val_loss
-        val_metrics["lr"] = optimizer.param_groups[0]['lr']
-        
-        tracker.log_metrics(val_metrics, epoch)
-        
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_epoch = epoch + 1
-            tracker.save_checkpoint(model, optimizer, epoch, val_loss)
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            
-        if patience_counter >= patience:
-            print(f"Early stopping triggered at epoch {epoch+1}.")
-            metadata['early_stopping_epoch'] = epoch + 1
-            break
-            
-    metadata['total_epochs_run'] = epochs_run
-    metadata['best_epoch'] = best_epoch
-    metadata['total_train_time_sec'] = total_train_time
-    metadata['total_val_time_sec'] = total_val_time
-    tracker.metrics["metadata"] = metadata
-    
-    # Final evaluation and saving artifacts
-    out_dir = os.path.join(tracker.experiment_dir, tracker.experiment_id)
-    os.makedirs(out_dir, exist_ok=True)
-    
-    # Save Model
-    model_path = os.path.join(out_dir, "model.pt")
-    model.save(model_path)
-    
-    # Save Pipeline (preprocessing/scaler)
-    pipeline_path = os.path.join(out_dir, "pipeline.pkl")
-    pipeline.save(pipeline_path)
-    
-    # Calculate Model Fingerprint (SHA-256)
-    hasher = hashlib.sha256()
-    with open(model_path, 'rb') as f:
-        hasher.update(f.read())
-    model_fingerprint = hasher.hexdigest()
-    
-    # Save feature columns
-    import json
-    with open(os.path.join(out_dir, "feature_columns.json"), "w") as f:
-        json.dump(pipeline.feature_columns, f, indent=4)
-        
-    # Save summary.json
-    summary = {
-        "experiment_id": tracker.experiment_id,
-        "model_name": model_name,
-        "model_fingerprint": model_fingerprint,
-        "pipeline_version": "1.0", # Can be bumped as feature sets evolve
-        "feature_set": pipeline.feature_columns,
-        "lookback": lookback,
-        "horizon": horizon,
-        "metrics": val_metrics,
-        "metadata": metadata
-    }
-    with open(os.path.join(out_dir, "summary.json"), "w") as f:
-        json.dump(summary, f, indent=4)
-        
-    # Save config and finalize tracking
-    tracker.config['out_dir'] = out_dir
-    tracker.end_experiment(final_metrics=val_metrics, save_dir=out_dir)
 
-    # --- Verification Phase (Phase 2.5) ---
-    print("\n--- Running Serialization Verification ---")
-    
-    # 1. Verify Pipeline save/load
-    loaded_pipeline = FeaturePipeline(time_col='timestamp', target_cols=['gap'])
-    loaded_pipeline.load(pipeline_path)
-    
-    # Transform on a small sample to check
-    sample_df = val_df.iloc[:20].copy()
-    missing_strategy = config['training'].get('missing_strategy', 'interpolate')
-    feat_original = pipeline.transform(sample_df, validate=False, missing_strategy=missing_strategy)
-    feat_loaded = loaded_pipeline.transform(sample_df, validate=False, missing_strategy=missing_strategy)
-    
-    # The arrays should match exactly
-    if not np.allclose(feat_original['gap'].values, feat_loaded['gap'].values, equal_nan=True):
-        print("WARNING: Pipeline serialization mismatch!")
+    return (
+        np.stack(X_list).astype(np.float32),
+        np.stack(Y_list).astype(np.float32),
+        ts_list,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Artifact helpers
+# ---------------------------------------------------------------------------
+
+def _build_exp_dir(
+    base: Path, dataset: str, lookback: int, horizon: int, model_name: str
+) -> Path:
+    """experiments/<dataset>/lookback<N>/horizon<N>/<model>/<timestamp>/"""
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path = base / dataset / f"lookback{lookback}" / f"horizon{horizon}" / model_name / ts
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _save_config(path: Path, args, meta: dict, n_features: int, n_targets: int) -> None:
+    cfg = {
+        "experiment": {
+            "dataset":    args.dataset,
+            "model":      args.model,
+            "lookback":   args.lookback,
+            "horizon":    args.horizon,
+            "seed":       args.seed,
+        },
+        "data": {
+            "n_features": n_features,
+            "n_targets":  n_targets,
+        },
+    }
+    cfg["experiment"].update(meta.get("experiment_meta", {}))
+    with open(path / "config.yaml", "w") as f:
+        yaml.dump(cfg, f, default_flow_style=False)
+
+
+def _save_metrics(path: Path, metrics: dict, timing: dict) -> None:
+    payload = {**metrics, **timing}
+    with open(path / "metrics.json", "w") as f:
+        json.dump(payload, f, indent=2)
+
+
+def _save_predictions(
+    path: Path,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    timestamps: list,
+    target_cols: list,
+    split: str = "test",
+) -> None:
+    """
+    Save predictions with rich metadata columns.
+
+    Columns: timestamp, target, prediction, split, window_id
+    """
+    rows = []
+    n_windows, horizon, n_targets = y_true.shape
+    for w in range(n_windows):
+        for h in range(horizon):
+            for t_idx, col in enumerate(target_cols):
+                rows.append({
+                    "window_id":  w,
+                    "horizon_step": h,
+                    "target":     col,
+                    "timestamp":  timestamps[w] if timestamps else None,
+                    "y_true":     float(y_true[w, h, t_idx]),
+                    "y_pred":     float(y_pred[w, h, t_idx]),
+                    "split":      split,
+                })
+    pd.DataFrame(rows).to_csv(path / "predictions.csv", index=False)
+
+
+def _save_feature_importance(
+    path: Path,
+    model,
+    feature_names: list,
+    lookback: int,
+) -> None:
+    """Save feature_importance.csv and top20_features.png."""
+    importances = model.get_feature_importance(feature_names)
+    if importances is None:
+        return
+
+    # For flat models: importances has shape (lookback * n_features,)
+    # We expand names to (feature, lag) pairs
+    if len(importances) == lookback * len(feature_names):
+        rows = []
+        for lag in range(lookback):
+            for feat in feature_names:
+                rows.append({"feature": feat, "lag": lag})
+        imp_df = pd.DataFrame(rows)
+        imp_df["importance"] = importances
     else:
-        print("Pipeline save/load verification: PASSED")
-        
-    # 2. Verify Model save/load
-    # Re-instantiate the model to check
-    if model_name == 'Autoformer':
-        loaded_model = Autoformer(config['model']).to(device)
-    elif model_name == 'iTransformer':
-        loaded_model = iTransformer(config['model']).to(device)
-    elif model_name == 'Hybrid_v2':
-        loaded_model = Hybrid_v2(config['model']).to(device)
-    else:
-        loaded_model = NaivePersistence(config['model']).to(device)
-        
-    loaded_model.load(model_path, device)
+        imp_df = pd.DataFrame({
+            "feature": feature_names[:len(importances)],
+            "importance": importances,
+        })
+
+    imp_df = imp_df.sort_values("importance", ascending=False)
+    imp_df.to_csv(path / "feature_importance.csv", index=False)
+
+    # Bar chart of top 20
+    top20 = imp_df.head(20)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.barh(top20["feature"].astype(str) + " (lag " + top20["lag"].astype(str) + ")"
+            if "lag" in top20.columns else top20["feature"].astype(str),
+            top20["importance"], color="#4C9BE8")
+    ax.invert_yaxis()
+    ax.set_xlabel("Feature Importance")
+    ax.set_title("Top 20 Most Important Features")
+    plt.tight_layout()
+    fig.savefig(path / "top20_features.png", dpi=150)
+    plt.close(fig)
+    log.info("Saved feature importance chart.")
+
+
+def _save_forecast_plot(
+    path: Path,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    target_cols: list,
+    n_windows: int = 5,
+) -> None:
+    """Save a multi-panel forecast plot for the first `n_windows` windows."""
+    n_show = min(n_windows, len(y_true))
+    n_targets = len(target_cols)
+    fig, axes = plt.subplots(n_show, n_targets, figsize=(6 * n_targets, 3 * n_show), squeeze=False)
+
+    for w in range(n_show):
+        for t, col in enumerate(target_cols):
+            ax = axes[w][t]
+            ax.plot(y_true[w, :, t], label="Actual", color="#333")
+            ax.plot(y_pred[w, :, t], label="Predicted", color="#E84C4C", linestyle="--")
+            ax.set_title(f"Window {w} — {col}")
+            ax.legend(fontsize=8)
+
+    plt.suptitle("Forecast vs Actual (Test Set)", fontsize=14)
+    plt.tight_layout()
+    fig.savefig(path / "plots.png", dpi=150)
+    plt.close(fig)
+    log.info("Saved forecast plots.")
+
+
+def _save_metadata(path: Path, args, exp_dir: Path, timing: dict) -> None:
+    import subprocess
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=PROJECT_ROOT, stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        git_commit = "unknown"
+
+    environment = {
+        "python": sys.version,
+        "torch": None,
+        "transformers": None,
+        "cuda_available": False,
+        "device_name": "CPU"
+    }
+    try:
+        import torch
+        environment["torch"] = torch.__version__
+        environment["cuda_available"] = torch.cuda.is_available()
+        if torch.cuda.is_available():
+            environment["device_name"] = torch.cuda.get_device_name(0)
+        import transformers
+        environment["transformers"] = transformers.__version__
+    except ImportError:
+        pass
+
+    meta = {
+        "experiment": {
+            "dataset": args.dataset,
+            "model":   args.model,
+            "horizon": args.horizon,
+            "lookback": args.lookback,
+            "seed":    args.seed,
+            "device":  args.device,
+        },
+        "reproducibility": {
+            "git_commit":       git_commit,
+            "python_version":   sys.version,
+            "created_at":       datetime.now(timezone.utc).isoformat(),
+            "output_directory": str(exp_dir),
+            "environment":      environment,
+        },
+        "timing": timing,
+    }
+    with open(path / "metadata.yaml", "w") as f:
+        yaml.dump(meta, f, default_flow_style=False)
+
+
+# ---------------------------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------------------------
+
+def run(args: argparse.Namespace, kwargs: dict) -> None:
+    np.random.seed(args.seed)
+    log.info(f"=== Training: dataset={args.dataset}, model={args.model}, "
+             f"lookback={args.lookback}, horizon={args.horizon} ===")
+    if kwargs:
+        log.info(f"   Hyperparameters: {kwargs}")
+
+    # 1. Load & preprocess dataset
+    log.info("[1/7] Loading dataset...")
+    provider = get_dataset(args.dataset, args.data_dir)
+    df_raw = provider.load()
+    df_clean = provider.preprocess(df_raw)
+    df_features = provider.create_features(df_clean)
+    meta = provider.get_metadata()
+    # Option A: Benchmark ONLY the primary target (e.g. Global_active_power) for EVERY model.
+    # This ensures an apples-to-apples comparison across all architectures.
+    target_cols = [meta["targets"][0]]
+    log.info(f"   Target: predicting '{target_cols[0]}' only")
+    freq = meta["frequency"]
+
+    # 2. Chronological split
+    log.info("[2/7] Splitting data chronologically...")
+    splitter = ChronologicalSplitter(train_ratio=0.7, val_ratio=0.1)
+    train_df, val_df, test_df = splitter.split(df_features)
+
+    # 3. Scale — fit ONLY on train
+    log.info("[3/7] Fitting scaler on training data only...")
+    from training.features.feature_engineering import FeaturePipeline
+    pipeline = FeaturePipeline(time_col="Datetime", target_cols=target_cols)
+    pipeline.fit(train_df, freq=freq)
+    train_scaled = pipeline.transform(train_df, freq=freq)
+    val_scaled   = pipeline.transform(val_df,   freq=freq)
+    test_scaled  = pipeline.transform(test_df,  freq=freq)
+
+    feature_cols = [c for c in train_scaled.columns if c != "Datetime"]
+
+    # 4. Window generation
+    log.info("[4/7] Generating sliding windows...")
+    X_train, Y_train, _  = make_windows(train_scaled, target_cols, args.lookback, args.horizon)
+    X_val,   Y_val,   _  = make_windows(val_scaled,   target_cols, args.lookback, args.horizon)
+    X_test,  Y_test,  ts_test = make_windows(test_scaled, target_cols, args.lookback, args.horizon)
+
+    log.info(f"   Train: {X_train.shape} → {Y_train.shape}")
+    log.info(f"   Val:   {X_val.shape}   → {Y_val.shape}")
+    log.info(f"   Test:  {X_test.shape}  → {Y_test.shape}")
+
+    # 5. Create experiment dir and Instantiate model
+    log.info("[5/7] Fitting model...")
+    base_dir = PROJECT_ROOT / "experiments"
+    model_dir_name = f"{args.model}_{args.tag}" if args.tag else args.model
+    exp_dir = _build_exp_dir(
+        base_dir, args.dataset, args.lookback, args.horizon, model_dir_name
+    )
+    model = get_model(args.model, exp_dir=str(exp_dir), **kwargs)
+    set_seed(args.seed)
+
+    t0_fit = time.perf_counter()
+    model.fit(X_train, Y_train, X_val, Y_val)
+    fit_time_s = time.perf_counter() - t0_fit
+    log.info(f"   Fit time: {fit_time_s:.2f}s")
+
+    # 6. Predict + evaluate
+    log.info("[6/7] Evaluating on test set...")
+    Y_pred = model.predict(X_test)
+
+    # Inverse-transform predictions and targets to real-world scale
+    n_windows_test = len(Y_test)
+    Y_test_inv = pipeline.inverse_transform_targets(
+        Y_test.reshape(-1, len(target_cols))
+    ).reshape(n_windows_test, args.horizon, len(target_cols))
     
-    # Run prediction
-    model.eval()
-    sample_x, sample_temp = batch_x[:2], batch_temp[:2]
-    pred_original = model.predict(sample_x, sample_temp)
-    pred_loaded = loaded_model.predict(sample_x, sample_temp)
+    Y_pred_inv = pipeline.inverse_transform_targets(
+        Y_pred.reshape(-1, len(target_cols))
+    ).reshape(n_windows_test, args.horizon, len(target_cols))
+
+    metrics = calculate_metrics(Y_test_inv, Y_pred_inv)
+    inf_time_ms = measure_inference_time(model, X_test[:50])
+
+    # Model artifact size
+    import tempfile, pickle
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp:
+        tmp_path = tmp.name
+    model.save(tmp_path)
+    size_mb = model_size_mb(tmp_path)
+    os.unlink(tmp_path)
+
+    timing = {
+        "fit_time_s":         round(fit_time_s, 3),
+        "inference_ms_per_sample": round(inf_time_ms, 4),
+        "model_size_mb":      round(size_mb, 3) if size_mb else None,
+    }
+
+    log.info("Metrics (unscaled):")
+    for k, v in {**metrics, **timing}.items():
+        log.info(f"   {k:30s}: {v}")
+
+    # 7. Save artifacts
+    log.info("[7/7] Saving artifacts...")
+
+    _save_config(exp_dir, args, {"experiment_meta": {}},
+                 n_features=len(feature_cols), n_targets=len(target_cols))
+    _save_metrics(exp_dir, metrics, timing)
+    _save_predictions(exp_dir, Y_test_inv, Y_pred_inv, ts_test, target_cols)
+    _save_metadata(exp_dir, args, exp_dir, timing)
+    model.save(exp_dir / "model.pkl")
+
+    if model.supports_feature_importance:
+        _save_feature_importance(exp_dir, model, feature_cols, args.lookback)
+
+    _save_forecast_plot(exp_dir, Y_test_inv, Y_pred_inv, target_cols[:1])
+
+    log.info(f"\nArtifacts saved to: {exp_dir}")
+    log.info("=== Run complete ===")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def _parse_args() -> tuple[argparse.Namespace, dict]:
+    parser = argparse.ArgumentParser(
+        description="Unified forecast model training entrypoint."
+    )
+    parser.add_argument("--dataset",  required=True, help="Dataset name (ihepc, ecl, ...)")
+    parser.add_argument("--model",    required=True, help=f"Model name. Available: {list_models()}")
+    parser.add_argument("--tag",      default="",    help="Optional tag to distinguish experiments")
+    parser.add_argument("--horizon",  type=int, default=24,  help="Forecast horizon in hours")
+    parser.add_argument("--lookback", type=int, default=96,  help="Encoder / lookback window")
+    parser.add_argument("--seed",     type=int, default=42,  help="Global random seed")
+    parser.add_argument("--device",   default="cpu",         help="Compute device (cpu / cuda)")
+    parser.add_argument("--data-dir", dest="data_dir", default="data", help="Path to data files")
     
-    if not torch.allclose(pred_original, pred_loaded, atol=1e-6):
-        print("WARNING: Model serialization mismatch!")
-    else:
-        print("Model save/load verification: PASSED")
-        
-    print("\nTraining completed successfully!")
+    args, unknown = parser.parse_known_args()
+    
+    kwargs = {}
+    i = 0
+    while i < len(unknown):
+        if unknown[i].startswith("--"):
+            key = unknown[i].lstrip("-")
+            if i + 1 < len(unknown) and not unknown[i+1].startswith("--"):
+                val = unknown[i+1]
+                # Try to parse to int or float if possible
+                try:
+                    if '.' in val or 'e' in val.lower():
+                        val = float(val)
+                    else:
+                        val = int(val)
+                except ValueError:
+                    pass
+                kwargs[key] = val
+                i += 2
+            else:
+                kwargs[key] = True
+                i += 1
+        else:
+            i += 1
+            
+    return args, kwargs
+
 
 if __name__ == "__main__":
-    train()
+    args, kwargs = _parse_args()
+    run(args, kwargs)

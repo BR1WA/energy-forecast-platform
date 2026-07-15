@@ -145,14 +145,19 @@ class ModelRegistry(Base):
     __tablename__ = "model_registry"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), nullable=False) # e.g. Hybrid_v2
+    name = Column(String(50), nullable=False) # e.g. patchtst_ihepc_24h
     version = Column(String(20), default="1.0.0", nullable=False)
+    experiment_id = Column(String(50), nullable=True) # e.g. exp_20260709_001
+    dataset = Column(String(50), nullable=False, default="ihepc")
+    horizon = Column(Integer, nullable=False, default=24)
+    lookback = Column(Integer, nullable=True)
     experiment_path = Column(String(255), nullable=False)
     model_fingerprint = Column(String(64), nullable=True) # SHA-256 hash
     active = Column(Boolean, default=False, nullable=False)
     mae = Column(Float, nullable=True)
     rmse = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class EnergyBudget(Base):

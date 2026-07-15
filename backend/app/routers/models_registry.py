@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import ModelRegistry
+from app.models.models import ModelRegistry, User
+from app.services.auth_service import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/models", tags=["Models Registry"])
 
@@ -19,13 +20,19 @@ def serialize_model(m: ModelRegistry):
     }
 
 @router.get("/")
-def get_models(db: Session = Depends(get_db)):
+def get_models(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """List all registered experiments."""
     models = db.query(ModelRegistry).order_by(ModelRegistry.created_at.desc()).all()
     return [serialize_model(m) for m in models]
 
 @router.get("/active")
-def get_active_model(db: Session = Depends(get_db)):
+def get_active_model(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get the current production model."""
     active_model = db.query(ModelRegistry).filter(ModelRegistry.active == True).first()
     if not active_model:
@@ -33,7 +40,11 @@ def get_active_model(db: Session = Depends(get_db)):
     return serialize_model(active_model)
 
 @router.get("/{model_id}")
-def get_model_details(model_id: int, db: Session = Depends(get_db)):
+def get_model_details(
+    model_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get specific experiment details."""
     model = db.query(ModelRegistry).filter(ModelRegistry.id == model_id).first()
     if not model:
@@ -41,7 +52,11 @@ def get_model_details(model_id: int, db: Session = Depends(get_db)):
     return serialize_model(model)
 
 @router.post("/{model_id}/activate")
-def activate_model(model_id: int, db: Session = Depends(get_db)):
+def activate_model(
+    model_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["admin"]))
+):
     """Activate a specific model for production."""
     target_model = db.query(ModelRegistry).filter(ModelRegistry.id == model_id).first()
     if not target_model:
@@ -56,3 +71,4 @@ def activate_model(model_id: int, db: Session = Depends(get_db)):
     db.refresh(target_model)
     
     return serialize_model(target_model)
+

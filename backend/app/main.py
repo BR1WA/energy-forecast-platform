@@ -189,7 +189,105 @@ async def lifespan(app: FastAPI):
                 logger.error(f"[AUTO-FORECAST] Loop exception: {e}")
             await asyncio.sleep(30)
 
+    async def simulation_loop():
+        logger.info("[SIMULATION-LOOP] Starting background simulation loop...")
+        from app.services.simulation_service import simulation_service
+        from app.database import SessionLocal
+        from app.models import SmartMeterReading
+        from datetime import datetime, timezone
+        import random
+        import math
+        import time
+
+        while True:
+            try:
+                if simulation_service.is_running:
+                    db = SessionLocal()
+                    try:
+                        # Base load by day part
+                        base_map = {
+                            "morning": 0.8,
+                            "afternoon": 0.4,
+                            "evening": 1.8,
+                            "night": 0.2
+                        }
+                        gap = base_map.get(simulation_service.day_part, 0.5)
+                        
+                        # Add occupants effect
+                        gap += simulation_service.occupants * 0.15
+                        
+                        # Add Air Conditioner effect (scaled by temperature)
+                        ac_map = {
+                            "off": 0.0,
+                            "low": 0.4,
+                            "medium": 0.9,
+                            "high": 1.8
+                        }
+                        ac_base = ac_map.get(simulation_service.ac_level, 0.0)
+                        if simulation_service.temperature > 30.0:
+                            ac_base *= 1.25
+                        gap += ac_base
+                        
+                        # Add Washing Machine effect
+                        if simulation_service.washing_machine:
+                            gap += 0.8
+                            
+                        # Add Solar Panels offset (only during daylight)
+                        solar_map = {
+                            "off": 0.0,
+                            "low": -0.4,
+                            "high": -1.2
+                        }
+                        if simulation_service.day_part in ("morning", "afternoon"):
+                            gap += solar_map.get(simulation_service.solar, 0.0)
+                            
+                        # Add slight noise and clamp positive
+                        gap += random.uniform(-0.08, 0.08)
+                        gap = max(0.02, gap)
+
+                        # sub-metering breakdown (in Wh)
+                        # sub_metering_1: Kitchen (washing machine / appliances)
+                        sub1 = 800.0 if simulation_service.washing_machine else 50.0
+                        sub1 += random.uniform(-10.0, 10.0)
+                        sub1 = max(0.0, sub1)
+                        
+                        # sub_metering_3: HVAC (AC)
+                        sub3 = ac_base * 1000.0
+                        sub3 += random.uniform(-20.0, 20.0)
+                        sub3 = max(0.0, sub3)
+                        
+                        # sub_metering_2: Laundry/Other
+                        sub2 = gap * 150.0 + random.uniform(-15.0, 15.0)
+                        sub2 = max(0.0, sub2)
+
+                        grp = gap * 0.08 + random.uniform(-0.01, 0.01)
+                        voltage = 230.0 + random.uniform(-1.0, 1.0)
+                        intensity = (gap * 1000.0) / voltage
+
+                        db_reading = SmartMeterReading(
+                            gap=round(gap, 3),
+                            grp=round(grp, 3),
+                            voltage=round(voltage, 1),
+                            intensity=round(intensity, 2),
+                            sub_metering_1=round(sub1, 2),
+                            sub_metering_2=round(sub2, 2),
+                            sub_metering_3=round(sub3, 2),
+                            timestamp=datetime.now(timezone.utc)
+                        )
+                        db.add(db_reading)
+                        db.commit()
+                        logger.info(f"[SIMULATION-LOOP] Inserted simulated smart meter reading: {gap:.3f} kW")
+                    except Exception as db_err:
+                        logger.error(f"[SIMULATION-LOOP] Database write error: {db_err}")
+                        db.rollback()
+                    finally:
+                        db.close()
+            except Exception as e:
+                logger.error(f"[SIMULATION-LOOP] Loop exception: {e}")
+            await asyncio.sleep(5)
+
     loop_task = asyncio.create_task(auto_forecast_loop())
+    sim_task = asyncio.create_task(simulation_loop())
 
     logger.info("[APP] Server ready!")
     logger.info("=" * 60)
@@ -199,6 +297,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("[APP] Shutting down...")
     loop_task.cancel()
+    sim_task.cancel()
+
 
 
 # Create FastAPI app
@@ -268,6 +368,7 @@ def health_check():
     service = get_forecast_service()
     return {
         "status": "healthy",
-        "active_model_id": service._active_model_id,
+        "active_model_id": service._cached_model_id,
         "model_loaded": service._model is not None,
     }
+

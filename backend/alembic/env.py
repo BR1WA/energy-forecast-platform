@@ -23,7 +23,11 @@ if backend_dir not in sys.path:
 
 from app.config import get_settings
 from app.database import Base
-from app.models.models import User, Forecast, AlertConfig, Alert
+from app.models import (
+    User, Forecast, AlertConfig, Alert, SmartMeterReading,
+    ModelRegistry, Subscription, RefreshToken, EnergyBudget, SystemSettings
+)
+
 
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

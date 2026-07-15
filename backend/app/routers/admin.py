@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.models import User, Forecast, Alert
+from app.models import User, Forecast, Alert, ModelRegistry
 from app.schemas import UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role, get_current_user
 from app.services import billing_service
@@ -110,9 +110,12 @@ def system_health(
     from app.services.forecast_service import get_forecast_service
     service = get_forecast_service()
 
+    active_model = service.get_active_model_registry(db)
+    active_models_count = 1 if active_model else 0
+
     return SystemHealth(
         status="operational",
-        active_models=len(service.models),
+        active_models=active_models_count,
         total_users=db.query(User).count(),
         total_forecasts=db.query(Forecast).count(),
         database_status=db_status,
@@ -178,12 +181,8 @@ def retrain_model_endpoint(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_role(["admin"])),
 ):
-    """Simulate ML model retraining (admin only)."""
-    from app.services.forecast_service import get_forecast_service
-    service = get_forecast_service()
-    try:
-        service.retrain_model(model_name, background_tasks)
-        return {"message": f"Retraining started for model {model_name}"}
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Model retraining is not implemented in the production API."
+    )
 

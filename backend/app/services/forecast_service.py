@@ -35,7 +35,7 @@ from training.features.feature_engineering import FeaturePipeline
 TARGET_COLS = ["gap"]
 
 # The experiments directory is mounted into the container at /app/experiments.
-EXPERIMENTS_DIR = os.environ.get("EXPERIMENTS_DIR", "/app/experiments")
+EXPERIMENTS_DIR = os.environ.get("EXPERIMENTS_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "experiments"))
 
 
 # ---------------------------------------------------------------------------
@@ -111,56 +111,84 @@ class ForecastService:
     # ── Registry helpers ────────────────────────────────────────────────────
 
     def _seed_registry_from_disk(self, db: Session) -> None:
-        """Auto-register experiments found on disk when the registry is empty.
-
-        This makes the service usable immediately after training without
-        requiring a separate manual API call.  The most recently created
-        experiment is set as the default active model.
+        """Synchronize the database registry with the experiments directory.
+        
+        Reads metadata from `metrics.json` and updates the registry if the file has 
+        been modified. Never automatically sets a model to active.
         """
-        if db.query(ModelRegistry).count() > 0:
-            return
-
         if not os.path.isdir(EXPERIMENTS_DIR):
             return
 
         required_files = ("model.pt", "pipeline.pkl", "config.yaml", "metrics.json")
-        candidates = sorted(
-            name for name in os.listdir(EXPERIMENTS_DIR)
-            if all(
-                os.path.exists(os.path.join(EXPERIMENTS_DIR, name, f))
-                for f in required_files
-            )
-        )
-        if not candidates:
-            return
-
-        registered = False
-        for exp_name in candidates:
-            exp_path = os.path.join(EXPERIMENTS_DIR, exp_name)
+        for root, dirs, files in os.walk(EXPERIMENTS_DIR):
+            if not all(f in files for f in required_files):
+                continue
+                
+            exp_path = root
+            exp_folder_name = os.path.basename(root)
+            
             try:
+                metrics_path = os.path.join(exp_path, "metrics.json")
+                mtime = os.path.getmtime(metrics_path)
+                
                 import yaml
+                import json
+                from datetime import datetime, timezone
                 with open(os.path.join(exp_path, "config.yaml")) as fh:
                     cfg = yaml.safe_load(fh)
-                with open(os.path.join(exp_path, "metrics.json")) as fh:
+                with open(metrics_path) as fh:
                     summary = json.load(fh)
 
+                # Parse Phase 3 vs Legacy config
+                exp_meta = cfg.get("experiment", {})
+                exp_id = exp_meta.get("id", None)
+                exp_name = exp_meta.get("name", exp_folder_name)
+                dataset_name = exp_meta.get("dataset", "ihepc")
+                horizon = exp_meta.get("horizon", 24)
+                lookback = exp_meta.get("lookback", cfg.get("model", {}).get("lookback", 96))
+                
+                # Check if it already exists in the DB (by name, as name must be unique)
+                entry = db.query(ModelRegistry).filter(ModelRegistry.name == exp_name).first()
+                if entry and entry.updated_at and entry.updated_at.timestamp() >= mtime:
+                    continue  # Already up to date
+
                 m = summary.get("final_unscaled") or summary.get("metrics", {}).get("final_unscaled") or summary.get("final") or summary.get("metrics", {}).get("final", {})
-                entry = ModelRegistry(
-                    name=exp_name,
-                    version=cfg.get("version", "1.0.0"),
-                    experiment_path=exp_path,
-                    model_fingerprint=summary.get("model_fingerprint"),
-                    active=not registered,   # first candidate becomes active
-                    mae=m.get("mae"),
-                    rmse=m.get("rmse"),
-                )
-                db.add(entry)
-                registered = True
-            except Exception:
+                
+                if entry:
+                    # Update existing entry
+                    entry.version = cfg.get("version", "1.0.0")
+                    entry.experiment_id = exp_id
+                    entry.dataset = dataset_name
+                    entry.horizon = horizon
+                    entry.lookback = lookback
+                    entry.model_fingerprint = summary.get("model_fingerprint")
+                    entry.mae = m.get("mae")
+                    entry.rmse = m.get("rmse")
+                    entry.updated_at = datetime.fromtimestamp(mtime, tz=timezone.utc)
+                else:
+                    # Create new entry
+                    entry = ModelRegistry(
+                        name=exp_name,
+                        version=cfg.get("version", "1.0.0"),
+                        experiment_id=exp_id,
+                        dataset=dataset_name,
+                        horizon=horizon,
+                        lookback=lookback,
+                        experiment_path=exp_path,
+                        model_fingerprint=summary.get("model_fingerprint"),
+                        active=False,  # Never auto-activate
+                        mae=m.get("mae"),
+                        rmse=m.get("rmse"),
+                        created_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
+                        updated_at=datetime.fromtimestamp(mtime, tz=timezone.utc)
+                    )
+                    db.add(entry)
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to sync experiment {exp_folder_name}: {e}")
                 continue
 
-        if registered:
-            db.commit()
+        db.commit()
 
     def _resolve_entry(self, model_name: str, db: Session) -> ModelRegistry:
         """Return the registry entry for *model_name*, falling back to active."""
@@ -207,15 +235,24 @@ class ForecastService:
         pipeline.load(pipeline_path)
         self._pipeline = pipeline
 
-        arch = config["model"]["name"]
-        if arch == "Hybrid_v2":
-            from training.models.hybrid_v2 import Hybrid_v2
-            model = Hybrid_v2(config["model"])
-        elif arch == "iTransformer":
-            from training.models.itransformer import iTransformer
-            model = iTransformer(config["model"])
+        arch = config.get("architecture", {}).get("name") or config.get("model", {}).get("name")
+        if not arch:
+            raise ValueError("Architecture name missing from config.yaml")
+
+        from app.ml.model_registry import get_model_class
+        ModelClass = get_model_class(arch)
+        
+        # Load kwargs
+        model_kwargs = config.get("architecture", config.get("model", {}))
+        if isinstance(model_kwargs, dict) and "name" in model_kwargs:
+            model_kwargs = model_kwargs.copy()
+            del model_kwargs["name"]
+        
+        if arch in ("Hybrid_v2", "HybridV2", "iTransformer"):
+            # These legacy models expect the full config dict
+            model = ModelClass(config.get("model", {}))
         else:
-            raise ValueError(f"Unknown model architecture in config: {arch!r}")
+            model = ModelClass(**model_kwargs)
 
         model.to(self.device)
         model.load(model_path, self.device)
@@ -232,7 +269,12 @@ class ForecastService:
         self._ensure_loaded(entry)
         return True
 
+    def get_active_model_registry(self, db: Session) -> Optional[ModelRegistry]:
+        """Return the currently active ModelRegistry entry, if any."""
+        return db.query(ModelRegistry).filter(ModelRegistry.active == True).first()
+
     # ── Public API ───────────────────────────────────────────────────────────
+
 
     def get_available_models(self) -> List[dict]:
         """Return every registered experiment as a ``ModelInfo``-compatible dict."""
@@ -345,8 +387,25 @@ class ForecastService:
         finally:
             db.close()
 
-        # 2. Extract GAP column (column 0 for multi-column arrays)
-        gap = targets[:, 0] if targets.ndim > 1 else targets
+        # 2. Map input targets to pipeline expected columns
+        cols = self._pipeline.target_cols if self._pipeline.target_cols else ["gap"]
+        
+        mapping_indices = {
+            "Global_active_power": 0,
+            "Global_reactive_power": 1,
+            "Voltage": 2,
+            "Global_intensity": 3,
+            "Sub_metering_1": 4,
+            "Sub_metering_2": 5,
+            "Sub_metering_3": 6,
+            "gap": 0,
+            "grp": 1,
+            "voltage": 2,
+            "gi": 3,
+            "sub_metering_1": 4,
+            "sub_metering_2": 5,
+            "sub_metering_3": 6
+        }
 
         # 3. Build a timestamp index
         if timestamps is not None:
@@ -356,31 +415,48 @@ class ForecastService:
         else:
             ts = pd.date_range(
                 end=pd.Timestamp.now(tz="UTC"),
-                periods=len(gap),
+                periods=len(targets),
                 freq="h",
             )
 
-        # 4. Run through FeaturePipeline
-        raw_df = pd.DataFrame({"timestamp": ts, "gap": gap.astype(np.float32)})
-        missing_strat = self._config["training"].get("missing_strategy", "interpolate")
+        data_dict = {"timestamp": ts}
+        for col in cols:
+            idx = mapping_indices.get(col, 0)
+            if targets.ndim > 1 and idx < targets.shape[1]:
+                val = targets[:, idx]
+            else:
+                val = targets[:, 0] if targets.ndim > 1 else targets
+            data_dict[col] = val.astype(np.float32)
+
+        raw_df = pd.DataFrame(data_dict)
+
+        # 4. Repair scale_cols if loaded as empty [] (pickle compatibility fix)
+        if not self._pipeline.scale_cols:
+            self._pipeline.scale_cols = [c for c in raw_df.columns if c != "timestamp"]
+
+        # Run through FeaturePipeline
+        missing_strat = self._config.get("training", {}).get("missing_strategy", "interpolate") if self._config else "interpolate"
         processed = self._pipeline.transform(
             raw_df, validate=True, missing_strategy=missing_strat
         )
 
-        lookback = self._config["model"]["lookback"]
+        lookback = 96
+        if self._config:
+            lookback = self._config.get("model", {}).get("lookback") or self._config.get("architecture", {}).get("lookback", 96)
         processed = processed.tail(lookback)
+
 
         if len(processed) < lookback:
             raise ValueError(
                 f"Not enough data: need {lookback} rows, got {len(processed)}."
             )
 
-        # 5. Build tensors
+        # 5. Build tensors (cols maintains correct features dimension)
         x = (
-            torch.tensor(processed["gap"].values, dtype=torch.float32)
-            .unsqueeze(0).unsqueeze(-1).to(self.device)
+            torch.tensor(processed[cols].values, dtype=torch.float32)
+            .unsqueeze(0).to(self.device)
         )
-        feat_cols = [c for c in processed.columns if c not in ("timestamp", "gap")]
+        feat_cols = [c for c in processed.columns if c != "timestamp" and c not in cols]
         temp = (
             torch.tensor(processed[feat_cols].values, dtype=torch.float32)
             .unsqueeze(0).to(self.device)
@@ -396,8 +472,15 @@ class ForecastService:
         if hasattr(self._pipeline, 'scaler'):
             preds_np = self._pipeline.scaler.inverse_transform(preds_np)
             
+        # Ensure Global Active Power (column 0) is never negative
+        if preds_np.ndim > 1:
+            preds_np[:, 0] = np.clip(preds_np[:, 0], 0.01, None)
+        else:
+            preds_np = np.clip(preds_np, 0.01, None)
+            
         alerts = self._check_alerts(preds_np, threshold_kw)
         return preds_np, alerts
+
 
     def predict_comparison(
         self,

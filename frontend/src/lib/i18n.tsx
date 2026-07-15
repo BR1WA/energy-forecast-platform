@@ -10,7 +10,7 @@ const translations: Record<Language, Translations> = {
   en: {
     // Nav & Sidebar
     'nav.dashboard': 'Dashboard',
-    'nav.forecasts': 'ML Sandbox',
+    'nav.forecasts': 'Forecasts',
     'nav.consumption': 'Consumption',
     'nav.simulation': 'Simulation',
     'nav.models': 'Models',
@@ -116,7 +116,7 @@ const translations: Record<Language, Translations> = {
   fr: {
     // Nav & Sidebar
     'nav.dashboard': 'Tableau de bord',
-    'nav.forecasts': 'Bac à sable ML',
+    'nav.forecasts': 'Prévisions',
     'nav.consumption': 'Consommation',
     'nav.simulation': 'Simulation',
     'nav.models': 'Modèles',
@@ -222,7 +222,7 @@ const translations: Record<Language, Translations> = {
   ar: {
     // Nav & Sidebar
     'nav.dashboard': 'لوحة التحكم',
-    'nav.forecasts': 'بيئة اختبار ML',
+    'nav.forecasts': 'التنبؤات',
     'nav.consumption': 'الاستهلاك',
     'nav.simulation': 'المحاكاة',
     'nav.models': 'النماذج',
