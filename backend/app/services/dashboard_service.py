@@ -10,7 +10,7 @@ import numpy as np
 from datetime import datetime, timezone, timedelta
 
 class DashboardService:
-    def get_summary(self, db: Session, user_id: int):
+    def get_summary(self, db: Session, user_id: int, lat: float | None = None, lon: float | None = None):
         # 1. Fetch live telemetry logs
         readings = db.query(SmartMeterReading).order_by(SmartMeterReading.timestamp.desc()).limit(1440).all()
         total_readings = len(readings)
@@ -164,24 +164,14 @@ class DashboardService:
         forecast_service = get_forecast_service()
         lookback = 96
         
-        if total_readings >= lookback:
-            recent_96 = readings[:96]
-            targets_list = []
-            for r in reversed(recent_96):
-                targets_list.append([r.gap, r.grp, r.voltage, r.intensity, r.sub_metering_1, r.sub_metering_2, r.sub_metering_3])
-            targets_arr = np.array(targets_list, dtype=np.float32)
-            ts_list = [r.timestamp for r in reversed(recent_96)]
-        else:
-            sample = forecast_service.samples.get("sample_winter")
-            targets_arr = sample['targets'][-lookback:]
-            if targets_arr.ndim == 1 or targets_arr.shape[1] < 7:
-                targets_padded = np.zeros((lookback, 7), dtype=np.float32)
-                if targets_arr.ndim == 1:
-                    targets_padded[:, 0] = targets_arr
-                else:
-                    targets_padded[:, :targets_arr.shape[1]] = targets_arr
-                targets_arr = targets_padded
-            ts_list = sample.get("timestamps")[-lookback:]
+        # Fetch targets from smart meter service to ensure they are hourly and properly formatted
+        from app.services.smart_meter_service import get_smart_meter_service
+        meter_service = get_smart_meter_service()
+        targets_arr = meter_service.fetch_live_readings(db=db, limit=lookback)
+        
+        # Generate corresponding hourly timestamps ending now (UTC)
+        now_utc = datetime.now(timezone.utc)
+        ts_list = [now_utc - timedelta(hours=(lookback - 1 - i)) for i in range(lookback)]
             
         active_model_entry = forecast_service.get_active_model_registry(db)
         active_model_name = active_model_entry.name if active_model_entry else "cnn_bilstm"
@@ -227,11 +217,15 @@ class DashboardService:
         # 9. Weather summary
         weather_data = {"temperature": 25.0, "condition": "Sunny"}
         try:
-            w = weather_service.get_weather(33.5731, -7.5898, mode="current")
+            actual_lat = lat if lat is not None else 33.5731
+            actual_lon = lon if lon is not None else -7.5898
+            w = weather_service.get_weather(actual_lat, actual_lon, mode="current")
             if w:
                 weather_data = {
                     "temperature": w.get("temperature", 25.0),
-                    "condition": w.get("condition", "Sunny")
+                    "condition": w.get("condition", "Sunny"),
+                    "wind_speed": w.get("wind_speed", 0.0),
+                    "is_day": w.get("is_day", True)
                 }
         except Exception:
             pass

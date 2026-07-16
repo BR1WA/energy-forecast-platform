@@ -14,7 +14,7 @@ import json
 import numpy as np
 
 from app.database import SessionLocal
-from app.models import User, Forecast, Alert
+from app.models import User, Forecast, Alert, ModelRegistry
 from app.services.forecast_service import get_forecast_service
 from app.services.auth_service import hash_password
 
@@ -62,9 +62,10 @@ def seed_database():
         sample_name = list(service.samples.keys())[0]
         sample_data = service.samples[sample_name]
         
-        models = [m for m in list(service.models.keys()) if m in ["patchtst", "sota", "cnn_bilstm"]]
+        # Get model names from registry table
+        models = [m.name for m in db.query(ModelRegistry).all()]
         if not models:
-            print("No 24h models loaded.")
+            print("No models found in database ModelRegistry.")
             return
 
         print(f"Seeding with {len(models)} models using sample '{sample_name}'...")
@@ -82,7 +83,7 @@ def seed_database():
             
             # Truncate to 96 steps for 24h models
             targets = sample_data['targets'][-96:]
-            calendar = sample_data['calendar'][-96:]
+            calendar = None
             
             # Add some random noise to make them look different
             noise = np.random.normal(0, 0.05, targets.shape)

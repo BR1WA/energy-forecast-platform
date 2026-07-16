@@ -492,7 +492,7 @@ export const simulationApi = {
 };
 
 export const dashboardApi = {
-  getSummary: (): Promise<{
+  getSummary: (lat?: number, lon?: number): Promise<{
     kpis: {
       energy_score: number;
       estimated_bill: number;
@@ -552,7 +552,13 @@ export const dashboardApi = {
       target: number;
       daily_limit: number;
     };
-  }> => apiFetch('/api/v1/dashboard/summary'),
+  }> => {
+    let url = '/api/v1/dashboard/summary';
+    if (lat !== undefined && lon !== undefined) {
+      url += `?lat=${lat}&lon=${lon}`;
+    }
+    return apiFetch(url);
+  },
 };
 
 // Export helpers for use in auth context

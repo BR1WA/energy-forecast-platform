@@ -149,6 +149,10 @@ export default function DashboardPage() {
   const { language } = useI18n();
   const [mounted, setMounted] = useState(false);
 
+  // Geolocation and resolved states
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [locationResolved, setLocationResolved] = useState(false);
+
   // Dashboard summary state
   const [summary, setSummary] = useState<any>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -161,10 +165,38 @@ export default function DashboardPage() {
   // Chart mode
   const [dashboardTimeframe, setDashboardTimeframe] = useState<'live' | '24'>('live');
 
+  // Request user geolocation once on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCoords({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+          });
+          setLocationResolved(true);
+        },
+        (error) => {
+          console.warn('Geolocation error or permission denied:', error);
+          setLocationResolved(true);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 5000,
+          maximumAge: 300000
+        }
+      );
+    } else {
+      setLocationResolved(true);
+    }
+  }, []);
+
   // Fetch dashboard summary
   const fetchSummary = async () => {
     try {
-      const data = await dashboardApi.getSummary();
+      const data = coords 
+        ? await dashboardApi.getSummary(coords.lat, coords.lon)
+        : await dashboardApi.getSummary();
       setSummary(data);
       setSummaryError(null);
     } catch (err: any) {
@@ -176,10 +208,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
-    fetchSummary();
-    const interval = setInterval(fetchSummary, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    // Only query backend after geolocation resolution completes to avoid Casablanca flickers
+    if (locationResolved) {
+      fetchSummary();
+      const interval = setInterval(fetchSummary, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [locationResolved, coords]);
 
   // WebSocket URL
   const [wsUrl, setWsUrl] = useState<string | null>(null);

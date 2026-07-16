@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 @router.get("/summary")
 def get_summary(
+    lat: float = None,
+    lon: float = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -20,10 +22,12 @@ def get_summary(
     Unified dashboard summary aggregating energy score, estimated bill,
     recommendations, forecasts, and live simulation states.
     """
-    return dashboard_service.get_summary(db, user_id=current_user.id)
+    return dashboard_service.get_summary(db, user_id=current_user.id, lat=lat, lon=lon)
 
 @router.get("/overview")
 def get_overview(
+    lat: float = None,
+    lon: float = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -49,7 +53,9 @@ def get_overview(
 
     def get_weather():
         try:
-            return weather_service.get_weather(33.5731, -7.5898, mode="current")
+            actual_lat = lat if lat is not None else 33.5731
+            actual_lon = lon if lon is not None else -7.5898
+            return weather_service.get_weather(actual_lat, actual_lon, mode="current")
         except Exception as e:
             print(f"Weather Service Error: {e}")
             return None
