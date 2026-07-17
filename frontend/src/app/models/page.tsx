@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Server, Activity, CalendarClock, Target, Cpu } from 'lucide-react';
+import { Loader2, Server, Activity, CalendarClock, Cpu } from 'lucide-react';
 import { fetchWithAuth } from '@/services/api-client';
 
 export default function ModelsPage() {
@@ -17,7 +17,7 @@ export default function ModelsPage() {
       try {
         const data = await fetchWithAuth('/api/v1/models/');
         setModels(data);
-      } catch (err) {
+      } catch {
         setError('Failed to load models. Please try again later.');
       } finally {
         setIsLoading(false);

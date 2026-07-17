@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Zap, TrendingDown, Target, HelpCircle, ShieldAlert, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Target, Sparkles, CheckCircle2 } from 'lucide-react';
 import { consumptionApi } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -15,17 +15,13 @@ export default function BudgetGoalsPage() {
   const [dailyLimit, setDailyLimit] = useState<number>(15);
   const [carbonGoal, setCarbonGoal] = useState<number>(20);
   const [stats, setStats] = useState({ total_kwh: 0 });
-  const [loading, setLoading] = useState(true);
 
   const fetchStats = async () => {
     try {
-      setLoading(true);
       const data = await consumptionApi.getStatistics();
       setStats(data);
     } catch (err) {
       console.error('Failed to fetch statistics:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -34,8 +30,6 @@ export default function BudgetGoalsPage() {
   }, []);
 
   const totalKwh = stats.total_kwh ?? 0;
-  const currentCost = totalKwh * 1.01;
-
   //ONE Tariff Tranches
   const getTariffInfo = () => {
     if (totalKwh <= 100) {

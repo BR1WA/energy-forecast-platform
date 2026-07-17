@@ -6,10 +6,8 @@ import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
-import { can, Feature } from '@/lib/entitlements';
-import { settingsApi, getAccessToken, dashboardApi, analyticsApi } from '@/lib/api';
+import { getAccessToken, dashboardApi, analyticsApi } from '@/lib/api';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { cn } from '@/lib/utils';
 import {
@@ -19,16 +17,11 @@ import {
   Thermometer,
   PlayCircle,
   TrendingUp,
-  TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
-  Database,
   Sparkles,
-  ArrowRight,
   Home,
   Users,
-  AlertCircle,
-  HelpCircle,
   FileText,
   DollarSign,
   Clock,
@@ -48,7 +41,6 @@ import {
   CircleDot,
   Radar,
   Brain,
-  Leaf,
   ArrowDown,
   ArrowUp
 } from 'lucide-react';
@@ -146,7 +138,6 @@ function StarIcon({ filled }: { filled: boolean }) {
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { language } = useI18n();
   const [mounted, setMounted] = useState(false);
 
   // Geolocation and resolved states
@@ -192,7 +183,7 @@ export default function DashboardPage() {
   }, []);
 
   // Fetch dashboard summary
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     try {
       const data = coords 
         ? await dashboardApi.getSummary(coords.lat, coords.lon)
@@ -204,7 +195,7 @@ export default function DashboardPage() {
     } finally {
       setSummaryLoading(false);
     }
-  };
+  }, [coords]);
 
   useEffect(() => {
     setMounted(true);
@@ -214,7 +205,7 @@ export default function DashboardPage() {
       const interval = setInterval(fetchSummary, 5000);
       return () => clearInterval(interval);
     }
-  }, [locationResolved, coords]);
+  }, [locationResolved, fetchSummary]);
 
   // WebSocket URL
   const [wsUrl, setWsUrl] = useState<string | null>(null);
@@ -259,11 +250,11 @@ export default function DashboardPage() {
   const forecast = summary?.forecast;
   const recs = summary?.recommendations;
   const budget = summary?.budget;
-  const timeline = summary?.timeline;
   const weather = summary?.weather;
   const radar = summary?.intelligence_radar;
   const todayVsYesterday = summary?.today_vs_yesterday;
   const aiDecisions = summary?.ai_decisions;
+  const firstName = user?.full_name?.trim().split(/\s+/)[0] || 'there';
 
   // ── Skeleton Loader ────────────────────────────────────────────────
   if (summaryLoading) {
@@ -298,6 +289,12 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
 
+        {summaryError && (
+          <div role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            Dashboard data is temporarily unavailable: {summaryError}
+          </div>
+        )}
+
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* COMPONENT A — EXECUTIVE HERO                                  */}
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -312,7 +309,7 @@ export default function DashboardPage() {
                 <EnergyScoreGauge score={exec?.energy_score || 0} />
                 <div className="space-y-1.5">
                   <h1 className="text-xl font-bold text-white tracking-tight">
-                    {exec?.greeting || 'Hello'}, <span className="text-indigo-400">Salah</span>
+                    {exec?.greeting || 'Hello'}, <span className="text-indigo-400">{firstName}</span>
                   </h1>
                   <p className="text-sm text-slate-300 max-w-lg leading-relaxed">
                     {exec?.proactive_sentence || exec?.summary_sentence || 'Your household is operating efficiently.'}

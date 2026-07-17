@@ -1016,7 +1016,7 @@ export default function ForecastPage() {
                       <Sparkles className="w-4 h-4 text-indigo-400" /> Explainable AI Insights
                     </h4>
                     <p className="text-xs text-slate-300 leading-relaxed mt-3">
-                      Tomorrow's electricity demand is predicted to increase by <strong className="text-indigo-400">14%</strong> because temperatures will rise by <strong className="text-indigo-400">5°C</strong>, driving higher cooling usage. Historical weekend occupancy patterns also support this afternoon demand profile.
+                      Tomorrow&apos;s electricity demand is predicted to increase by <strong className="text-indigo-400">14%</strong> because temperatures will rise by <strong className="text-indigo-400">5°C</strong>, driving higher cooling usage. Historical weekend occupancy patterns also support this afternoon demand profile.
                     </p>
                   </Card>
 
@@ -1026,7 +1026,7 @@ export default function ForecastPage() {
                        <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
                          <AlertCircle className="w-4 h-4 text-amber-400" /> Forecast Reliability
                        </h4>
-                       <p className="text-xs text-slate-400">Yesterday's forecast vs. actual smart meter readings.</p>
+                        <p className="text-xs text-slate-400">Yesterday&apos;s forecast vs. actual smart meter readings.</p>
                      </div>
                      {validation?.available ? (
                        <div className="space-y-3 mt-3">

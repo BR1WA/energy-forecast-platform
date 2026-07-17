@@ -18,7 +18,6 @@ import {
 import {
   Bell,
   AlertTriangle,
-  AlertCircle,
   Info,
   CheckCircle2,
   Settings,
@@ -26,44 +25,12 @@ import {
   Zap,
   TrendingUp,
   ShieldAlert,
-  Save,
   Loader2,
 } from 'lucide-react';
-import { alertsApi, settingsApi } from '@/lib/api';
+import { alertsApi } from '@/lib/api';
 import { parseDate } from '@/lib/utils';
 import { Alert } from '@/types';
 import { toast } from 'sonner';
-
-const severityConfig: Record<string, any> = {
-  critical: {
-    color: 'text-red-400',
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/20',
-    icon: ShieldAlert,
-    badge: 'bg-red-500/10 text-red-400 border-red-500/20',
-  },
-  high: {
-    color: 'text-orange-400',
-    bg: 'bg-orange-500/10',
-    border: 'border-orange-500/20',
-    icon: AlertTriangle,
-    badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  },
-  medium: {
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/10',
-    border: 'border-amber-500/20',
-    icon: AlertCircle,
-    badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  },
-  low: {
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
-    icon: Info,
-    badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  },
-};
 
 const notificationConfig: Record<string, any> = {
   critical: {
@@ -88,6 +55,8 @@ const notificationConfig: Record<string, any> = {
   }
 };
 
+const notificationReferenceTime = Date.now();
+
 export default function AlertsPage() {
   const [filter, setFilter] = useState('all');
   const [threshold, setThreshold] = useState('3.0');
@@ -97,7 +66,6 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [systemSettings, setSystemSettings] = useState<any>(null);
 
   // Listen for real-time alerts broadcasted via custom event from Navbar (deduplicated)
   useEffect(() => {
@@ -150,10 +118,6 @@ export default function AlertsPage() {
           setEmailEnabled(config.notification_email);
           setPushEnabled(config.notification_push);
         }
-        
-        // Fetch SystemSettings
-        const settingsData = await settingsApi.getSettings();
-        setSystemSettings(settingsData);
       } catch (err) {
         console.error('Failed to fetch alerts and config', err);
       } finally {
@@ -223,7 +187,7 @@ export default function AlertsPage() {
         title: 'Goal Achieved: Budget Target Met!',
         message: 'Your household consumption remained below the 400 MAD budget threshold this week.',
         isRead: true,
-        createdAt: new Date(Date.now() - 3600000 * 2),
+        createdAt: new Date(notificationReferenceTime - 3600000 * 2),
         category: 'success'
       });
       list.push({
@@ -233,7 +197,7 @@ export default function AlertsPage() {
         title: 'Virtual House Simulator Active',
         message: 'A new simulation scenario was executed. Baseline load metrics updated.',
         isRead: true,
-        createdAt: new Date(Date.now() - 3600000 * 6),
+        createdAt: new Date(notificationReferenceTime - 3600000 * 6),
         category: 'info'
       });
       list.push({
@@ -243,7 +207,7 @@ export default function AlertsPage() {
         title: 'New AI Saving Recommendation',
         message: 'Peak load shifts detected: Delaying laundry to off-peak slots can save up to 9 MAD.',
         isRead: true,
-        createdAt: new Date(Date.now() - 3600000 * 12),
+        createdAt: new Date(notificationReferenceTime - 3600000 * 12),
         category: 'info'
       });
     }

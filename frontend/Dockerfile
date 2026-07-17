@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source
 COPY . .
@@ -14,6 +14,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Build
 RUN npm run build
+
+# Keep command-line/build tooling out of the runtime image.
+RUN npm prune --omit=dev --no-audit --no-fund
 
 # Start the application
 CMD ["npm", "start"]

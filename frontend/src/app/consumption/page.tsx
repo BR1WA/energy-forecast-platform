@@ -261,7 +261,7 @@ export default function ConsumptionPage() {
                 <div className="flex gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                   <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-slate-300">
-                    Consumption is <strong>8% lower</strong> than yesterday's average daily profile.
+                    Consumption is <strong>8% lower</strong> than yesterday&apos;s average daily profile.
                   </p>
                 </div>
 
