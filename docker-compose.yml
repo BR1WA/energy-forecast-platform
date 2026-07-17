@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-energy_forecast}
       POSTGRES_USER: ${POSTGRES_USER:-pfe}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pfe_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
@@ -27,17 +27,24 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:-pfe_password}@db:5432/${POSTGRES_DB:-energy_forecast}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-super-secret-key-change-in-production}
-      FRONTEND_URL: http://localhost:3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-energy_forecast}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      DEBUG: ${DEBUG:-false}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       MODELS_DIR: /app/models
+      EXPERIMENTS_DIR: /app/experiments
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@energyforecast.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       PYTHONUNBUFFERED: "1"
     volumes:
-      - ./models:/app/models
-      - ./app_forecast/samples:/app/app_forecast/samples
-      - ./experiments:/app/experiments
+      - ./models:/app/models:ro
+      - ./experiments:/app/experiments:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/live', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
       db:
         condition: service_healthy
@@ -54,8 +61,15 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   pgdata:

@@ -99,10 +99,14 @@ python -m uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend
 # Install dependencies
-npm install
+npm ci
 # Start dev server
 npm run dev
 ```
+
+For environment variables, migrations, explicit administrator creation, Docker,
+demo seeding, health checks, and quality gates, see
+[`docs/operations.md`](docs/operations.md).
 
 ---
 
