@@ -404,8 +404,8 @@ export const consumptionApi = {
   getCurrent: (): Promise<{ kw: number; status: string; voltage?: number; intensity?: number; timestamp?: string; source?: string | null; age_seconds?: number | null }> =>
     apiFetch('/api/v1/consumption/current'),
 
-  getHistory: (): Promise<Array<{ kw: number; timestamp: string }>> =>
-    apiFetch('/api/v1/consumption/history'),
+  getHistory: (timeframe?: 'live' | 'day' | 'week' | 'month' | 'all'): Promise<Array<{ kw: number; timestamp: string }>> =>
+    apiFetch(`/api/v1/consumption/history${timeframe ? `?timeframe=${timeframe}` : ''}`),
 
   getStatistics: (): Promise<{
     month: string;

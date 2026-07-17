@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,20 +40,21 @@ export default function ConsumptionPage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<{ valid_rows: number; rejected_rows: number } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [timeframe, setTimeframe] = useState<'live' | 'day' | 'week' | 'month' | 'all'>('day');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (selectedTimeframe = timeframe) => {
     try {
       setLoading(true);
       const [statsData, currentData, historyData] = await Promise.all([
         consumptionApi.getStatistics(),
         consumptionApi.getCurrent(),
-        consumptionApi.getHistory(),
+        consumptionApi.getHistory(selectedTimeframe),
       ]);
 
       setStats(statsData);
       setCurrent(currentData);
       
-      const formattedHistory = (historyData || []).reverse().map((item: any) => {
+      const formattedHistory = (historyData || []).map((item: any) => {
         const date = new Date(item.timestamp);
         const timeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return {
@@ -67,14 +68,14 @@ export default function ConsumptionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeframe]);
 
   useEffect(() => {
-    fetchData();
+    fetchData(timeframe);
     ingestionApi.getMeters().then(setMeters).catch(() => toast.error('Unable to load your meter for CSV import.'));
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(() => fetchData(timeframe), timeframe === 'live' ? 5000 : 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData, timeframe]);
 
   const previewCsv = async (file: File) => {
     if (!meters[0]) return;
@@ -161,7 +162,7 @@ export default function ConsumptionPage() {
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={fetchData}
+              onClick={() => fetchData()}
               variant="outline"
               className="border-white/10 text-white hover:bg-white/5"
             >
@@ -256,9 +257,11 @@ export default function ConsumptionPage() {
 
         {/* Recharts Historical Curve */}
         <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
-          <CardHeader>
-            <CardTitle className="text-white text-base">Historical Energy Footprint</CardTitle>
-            <CardDescription className="text-slate-400 text-xs">Visualized aggregate meter log intervals (hourly timeline).</CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+            <div><CardTitle className="text-white text-base">Energy History</CardTitle><CardDescription className="text-slate-400 text-xs">Actual readings grouped for the selected period.</CardDescription></div>
+            <div className="flex shrink-0 rounded-md border border-white/10 p-1">
+              {(['live', 'day', 'week', 'month', 'all'] as const).map((range) => <button key={range} onClick={() => setTimeframe(range)} className={`rounded px-2 py-1 text-xs capitalize ${timeframe === range ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>{range}</button>)}
+            </div>
           </CardHeader>
           <CardContent>
             {loading && history.length === 0 ? (

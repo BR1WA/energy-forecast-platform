@@ -16,10 +16,16 @@ def get_current(
 
 @router.get("/history")
 def get_history(
+    timeframe: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return consumption_service.get_history(db, user_id=current_user.id)
+    try:
+        if timeframe:
+            return consumption_service.get_chart_history(db, user_id=current_user.id, timeframe=timeframe)
+        return consumption_service.get_history(db, user_id=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.get("/statistics")
 def get_statistics(

@@ -227,6 +227,34 @@ class ConsumptionService:
         readings = self._readings_for_user(db, user_id)[-hours * 60:]
         return [{"kw": reading.gap, "timestamp": _as_utc(reading.timestamp).isoformat()} for reading, _ in reversed(readings)]
 
+    def get_chart_history(self, db: Session, user_id: int, timeframe: str) -> list[dict]:
+        """Return owned meter power points grouped for a chart timeframe."""
+        windows = {"live": 2, "day": 24, "week": 24 * 7, "month": 24 * 31, "all": 24 * 365}
+        if timeframe not in windows:
+            raise ValueError("timeframe must be live, day, week, month, or all")
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=windows[timeframe])
+        records = [
+            (reading, meter) for reading, meter in self._readings_for_user(db, user_id)
+            if _as_utc(reading.timestamp) >= cutoff
+        ]
+        if timeframe == "live":
+            return [
+                {"kw": round(reading.gap, 3), "timestamp": _as_utc(reading.timestamp).isoformat()}
+                for reading, _ in records[-60:]
+            ]
+
+        bucket_hours = {"day": 1, "week": 6, "month": 24, "all": 24 * 30}[timeframe]
+        buckets: dict[datetime, list[float]] = defaultdict(list)
+        for reading, _ in records:
+            timestamp = _as_utc(reading.timestamp)
+            bucket_epoch = int(timestamp.timestamp() // (bucket_hours * 3600)) * bucket_hours * 3600
+            bucket = datetime.fromtimestamp(bucket_epoch, tz=timezone.utc)
+            buckets[bucket].append(reading.gap)
+        return [
+            {"kw": round(sum(values) / len(values), 3), "timestamp": timestamp.isoformat()}
+            for timestamp, values in sorted(buckets.items())
+        ]
+
     def get_statistics(self, db: Session, user_id: int):
         summary = self.get_monthly_summary(db, user_id)
         return {**summary, "average_daily": summary["average_daily_kwh"], "peak": summary["peak_kw"]}
