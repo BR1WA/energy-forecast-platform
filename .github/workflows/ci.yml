@@ -33,6 +33,8 @@ jobs:
       DEBUG: "true"
       JWT_SECRET_KEY: ci-only-jwt-secret-with-more-than-32-characters
       ADMIN_PASSWORD: ci-only-admin-password
+      # The backend imports the sibling training package during application startup.
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
