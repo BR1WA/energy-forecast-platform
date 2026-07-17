@@ -137,10 +137,13 @@ def update_budget(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    site = ensure_default_site(db, current_user.id)
     budget = db.query(EnergyBudget).filter(EnergyBudget.user_id == current_user.id).first()
     if not budget:
-        budget = EnergyBudget(user_id=current_user.id)
+        budget = EnergyBudget(user_id=current_user.id, site_id=site.id)
         db.add(budget)
+    elif budget.site_id is None:
+        budget.site_id = site.id
     
     budget.monthly_budget_mad = payload.monthly_budget_mad
     budget.monthly_budget_kwh = payload.monthly_budget_kwh

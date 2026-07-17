@@ -113,10 +113,10 @@ async def lifespan(app: FastAPI):
                                 # Budget Warning Alert
                                 from app.models.models import EnergyBudget
                                 from datetime import timedelta
+                                from app.services.consumption_service import consumption_service
                                 budget = db_session.query(EnergyBudget).filter(EnergyBudget.user_id == uid).first()
                                 if budget and budget.monthly_budget_mad > 0:
-                                    # Simulate projected cost based on current behavior
-                                    projected_cost = budget.monthly_budget_mad * random.uniform(0.85, 1.1)
+                                    projected_cost = consumption_service.get_monthly_summary(db_session, uid)["budget"]["projected_mad"]
                                     if projected_cost >= (budget.monthly_budget_mad * 0.9):
                                         # Check for debounce (24 hours)
                                         recent_budget_alert = db_session.query(Alert).filter(

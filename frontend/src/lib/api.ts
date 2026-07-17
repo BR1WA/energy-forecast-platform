@@ -407,11 +407,22 @@ export const consumptionApi = {
   getHistory: (): Promise<Array<{ kw: number; timestamp: string }>> =>
     apiFetch('/api/v1/consumption/history'),
 
-  getStatistics: (): Promise<{ average_daily: number; peak: number; total_kwh: number }> =>
+  getStatistics: (): Promise<{
+    month: string;
+    total_kwh: number;
+    total_cost: number;
+    peak_kw: number;
+    average_daily_kwh: number;
+    coverage_pct: number;
+    tariff: { currency: string; peak_rate: number; off_peak_rate: number; peak_start_hour: number; peak_end_hour: number };
+    budget: { target_mad: number | null; spent_mad: number; remaining_mad: number | null; progress_pct: number | null; projected_mad: number };
+    previous_month: { month: string; total_kwh: number; total_cost: number };
+    comparison_pct: number | null;
+  }> =>
     apiFetch('/api/v1/consumption/statistics'),
 
-  exportUrl: (): Promise<{ url: string }> =>
-    apiFetch('/api/v1/consumption/export'),
+  exportCsv: (): Promise<Blob> =>
+    apiFetch('/api/v1/consumption/export', { isBlob: true }),
 };
 
 export const ingestionApi = {

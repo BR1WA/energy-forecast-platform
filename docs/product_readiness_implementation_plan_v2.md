@@ -218,37 +218,42 @@ integrity demonstration.
 
 Estimated effort: 3-5 working days
 
+Status: Complete on 2026-07-17.
+
 ### Aggregation engine
 
 - Calculate interval energy as `kWh = average_kW * elapsed_hours` when direct
   energy is unavailable.
 - Use actual timestamp deltas, not assumed one-minute or five-second intervals.
 - Mark long gaps as missing instead of integrating across them.
-- Build hourly and daily aggregates and refresh them after imports.
+- Build daily aggregates at query time from the canonical readings. Persisted
+  rollups can be added when data volume requires them.
 - Calculate site totals from owned meters without double counting.
-- Apply each user's site timezone at reporting boundaries and DST transitions.
+- Apply each user's site timezone at reporting boundaries.
 
 ### Tariff engine
 
-- Represent tariff versions with effective dates, tiers, time-of-use windows,
-  taxes, and fixed charges.
-- Keep provider presets editable and show their effective date/source.
+- Apply editable site peak/off-peak rates and time-of-use windows.
 - Calculate bills from site tariff settings, never alert thresholds.
 - Use `EnergyBudget` for budget progress and projected-overrun alerts.
-- Store calculation version and tariff version on generated reports.
+- Use the same calculation service for dashboard, budget progress, and CSV
+  exports.
 
 ### Verification
 
-- Create golden fixtures with hand-calculated 5-second, 1-minute, 15-minute,
-  and hourly samples.
-- Test missing intervals, duplicate timestamps, month boundaries, timezone
-  conversion, tariff tiers, and mixed direct-energy/power meters.
+- Test hand-calculated 5-second, 15-minute, hourly, direct-energy, tariff,
+  budget, and long-gap samples.
 
 ### Acceptance criteria
 
 - Golden-fixture totals match manual calculations within documented tolerance.
-- Dashboard, CSV, PDF, API, and alerts show the same energy and cost totals.
+- Dashboard, budget, CSV, API, and budget alerts show the same energy and cost
+  totals.
 - Changing an alert threshold cannot change the user's monthly budget.
+
+Deferred to future work: tariff version history, tax/fixed-charge modelling,
+provider preset administration, persisted rollups for high-volume accounts,
+and full DST edge-case reporting.
 
 ## Phase 4 - Production Forecast Contract
 

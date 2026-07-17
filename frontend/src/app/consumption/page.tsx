@@ -20,7 +20,12 @@ import { toast } from 'sonner';
 
 export default function ConsumptionPage() {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ average_daily: 0, peak: 0, total_kwh: 0 });
+  const [stats, setStats] = useState({
+    month: '', total_kwh: 0, total_cost: 0, peak_kw: 0, average_daily_kwh: 0, coverage_pct: 0,
+    tariff: { currency: 'MAD', peak_rate: 0, off_peak_rate: 0, peak_start_hour: 0, peak_end_hour: 0 },
+    budget: { target_mad: null as number | null, spent_mad: 0, remaining_mad: null as number | null, progress_pct: null as number | null, projected_mad: 0 },
+    previous_month: { month: '', total_kwh: 0, total_cost: 0 }, comparison_pct: null as number | null,
+  });
   const [current, setCurrent] = useState<{ kw: number; status: string; voltage?: number; intensity?: number; source?: string | null; age_seconds?: number | null; sub_metering_1?: number; sub_metering_2?: number; sub_metering_3?: number }>({
     kw: 0,
     status: 'normal',
@@ -104,10 +109,13 @@ export default function ConsumptionPage() {
 
   const handleExport = async () => {
     try {
-      const res = await consumptionApi.exportUrl();
-      if (res && res.url) {
-        window.open(res.url, '_blank');
-      }
+      const blob = await consumptionApi.exportCsv();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `energy-${stats.month || 'current-month'}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to export consumption data', err);
     }
@@ -139,19 +147,7 @@ export default function ConsumptionPage() {
 
   const appliances = calculateAppliancePercentages();
 
-  // Moroccan ONEE Progressive Tariff Tiers calculation
-  const getTariffTier = () => {
-    const totalKwh = stats.total_kwh ?? 0;
-    if (totalKwh <= 100) {
-      return { tier: 1, name: 'Tranche 1 (Social)', rate: '0.9010 MAD/kWh', pct: Math.round((totalKwh / 100) * 100) };
-    } else if (totalKwh <= 200) {
-      return { tier: 2, name: 'Tranche 2 (Normal)', rate: '1.0100 MAD/kWh', pct: Math.round(((totalKwh - 100) / 100) * 100) };
-    } else {
-      return { tier: 3, name: 'Tranche 3 (High-Usage)', rate: '1.1200 MAD/kWh', pct: 100 };
-    }
-  };
-
-  const tariff = getTariffTier();
+  const tariff = stats.tariff;
 
   return (
     <AppLayout>
@@ -193,7 +189,7 @@ export default function ConsumptionPage() {
         </Card>
 
         {/* Stats Cards grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden group">
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -221,7 +217,7 @@ export default function ConsumptionPage() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-white">
-                {loading ? '...' : `${(stats?.peak ?? 0).toFixed(3)} kW`}
+                {loading ? '...' : `${(stats.peak_kw ?? 0).toFixed(3)} kW`}
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 Highest recorded load this month
@@ -237,11 +233,23 @@ export default function ConsumptionPage() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-white">
-                {loading ? '...' : `MAD ${(stats?.total_kwh * 1.01).toFixed(2)}`}
+                {loading ? '...' : `${tariff.currency} ${(stats.total_cost ?? 0).toFixed(2)}`}
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 Accumulated: {(stats?.total_kwh ?? 0).toFixed(2)} kWh
               </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden group">
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-400" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-400">Month Comparison</CardTitle>
+              <TrendingUp className="h-4 w-4 text-cyan-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-white">{stats.comparison_pct === null ? 'N/A' : `${stats.comparison_pct > 0 ? '+' : ''}${stats.comparison_pct}%`}</div>
+              <p className="text-xs text-slate-500 mt-1">Previous month: {stats.previous_month.total_kwh.toFixed(2)} kWh</p>
             </CardContent>
           </Card>
         </div>
@@ -327,7 +335,7 @@ export default function ConsumptionPage() {
                 <div className="flex gap-3 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
                   <Sparkles className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-slate-300">
-                    If current behavior continues, monthly bill will be <strong>MAD {(stats?.total_kwh * 1.01).toFixed(2)}</strong>.
+                    Projected month-end cost is <strong>{tariff.currency} {stats.budget.projected_mad.toFixed(2)}</strong> based on recorded intervals.
                   </p>
                 </div>
 
@@ -437,41 +445,32 @@ export default function ConsumptionPage() {
               </CardContent>
             </Card>
 
-            {/* progressive tariff card */}
+            {/* site tariff card */}
             <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div>
-                  <CardTitle className="text-white text-base">ONEE Utility Tariff Status</CardTitle>
-                  <CardDescription className="text-slate-400 text-xs">Moroccan National Electricity progressive billing tranches.</CardDescription>
+                  <CardTitle className="text-white text-base">Site Tariff Status</CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">Costs are calculated from the peak and off-peak rates saved in site settings.</CardDescription>
                 </div>
-                <Badge className="bg-indigo-600 text-white text-[10px] uppercase font-semibold">{tariff.name}</Badge>
+                <Badge className="bg-indigo-600 text-white text-[10px] uppercase font-semibold">{stats.month || 'Current month'}</Badge>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className={`p-3 rounded-lg border ${tariff.tier === 1 ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/5 bg-white/5 opacity-60'}`}>
-                    <div className="font-semibold text-white">Tier 1</div>
-                    <div className="text-[10px] text-slate-400 mt-1">0 - 100 kWh</div>
-                    <div className="text-[10px] text-emerald-400 mt-0.5">0.9010 MAD</div>
+                <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                    <div className="font-semibold text-white">Peak</div>
+                    <div className="text-[10px] text-slate-400 mt-1">{tariff.peak_start_hour}:00-{tariff.peak_end_hour}:00</div>
+                    <div className="text-[10px] text-amber-400 mt-0.5">{tariff.peak_rate.toFixed(4)} {tariff.currency}/kWh</div>
                   </div>
-                  <div className={`p-3 rounded-lg border ${tariff.tier === 2 ? 'border-amber-500 bg-amber-500/10' : 'border-white/5 bg-white/5 opacity-60'}`}>
-                    <div className="font-semibold text-white">Tier 2</div>
-                    <div className="text-[10px] text-slate-400 mt-1">101 - 200 kWh</div>
-                    <div className="text-[10px] text-amber-400 mt-0.5">1.0100 MAD</div>
-                  </div>
-                  <div className={`p-3 rounded-lg border ${tariff.tier === 3 ? 'border-rose-500 bg-rose-500/10' : 'border-white/5 bg-white/5 opacity-60'}`}>
-                    <div className="font-semibold text-white">Tier 3</div>
-                    <div className="text-[10px] text-slate-400 mt-1">200+ kWh</div>
-                    <div className="text-[10px] text-rose-400 mt-0.5">1.1200 MAD</div>
-                  </div>
+                  <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10"><div className="font-semibold text-white">Off-peak</div><div className="text-[10px] text-slate-400 mt-1">All remaining hours</div><div className="text-[10px] text-emerald-400 mt-0.5">{tariff.off_peak_rate.toFixed(4)} {tariff.currency}/kWh</div></div>
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-slate-400">
-                    <span>Consumption inside current tranche rate ({tariff.rate})</span>
+                    <span>Data coverage for this month</span>
                     <span>{(stats.total_kwh ?? 0).toFixed(1)} kWh</span>
                   </div>
                   <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${tariff.tier === 1 ? 'bg-emerald-500' : tariff.tier === 2 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${tariff.pct}%` }} />
+                    <div className="h-full rounded-full bg-cyan-500" style={{ width: `${stats.coverage_pct}%` }} />
                   </div>
                 </div>
               </CardContent>

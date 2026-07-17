@@ -29,9 +29,9 @@ class DashboardService:
         
         last_reading = readings[0] if total_readings > 0 else None
         
-        active_power = last_reading.gap if last_reading else 1.25
-        voltage = last_reading.voltage if last_reading else 230.0
-        intensity = last_reading.intensity if last_reading else 5.43
+        active_power = last_reading.gap if last_reading else 0.0
+        voltage = last_reading.voltage if last_reading else 0.0
+        intensity = last_reading.intensity if last_reading else 0.0
         frequency = 50.0
 
         # 2. Greeting time
@@ -61,40 +61,18 @@ class DashboardService:
           {"name": "Occupancy", "status": f"{simulation.occupants} People", "level": str(simulation.occupants)}
         ]
 
-        # 4. ONEE Moroccan Tariffs & Billing Calculations
-        # 5 seconds per reading tick. Total kWh = sum(gap) / 720.0
-        total_kwh = sum(r.gap for r in readings) / 720.0 if total_readings > 0 else 125.4
-        
-        if total_kwh <= 100:
-            current_cost = total_kwh * 0.9010
-            tariff_tier = 1
-            tariff_name = "Tranche 1 (Social)"
-            tariff_rate = "0.9010 MAD/kWh"
-            tariff_pct = min(100, int((total_kwh / 100) * 100))
-        elif total_kwh <= 200:
-            current_cost = 100 * 0.9010 + (total_kwh - 100) * 1.0100
-            tariff_tier = 2
-            tariff_name = "Tranche 2 (Normal)"
-            tariff_rate = "1.0100 MAD/kWh"
-            tariff_pct = min(100, int(((total_kwh - 100) / 100) * 100))
-        else:
-            current_cost = 100 * 0.9010 + 100 * 1.0100 + (total_kwh - 200) * 1.1200
-            tariff_tier = 3
-            tariff_name = "Tranche 3 (High-Usage)"
-            tariff_rate = "1.1200 MAD/kWh"
-            tariff_pct = 100
-
-        # Load monthly budget limit from configs
-        alert_config = db.query(AlertConfig).filter(AlertConfig.user_id == user_id).first()
-        budget_target = alert_config.threshold_kw * 100.0 if alert_config and alert_config.threshold_kw else 400.0
-        
-        # Estimate projected end of month cost
-        # Scale current consumption up dynamically
-        projected_cost = current_cost * 2.5 if total_readings < 500 else current_cost * (1440 / max(1, total_readings))
-        projected_cost = max(current_cost + 10.0, min(budget_target * 1.2, projected_cost))
-        
-        progress_pct = min(100, int((current_cost / budget_target) * 100))
-        remaining = max(0.0, budget_target - current_cost)
+        # 4. Use the shared, timestamp-based calculation service for all billing figures.
+        monthly = consumption_service.get_monthly_summary(db, user_id)
+        total_kwh = monthly["total_kwh"]
+        current_cost = monthly["total_cost"]
+        tariff = monthly["tariff"]
+        tariff_name = "Site peak/off-peak tariff"
+        tariff_rate = tariff.get("peak_rate", 0.0)
+        budget_data = monthly["budget"]
+        budget_target = budget_data["target_mad"] or 0.0
+        projected_cost = budget_data["projected_mad"]
+        progress_pct = budget_data["progress_pct"] or 0.0
+        remaining = budget_data["remaining_mad"] or 0.0
 
         # 5. Dynamic Energy Score calculation
         base_score = 95
@@ -130,7 +108,7 @@ class DashboardService:
             today_story.append({"icon": "check", "text": "Peak demand stayed below budget threshold."})
         else:
             today_story.append({"icon": "alert", "text": f"Budget usage at {progress_pct}% — approaching limit."})
-        today_story.append({"icon": "check", "text": f"You remain inside {tariff_name}."})
+        today_story.append({"icon": "check", "text": f"Billing uses your site's configured peak and off-peak rates."})
 
         # 7. Priority savings opportunities
         potential_savings = 0
@@ -474,7 +452,7 @@ class DashboardService:
                 "grid_import": round(grid_import, 2),
                 "house_consumption": round(active_power, 2),
                 "solar_offset_pct": int(solar_offset),
-                "current_tariff_rate": float(tariff_rate.split()[0])
+                "current_tariff_rate": tariff_rate
             },
             "forecast": {
                 "points": forecast_points,
