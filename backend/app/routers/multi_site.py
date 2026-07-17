@@ -1,89 +1,39 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+
 from app.database import get_db
-from app.models import User
-from app.services.auth_service import require_feature
-from app.entitlements import Feature
+from app.models import Meter, Site, SmartMeterReading, User
+from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/v1/multi-site", tags=["multi-site"])
 
-# Static mock data representing different facilities
-SITES_DATA = [
-  {
-    "id": 'site-casablanca',
-    "name": 'Casablanca Headquarters',
-    "meterId": 'CM-HQ-01',
-    "status": 'Active',
-    "load": 184.5,
-    "dailyConsumption": 2420,
-    "peakPower": 210,
-    "monthlyCost": 64800,
-    "circuits": [
-      { "name": 'Server Room A', "status": 'Active', "current": 120, "power": 26.4, "cosPhi": 0.98 },
-      { "name": 'HVAC Main', "status": 'Active', "current": 280, "power": 61.6, "cosPhi": 0.88 },
-      { "name": 'Production Line B', "status": 'Active', "current": 310, "power": 68.2, "cosPhi": 0.90 },
-      { "name": 'Office Lighting', "status": 'Active', "current": 130, "power": 28.3, "cosPhi": 0.95 },
-    ]
-  },
-  {
-    "id": 'site-tangier',
-    "name": 'Tangier Logistics Hub',
-    "meterId": 'CM-TL-02',
-    "status": 'Active',
-    "load": 120.2,
-    "dailyConsumption": 1650,
-    "peakPower": 145,
-    "monthlyCost": 44200,
-    "circuits": [
-      { "name": 'EV Charging Stations', "status": 'Active', "current": 180, "power": 39.6, "cosPhi": 0.99 },
-      { "name": 'Conveyor Belts', "status": 'Active', "current": 220, "power": 48.4, "cosPhi": 0.85 },
-      { "name": 'Warehouse Lights', "status": 'Active', "current": 100, "power": 22.0, "cosPhi": 0.92 },
-      { "name": 'Office Pods', "status": 'Active', "current": 46, "power": 10.2, "cosPhi": 0.96 },
-    ]
-  },
-  {
-    "id": 'site-marrakech',
-    "name": 'Marrakech Showroom',
-    "meterId": 'CM-MS-03',
-    "status": 'Active',
-    "load": 65.8,
-    "dailyConsumption": 920,
-    "peakPower": 80,
-    "monthlyCost": 24800,
-    "circuits": [
-      { "name": 'Display Lighting', "status": 'Active', "current": 110, "power": 24.2, "cosPhi": 0.97 },
-      { "name": 'HVAC Aircon', "status": 'Active', "current": 150, "power": 33.0, "cosPhi": 0.89 },
-      { "name": 'IT Infrastructure', "status": 'Active', "current": 30, "power": 6.6, "cosPhi": 0.95 },
-      { "name": 'Security & Access', "status": 'Active', "current": 9, "power": 2.0, "cosPhi": 0.90 },
-    ]
-  },
-  {
-    "id": 'site-agadir',
-    "name": 'Agadir Production Plant',
-    "meterId": 'CM-AP-04',
-    "status": 'Maintenance',
-    "load": 0.0,
-    "dailyConsumption": 0,
-    "peakPower": 0,
-    "monthlyCost": 0,
-    "circuits": [
-      { "name": 'Assembly Line 1', "status": 'Idle', "current": 0, "power": 0.0, "cosPhi": 0.0 },
-      { "name": 'Main Compressor', "status": 'Idle', "current": 0, "power": 0.0, "cosPhi": 0.0 },
-      { "name": 'Plant Cooling', "status": 'Idle', "current": 0, "power": 0.0, "cosPhi": 0.0 },
-      { "name": 'Auxiliary System', "status": 'Idle', "current": 0, "power": 0.0, "cosPhi": 0.0 },
-    ]
-  }
-]
 
 @router.get("")
 def get_multi_site_data(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_feature(Feature.MULTI_SITE)),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Returns the multi-site telemetry data.
-
-    Enterprise-only: enforced server-side via `require_feature`, which returns a
-    consistent 403 (instead of the previous 200-with-error body). See audit C2.
-    """
-    return {"data": SITES_DATA}
+    """Return only the authenticated user's sites and meter summaries."""
+    sites = db.query(Site).filter(Site.user_id == current_user.id).order_by(Site.id).all()
+    data = []
+    for site in sites:
+        meter = db.query(Meter).filter(Meter.site_id == site.id).order_by(Meter.id).first()
+        latest = (
+            db.query(SmartMeterReading)
+            .join(Meter, SmartMeterReading.meter_id == Meter.id)
+            .filter(Meter.site_id == site.id)
+            .order_by(SmartMeterReading.timestamp.desc())
+            .first()
+        )
+        data.append({
+            "id": str(site.id),
+            "name": site.name,
+            "meterId": meter.external_id if meter and meter.external_id else (str(meter.id) if meter else None),
+            "status": meter.status.title() if meter else "No meter",
+            "load": latest.gap if latest else 0.0,
+            "dailyConsumption": 0.0,
+            "peakPower": latest.gap if latest else 0.0,
+            "monthlyCost": 0.0,
+            "circuits": [],
+        })
+    return {"data": data}

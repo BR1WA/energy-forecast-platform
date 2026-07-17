@@ -38,14 +38,14 @@ class TestWebSocketAuth(unittest.TestCase):
             email="user1@example.com",
             password_hash=hash_password(self.user_pass),
             full_name="User One",
-            role="viewer",
+            role="user",
             is_active=True,
         )
         self.user2 = User(
             email="user2@example.com",
             password_hash=hash_password(self.user_pass),
             full_name="User Two",
-            role="viewer",
+            role="user",
             is_active=True,
         )
         self.db.add(self.user1)

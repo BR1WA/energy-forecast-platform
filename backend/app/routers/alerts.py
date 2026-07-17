@@ -8,7 +8,7 @@ from typing import List
 from app.database import get_db
 from app.models import User, Alert, AlertConfig
 from app.schemas import AlertResponse, AlertConfigCreate, AlertConfigResponse, AlertAcknowledge
-from app.services.auth_service import get_current_user, require_role
+from app.services.auth_service import get_current_user
 from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
@@ -85,7 +85,7 @@ def get_alert_config(
 @router.post("/config", response_model=AlertConfigResponse)
 def update_alert_config(
     data: AlertConfigCreate,
-    current_user: User = Depends(require_role(["admin", "analyst"])),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Update alert threshold configuration."""
@@ -153,4 +153,3 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     except Exception as e:
         print(f"[WS] Exception for client {client_id}: {e}")
         manager.disconnect(client_id, websocket)
-

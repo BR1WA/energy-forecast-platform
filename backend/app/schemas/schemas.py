@@ -1,18 +1,18 @@
 """
 Pydantic schemas for request/response validation.
 """
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
+import math
 
 
 # ======================== AUTH ========================
 
 class UserRole(str, Enum):
     admin = "admin"
-    analyst = "analyst"
-    viewer = "viewer"
+    user = "user"
 
 
 class UserRegister(BaseModel):
@@ -38,7 +38,6 @@ class UserResponse(BaseModel):
     last_login: Optional[datetime] = None
     avatar_url: Optional[str] = None
     last_activity: Optional[datetime] = None
-    subscription_tier: Optional[str] = "free"
     is_setup_complete: bool = False
     preferences: Optional[Dict[str, Any]] = None
 
@@ -59,76 +58,72 @@ class TokenData(BaseModel):
     token_type: str = "bearer"
 
 
+# ======================== INGESTION ========================
+
+class MeterSample(BaseModel):
+    """Canonical electricity measurement accepted from every ingestion source."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    timestamp: datetime
+    active_power_kw: float = Field(ge=0, le=100)
+    reactive_power_kvar: float = Field(default=0, ge=0, le=100)
+    voltage_v: float = Field(default=230, gt=0, le=1000)
+    current_a: Optional[float] = Field(default=None, ge=0, le=1000)
+    sub_metering_1_wh: float = Field(default=0, ge=0, le=100_000)
+    sub_metering_2_wh: float = Field(default=0, ge=0, le=100_000)
+    sub_metering_3_wh: float = Field(default=0, ge=0, le=100_000)
+    energy_kwh: Optional[float] = Field(default=None, ge=0, le=10_000_000)
+
+    @field_validator("timestamp")
+    @classmethod
+    def timestamp_must_have_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp must include a timezone offset")
+        return value
+
+    @field_validator(
+        "active_power_kw", "reactive_power_kvar", "voltage_v", "current_a",
+        "sub_metering_1_wh", "sub_metering_2_wh", "sub_metering_3_wh", "energy_kwh",
+    )
+    @classmethod
+    def values_must_be_finite(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and not math.isfinite(value):
+            raise ValueError("measurement values must be finite")
+        return value
+
+
+class MeterSampleBatch(BaseModel):
+    samples: List[MeterSample] = Field(min_length=1, max_length=1000)
+    idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=100)
+
+
+class IngestionKeyResponse(BaseModel):
+    meter_id: int
+    api_key: str
+
+
+class IngestionResult(BaseModel):
+    batch_id: str
+    total_rows: int
+    accepted_rows: int
+    duplicate_rows: int
+    rejected_rows: int
+    errors: List[Dict[str, Any]]
+
+
 # ======================== USERS (Admin) ========================
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
-    subscription_tier: Optional[str] = None
 
 class UserUpdateMe(BaseModel):
     full_name: Optional[str] = None
-    # NOTE: subscription_tier is intentionally NOT updatable here.
-    # Tier changes are an entitlement/billing concern and must go through an
-    # admin endpoint or a real payment flow, never self-service. See audit C1.
 
 class PasswordUpdate(BaseModel):
     current_password: str
     new_password: str = Field(min_length=6, max_length=100)
-
-
-class SubscriptionTier(str, Enum):
-    free = "free"
-    pro = "pro"
-
-
-class SubscriptionUpdate(BaseModel):
-    """Dedicated, validated payload for changing subscription tier.
-
-    Kept separate from generic profile updates so tier changes go through a
-    single, auditable entitlement endpoint. See audit C1.
-    """
-    subscription_tier: SubscriptionTier
-
-
-# ======================== BILLING ========================
-
-class PaidTier(str, Enum):
-    """Tiers that can be purchased via checkout (free is not purchasable)."""
-    pro = "pro"
-
-
-class CheckoutRequest(BaseModel):
-    tier: PaidTier
-
-
-class CheckoutResponse(BaseModel):
-    """Returned when a checkout is opened; mimics a payment-provider intent."""
-    checkout_ref: str
-    tier: str
-    status: str
-
-
-class CheckoutConfirmRequest(BaseModel):
-    checkout_ref: str
-
-
-class SubscriptionResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    tier: str
-    status: str
-    source: str
-    started_at: Optional[datetime] = None
-    current_period_end: Optional[datetime] = None
-    cancelled_at: Optional[datetime] = None
-
-class EntitlementsResponse(BaseModel):
-    """Current user's tier and unlocked feature keys (UI gates from this)."""
-    subscription_tier: str
-    features: List[str]
 
 
 # ======================== FORECAST ========================

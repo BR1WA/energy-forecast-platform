@@ -19,6 +19,7 @@ from app.services.forecast_service import get_forecast_service
 from app.services.auth_service import hash_password
 from app.config import get_settings
 from app.migrations import run_migrations
+from app.services.site_service import ensure_default_site
 
 def seed_database():
     if os.getenv("ALLOW_DEMO_SEED", "").lower() != "true":
@@ -47,17 +48,16 @@ def seed_database():
                 role="admin",
                 is_active=True,
                 is_setup_complete=True,
-                subscription_tier="pro",
             )
             db.add(admin)
             db.commit()
 
         # Seed additional users if they don't exist
         extra_users = [
-            {"email": "operator@energyforecast.com", "full_name": "Jane Operator", "role": "analyst", "is_active": True},
-            {"email": "viewer@energyforecast.com", "full_name": "Bob Viewer", "role": "viewer", "is_active": False},
-            {"email": "alice@example.com", "full_name": "Alice Johnson", "role": "viewer", "is_active": False},
-            {"email": "charlie@example.com", "full_name": "Charlie Brown", "role": "analyst", "is_active": True},
+            {"email": "user1@energyforecast.com", "full_name": "Jane User", "role": "user", "is_active": True},
+            {"email": "user2@energyforecast.com", "full_name": "Bob User", "role": "user", "is_active": False},
+            {"email": "alice@example.com", "full_name": "Alice Johnson", "role": "user", "is_active": False},
+            {"email": "charlie@example.com", "full_name": "Charlie Brown", "role": "user", "is_active": True},
         ]
         for u_data in extra_users:
             existing = db.query(User).filter(User.email == u_data["email"]).first()
@@ -70,6 +70,10 @@ def seed_database():
                     is_active=u_data["is_active"],
                 )
                 db.add(new_user)
+        db.commit()
+
+        for user in db.query(User).all():
+            ensure_default_site(db, user.id)
         db.commit()
 
         service = get_forecast_service()

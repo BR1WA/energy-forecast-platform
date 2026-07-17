@@ -21,7 +21,6 @@ import {
   BarChart3,
   Loader2,
   Trash2,
-  CreditCard,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -269,17 +268,8 @@ export default function ProfilePage() {
                   </p>
                   <div className="flex flex-col items-center gap-1.5 mt-3">
                     <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 capitalize">
-                      {user?.role || 'Viewer'}
+                      {user?.role || 'User'}
                     </Badge>
-                    {user?.subscription_tier && (
-                      <Badge className={
-                        user.subscription_tier === 'pro' 
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 capitalize animate-pulse font-mono text-[9px]'
-                          : 'bg-slate-500/10 text-slate-400 border-slate-500/20 capitalize font-mono text-[9px]'
-                      }>
-                        {user.subscription_tier} Plan
-                      </Badge>
-                    )}
                   </div>
                 </div>
 
@@ -290,11 +280,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex items-center text-xs text-slate-400">
                     <Shield className="w-4 h-4 mr-2.5 text-slate-500" />
-                    <span className="capitalize">Role privileges: {user?.role || 'viewer'} levels</span>
-                  </div>
-                  <div className="flex items-center text-xs text-slate-400">
-                    <CreditCard className="w-4 h-4 mr-2.5 text-slate-500" />
-                    <span className="capitalize">Active Subscription: {user?.subscription_tier || 'free'}</span>
+                    <span className="capitalize">Account role: {user?.role || 'user'}</span>
                   </div>
                 </div>
               </CardContent>

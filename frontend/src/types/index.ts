@@ -5,13 +5,12 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'analyst' | 'viewer';
+  role: 'admin' | 'user';
   is_active: boolean;
   created_at: string;
   updated_at?: string;
   avatar_url?: string;
   last_activity?: string;
-  subscription_tier?: 'free' | 'pro';
   is_setup_complete?: boolean;
   preferences?: Record<string, any>;
 }
@@ -202,38 +201,6 @@ export interface ApiError {
   status_code: number;
 }
 
-// ============================================================
-// Billing Types
-// ============================================================
-export interface CheckoutRequest {
-  tier: 'pro';
-}
-
-export interface CheckoutResponse {
-  checkout_ref: string;
-  tier: string;
-  status: string;
-}
-
-export interface CheckoutConfirmRequest {
-  checkout_ref: string;
-}
-
-export interface SubscriptionResponse {
-  id: number;
-  tier: string;
-  status: string;
-  source: string;
-  started_at?: string;
-  current_period_end?: string;
-  cancelled_at?: string;
-}
-
-export interface EntitlementsResponse {
-  subscription_tier: 'free' | 'pro';
-  features: string[];
-}
-
 export interface EnergyBudget {
   id: number;
   user_id: string | number;
@@ -307,4 +274,3 @@ export interface Site {
   monthlyCost: number;
   circuits: SiteCircuit[];
 }
-

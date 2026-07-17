@@ -13,9 +13,6 @@ import type {
   AdminUser,
   ModelRegistry,
   SystemHealth,
-  CheckoutResponse,
-  SubscriptionResponse,
-  EntitlementsResponse,
   EnergyBudget,
   SystemSettings,
   RawAlertResponse,
@@ -133,13 +130,7 @@ async function apiFetch<T>(
     const errorData = await res.json().catch(() => ({}));
     if (res.status === 403 && typeof window !== 'undefined') {
       import('sonner').then(({ toast }) => {
-        toast.error(errorData.detail || 'Access denied. Please upgrade your subscription plan.', {
-          action: {
-            label: 'Upgrade Plan',
-            onClick: () => { window.location.href = '/plans'; }
-          },
-          duration: 10000,
-        });
+        toast.error(errorData.detail || 'Access denied.');
       }).catch(err => console.error('Failed to load sonner toast', err));
     }
     throw new Error(errorData.detail || `API error: ${res.status}`);
@@ -196,34 +187,6 @@ export const authApi = {
   deleteAvatar: (): Promise<User> =>
     apiFetch('/api/v1/auth/me/avatar', {
       method: 'DELETE',
-    }),
-};
-
-// ============================================================
-// Billing API
-// ============================================================
-export const billingApi = {
-  getEntitlements: (): Promise<EntitlementsResponse> =>
-    apiFetch('/api/v1/billing/entitlements'),
-
-  getSubscription: (): Promise<SubscriptionResponse | null> =>
-    apiFetch('/api/v1/billing/subscription'),
-
-  checkout: (tier: 'pro'): Promise<CheckoutResponse> =>
-    apiFetch('/api/v1/billing/checkout', {
-      method: 'POST',
-      body: JSON.stringify({ tier }),
-    }),
-
-  confirmCheckout: (checkout_ref: string): Promise<User> =>
-    apiFetch('/api/v1/billing/checkout/confirm', {
-      method: 'POST',
-      body: JSON.stringify({ checkout_ref }),
-    }),
-
-  cancelSubscription: (): Promise<User> =>
-    apiFetch('/api/v1/billing/cancel', {
-      method: 'POST',
     }),
 };
 
@@ -438,7 +401,7 @@ export const settingsApi = {
 // Consumption API
 // ============================================================
 export const consumptionApi = {
-  getCurrent: (): Promise<{ kw: number; status: string; voltage?: number; intensity?: number; timestamp?: string }> =>
+  getCurrent: (): Promise<{ kw: number; status: string; voltage?: number; intensity?: number; timestamp?: string; source?: string | null; age_seconds?: number | null }> =>
     apiFetch('/api/v1/consumption/current'),
 
   getHistory: (): Promise<Array<{ kw: number; timestamp: string }>> =>
@@ -449,6 +412,32 @@ export const consumptionApi = {
 
   exportUrl: (): Promise<{ url: string }> =>
     apiFetch('/api/v1/consumption/export'),
+};
+
+export const ingestionApi = {
+  getMeters: (): Promise<Array<{ id: number; name: string; source_type: string }>> =>
+    apiFetch('/api/v1/ingestion/meters'),
+
+  previewCsv: (meterId: number, file: File): Promise<{
+    mapped_columns: string[];
+    valid_rows: number;
+    rejected_rows: number;
+    errors: Array<{ row: number; message: string }>;
+  }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiFetch(`/api/v1/ingestion/meters/${meterId}/csv/preview`, { method: 'POST', body: formData });
+  },
+
+  importCsv: (meterId: number, file: File): Promise<{
+    accepted_rows: number;
+    duplicate_rows: number;
+    rejected_rows: number;
+  }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiFetch(`/api/v1/ingestion/meters/${meterId}/csv/import`, { method: 'POST', body: formData });
+  },
 };
 
 // ============================================================
@@ -563,4 +552,3 @@ export const dashboardApi = {
 
 // Export helpers for use in auth context
 export { setTokens, clearTokens, getAccessToken };
-

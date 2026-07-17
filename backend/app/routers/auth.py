@@ -12,18 +12,17 @@ import time
 logger = logging.getLogger(__name__)
 
 from app.database import get_db
-from app.models import User, SystemSettings, RefreshToken
+from app.models import User, RefreshToken
 from app.schemas import (
     UserRegister, UserLogin, UserResponse, TokenResponse,
     RefreshRequest, TokenData, UserUpdateMe, PasswordUpdate,
-    SubscriptionUpdate
 )
 from app.services.auth_service import (
     hash_password, verify_password, authenticate_user, create_access_token,
     create_refresh_token, decode_token, get_current_user, store_refresh_token,
     verify_refresh_token
 )
-from app.entitlements import Tier
+from app.services.site_service import ensure_default_site
 from app.limiter import limiter
 from app.config import get_settings
 
@@ -49,20 +48,16 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
         email=data.email,
         password_hash=hash_password(data.password),
         full_name=data.full_name,
-        role="analyst",  # Default role
+        role="user",
         is_active=True,
         is_setup_complete=False,
     )
     db.add(user)
 
-    # Ensure global SystemSettings exists
-    settings = db.query(SystemSettings).first()
-    if not settings:
-        new_settings = SystemSettings(is_setup_complete=True)
-        db.add(new_settings)
-
     db.commit()
     db.refresh(user)
+    ensure_default_site(db, user.id)
+    db.commit()
 
     # Generate tokens
     token_data = {"sub": str(user.id), "role": user.role}
@@ -193,53 +188,11 @@ def update_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update current user's profile.
-
-    Subscription tier is deliberately not editable here; it is an entitlement
-    controlled by admins/billing, not by the user. See audit C1.
-    """
+    """Update current user's profile."""
     if data.full_name is not None:
         current_user.full_name = data.full_name
     db.commit()
     db.refresh(current_user)
-    return UserResponse.model_validate(current_user)
-
-
-@router.post("/subscription", response_model=UserResponse)
-def change_subscription(
-    data: SubscriptionUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Self-service subscription changes.
-
-    Only *downgrades* are permitted here: a user may cancel a paid plan and
-    return to the free tier at any time, since that strictly removes
-    entitlement and carries no fraud risk. *Upgrades* to a paid tier are NOT
-    self-service; they must go through an entitlement flow (billing checkout
-    or an admin grant). Allowing arbitrary self-upgrades was the core of audit
-    finding C1, where any user could grant themselves Enterprise for free.
-    """
-    target = Tier.from_str(data.subscription_tier.value)
-    current = Tier.from_str(current_user.subscription_tier)
-
-    # Free tier is the only self-assignable target (cancel / downgrade).
-    if target != Tier.free:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Upgrading to a paid tier is not available through self-service. "
-                "Complete checkout or contact an administrator. You can only "
-                "cancel (downgrade to 'free') here."
-            ),
-        )
-
-    # No-op if already free; otherwise apply the downgrade.
-    if current != Tier.free:
-        current_user.subscription_tier = Tier.free.name
-        db.commit()
-        db.refresh(current_user)
-
     return UserResponse.model_validate(current_user)
 
 
@@ -349,5 +302,4 @@ def delete_avatar(
         db.refresh(current_user)
         
     return UserResponse.model_validate(current_user)
-
 

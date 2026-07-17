@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
-import { can, Feature } from '@/lib/entitlements';
 import {
   LayoutDashboard,
   LineChart,
@@ -40,8 +39,6 @@ interface NavItem {
   href: string;
   icon: any;
   adminOnly?: boolean;
-  analystOrAdminOnly?: boolean;
-  featureGate?: Feature;
   disabled?: boolean;
 }
 
@@ -159,8 +156,6 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
         {navItems
           .filter((item) => {
             if (item.adminOnly && user?.role !== 'admin') return false;
-            if (item.analystOrAdminOnly && user?.role !== 'analyst' && user?.role !== 'admin') return false;
-            if (item.featureGate && !can(user, item.featureGate)) return false;
             return true;
           })
           .map((item) => {

@@ -13,7 +13,8 @@ from app.schemas import (
     ForecastRequest, ForecastResponse, ForecastHistoryItem,
     ModelInfo, SampleDataset
 )
-from app.services.auth_service import get_current_user, require_role
+from app.services.auth_service import get_current_user
+from app.services.site_service import ensure_default_site, get_default_meter
 from app.services.forecast_service import get_forecast_service, TARGET_COLS
 from app.limiter import limiter
 from app.config import get_settings
@@ -45,7 +46,7 @@ def predict(
     request: Request,
     payload: ForecastRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_role(["admin", "analyst"])),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service = get_forecast_service()
@@ -122,8 +123,10 @@ def predict(
     if payload.horizon != 24 and not payload.model_name.endswith(f"_{payload.horizon}"):
         model_db_name = f"{payload.model_name}_{payload.horizon}"
 
+    site = ensure_default_site(db, current_user.id)
     forecast = Forecast(
         user_id=current_user.id,
+        site_id=site.id,
         model_name=model_db_name,
         predictions=predictions.tolist(),
         input_start=input_start,
@@ -138,6 +141,7 @@ def predict(
     for alert_data in alerts_data:
         alert = Alert(
             user_id=current_user.id,
+            site_id=site.id,
             forecast_id=forecast.id,
             alert_type=alert_data['alert_type'],
             severity=alert_data['severity'],
@@ -176,7 +180,7 @@ def predict(
 @router.post("/compare")
 def compare_models(
     request: ForecastRequest,
-    current_user: User = Depends(require_role(["admin", "analyst"])),
+    current_user: User = Depends(get_current_user),
 ):
     """Run all models on the same input for comparison."""
     service = get_forecast_service()
@@ -231,7 +235,7 @@ def predict_upload(
     file: UploadFile = File(...),
     requested_model_name: str = Form(..., alias="model_name"),
     horizon: int = Form(24),
-    current_user: User = Depends(require_role(["admin", "analyst"])),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Run forecast from an uploaded CSV file."""
@@ -319,8 +323,10 @@ def predict_upload(
         input_end = input_end.replace(tzinfo=datetime.timezone.utc)
 
     # Save forecast
+    site = ensure_default_site(db, current_user.id)
     forecast = Forecast(
         user_id=current_user.id,
+        site_id=site.id,
         model_name=requested_model_name,
         predictions=predictions.tolist(),
         input_start=input_start,
@@ -334,6 +340,7 @@ def predict_upload(
     for alert_data in alerts_data:
         alert = Alert(
             user_id=current_user.id,
+            site_id=site.id,
             forecast_id=forecast.id,
             alert_type=alert_data['alert_type'],
             severity=alert_data['severity'],
@@ -371,7 +378,7 @@ def predict_upload(
 def compare_upload(
     file: UploadFile = File(...),
     horizon: int = Form(24),
-    current_user: User = Depends(require_role(["admin", "analyst"])),
+    current_user: User = Depends(get_current_user),
 ):
     """Run comparison from an uploaded CSV file."""
     import pandas as pd
@@ -437,7 +444,7 @@ def compare_upload(
 def sync_smart_meter_forecast(
     payload: ForecastRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_role(["admin", "analyst"])),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -502,8 +509,10 @@ def sync_smart_meter_forecast(
     # Save to DB
     input_end = now
     input_start = now - datetime.timedelta(hours=lookback - 1)
+    site = ensure_default_site(db, current_user.id)
     forecast = Forecast(
         user_id=current_user.id,
+        site_id=site.id,
         model_name=full_model_key,
         predictions=predictions.tolist(),
         input_start=input_start,
@@ -517,6 +526,7 @@ def sync_smart_meter_forecast(
     for alert_data in alerts_data:
         alert = Alert(
             user_id=current_user.id,
+            site_id=site.id,
             forecast_id=forecast.id,
             alert_type=alert_data['alert_type'],
             severity=alert_data['severity'],
@@ -559,7 +569,7 @@ def sync_smart_meter_forecast(
 @router.post("/smart-meter/compare")
 def compare_smart_meter_forecasts(
     payload: ForecastRequest,
-    current_user: User = Depends(require_role(["admin", "analyst"])),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -647,9 +657,10 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
     from app.services.smart_meter_service import get_smart_meter_service
     from app.services.forecast_service import get_forecast_service
     from app.database import SessionLocal
-    from app.models import SmartMeterReading, User
+    from app.models import User
+    from app.schemas import MeterSample
+    from app.services.ingestion_service import ingestion_service
     from app.services.auth_service import decode_token
-    from datetime import datetime, timezone
 
     if not token:
         await websocket.accept()
@@ -674,6 +685,12 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
             await websocket.accept()
             await websocket.close(code=1008, reason="User unauthorized or inactive")
             return
+        ensure_default_site(db, user.id)
+        meter = get_default_meter(db, user.id)
+        if meter is None:
+            await websocket.accept()
+            await websocket.close(code=1008, reason="No meter is configured for this user")
+            return
     except Exception as e:
         await websocket.accept()
         await websocket.close(code=1008, reason=f"Authentication failed: {str(e)}")
@@ -693,17 +710,17 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
             
             # 2. Save reading to database using the active db_session
             try:
-                db_reading = SmartMeterReading(
-                    gap=reading["gap"],
-                    grp=reading["grp"],
-                    voltage=reading["voltage"],
-                    intensity=reading["intensity"],
-                    sub_metering_1=reading["sub_metering_1"],
-                    sub_metering_2=reading["sub_metering_2"],
-                    sub_metering_3=reading["sub_metering_3"],
-                    timestamp=datetime.now(timezone.utc)
-                )
-                db_session.add(db_reading)
+                sample = MeterSample.model_validate({
+                    "timestamp": reading["timestamp"],
+                    "active_power_kw": reading["gap"],
+                    "reactive_power_kvar": reading["grp"],
+                    "voltage_v": reading["voltage"],
+                    "current_a": reading["intensity"],
+                    "sub_metering_1_wh": reading["sub_metering_1"],
+                    "sub_metering_2_wh": reading["sub_metering_2"],
+                    "sub_metering_3_wh": reading["sub_metering_3"],
+                })
+                ingestion_service.ingest(db_session, meter, [sample], source="simulation")
                 db_session.commit()
             except Exception as db_err:
                 db_session.rollback()

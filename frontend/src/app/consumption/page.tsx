@@ -5,7 +5,7 @@ import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Zap, TrendingUp, Activity, Download, RefreshCw, Sparkles, AlertTriangle, CheckCircle, Flame } from 'lucide-react';
+import { Zap, TrendingUp, Activity, Download, RefreshCw, Sparkles, AlertTriangle, CheckCircle, Flame, Upload } from 'lucide-react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -15,12 +15,13 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts';
-import { consumptionApi } from '@/lib/api';
+import { consumptionApi, ingestionApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function ConsumptionPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ average_daily: 0, peak: 0, total_kwh: 0 });
-  const [current, setCurrent] = useState<{ kw: number; status: string; voltage?: number; intensity?: number; sub_metering_1?: number; sub_metering_2?: number; sub_metering_3?: number }>({
+  const [current, setCurrent] = useState<{ kw: number; status: string; voltage?: number; intensity?: number; source?: string | null; age_seconds?: number | null; sub_metering_1?: number; sub_metering_2?: number; sub_metering_3?: number }>({
     kw: 0,
     status: 'normal',
     voltage: 230,
@@ -30,6 +31,10 @@ export default function ConsumptionPage() {
     sub_metering_3: 0
   });
   const [history, setHistory] = useState<Array<{ kw: number; timestamp: string; timeLabel: string }>>([]);
+  const [meters, setMeters] = useState<Array<{ id: number; name: string }>>([]);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ valid_rows: number; rejected_rows: number } | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -61,9 +66,41 @@ export default function ConsumptionPage() {
 
   useEffect(() => {
     fetchData();
+    ingestionApi.getMeters().then(setMeters).catch(() => toast.error('Unable to load your meter for CSV import.'));
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  const previewCsv = async (file: File) => {
+    if (!meters[0]) return;
+    setCsvFile(file);
+    setCsvPreview(null);
+    try {
+      const preview = await ingestionApi.previewCsv(meters[0].id, file);
+      setCsvPreview(preview);
+      if (preview.rejected_rows) toast.warning(`${preview.rejected_rows} row(s) need attention.`);
+    } catch (error) {
+      setCsvFile(null);
+      toast.error(error instanceof Error ? error.message : 'Unable to validate this CSV file.');
+    }
+  };
+
+  const importCsv = async () => {
+    if (!meters[0] || !csvFile) return;
+    setImporting(true);
+    try {
+      const result = await ingestionApi.importCsv(meters[0].id, csvFile);
+      toast.success(`Imported ${result.accepted_rows} reading(s).`);
+      if (result.rejected_rows) toast.warning(`${result.rejected_rows} row(s) were rejected.`);
+      setCsvFile(null);
+      setCsvPreview(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'CSV import failed.');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleExport = async () => {
     try {
@@ -143,6 +180,18 @@ export default function ConsumptionPage() {
           </div>
         </div>
 
+        <Card className="border-white/10 bg-[#111827]/80">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-white"><Upload className="h-4 w-4 text-cyan-400" />Import meter readings</CardTitle>
+            <CardDescription className="text-xs text-slate-400">Upload a UTF-8 CSV with `timestamp` and `active_power_kw` columns. Legacy `GAP` and `Datetime` headers are accepted too.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 md:flex-row md:items-center">
+            <input type="file" accept=".csv,text/csv" onChange={(event) => event.target.files?.[0] && previewCsv(event.target.files[0])} className="block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-600 md:max-w-md" />
+            {csvPreview && <span className="text-sm text-slate-400">{csvPreview.valid_rows} valid, {csvPreview.rejected_rows} rejected</span>}
+            <Button onClick={importCsv} disabled={!csvFile || !csvPreview || importing} className="md:ml-auto">{importing ? 'Importing...' : 'Import CSV'}</Button>
+          </CardContent>
+        </Card>
+
         {/* Stats Cards grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden group">
@@ -157,6 +206,9 @@ export default function ConsumptionPage() {
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 Active feed: {(current.voltage ?? 230).toFixed(1)}V / {(current.intensity ?? 0).toFixed(2)}A
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                Source: {current.source || 'none'}{current.age_seconds !== undefined && current.age_seconds !== null ? `, ${current.age_seconds}s ago` : ''}
               </p>
             </CardContent>
           </Card>

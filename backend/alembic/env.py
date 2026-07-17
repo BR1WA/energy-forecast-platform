@@ -25,7 +25,8 @@ from app.config import get_settings
 from app.database import Base
 from app.models import (
     User, Forecast, AlertConfig, Alert, SmartMeterReading,
-    ModelRegistry, Subscription, RefreshToken, EnergyBudget, SystemSettings
+    ModelRegistry, RefreshToken, EnergyBudget, SystemSettings, Site, Meter,
+    SiteSettings, SimulationSession, IngestionBatch,
 )
 
 

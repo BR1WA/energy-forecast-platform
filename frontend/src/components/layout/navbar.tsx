@@ -7,7 +7,7 @@ import { alertsApi, getAccessToken, API_BASE_URL } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useDataMode } from '@/contexts/DataModeContext';
-import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Sparkles, Activity, PlayCircle, History, Database } from 'lucide-react';
+import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Activity, PlayCircle, History, Database } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -257,26 +257,6 @@ export default function Navbar() {
       </div>
 
       <div className="flex items-center gap-3">
-        {user?.subscription_tier === 'pro' ? (
-          <button
-            onClick={() => router.push('/plans')}
-            className="hover:scale-105 transition-all duration-200"
-            title="Manage Subscription"
-          >
-            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 border-0 text-white font-bold text-[10px] uppercase px-2 py-0.5 select-none animate-pulse cursor-pointer">
-              Pro Plan
-            </Badge>
-          </button>
-        ) : (
-          <button
-            onClick={() => router.push('/plans')}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/10 to-orange-500/10 hover:from-amber-500/20 hover:to-orange-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 font-bold transition-all duration-200 text-xs shadow-[0_0_15px_rgba(245,158,11,0.05)]"
-          >
-            <Sparkles className="w-3 h-3" />
-            <span>Upgrade</span>
-          </button>
-        )}
-
         <div className="relative" ref={searchRef}>
           <button
             id="navbar-search"
@@ -470,15 +450,6 @@ export default function Navbar() {
               <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
                 <User className="w-4 h-4 mr-2" />
                 {t('nav.profile')}
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              id="nav-plans"
-              className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
-            >
-              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/plans')}>
-                <Sparkles className="w-4 h-4 mr-2 text-amber-400" />
-                Subscription Plans
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem

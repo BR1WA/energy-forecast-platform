@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
-from app.models.settings import SystemSettings
-from app.models.models import User, EnergyBudget
+from app.models import EnergyBudget, SiteSettings, User
 from app.services.auth_service import get_current_user
+from app.services.site_service import ensure_default_site
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -45,7 +45,8 @@ def get_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    settings = db.query(SystemSettings).first()
+    site = ensure_default_site(db, current_user.id)
+    settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first()
     if not settings:
         return {
             "country": "Morocco",
@@ -57,7 +58,7 @@ def get_settings(
             "peak_start_hour": 6,
             "peak_end_hour": 22,
             "sensor_type": "simulator",
-            "sensor_api_url": None
+            "sensor_api_url": None,
         }
     return settings
 
@@ -67,38 +68,26 @@ def save_setup(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    settings = db.query(SystemSettings).first()
-    settings_created_or_updated = False
-    
+    site = ensure_default_site(db, current_user.id)
+    settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first()
     if not settings:
-        settings = SystemSettings()
+        settings = SiteSettings(site_id=site.id)
         db.add(settings)
-        settings_created_or_updated = True
-    elif current_user.role == "admin":
-        settings_created_or_updated = True
-        
-    if settings_created_or_updated:
-        settings.is_setup_complete = True
-        settings.country = payload.country
-        settings.region = payload.region
-        settings.electricity_provider = payload.electricity_provider
-        settings.currency = payload.currency
-        settings.peak_rate = payload.peak_rate
-        settings.off_peak_rate = payload.off_peak_rate
-        settings.peak_start_hour = payload.peak_start_hour
-        settings.peak_end_hour = payload.peak_end_hour
-        settings.sensor_type = payload.sensor_type
-        settings.sensor_api_url = payload.sensor_api_url
+
+    settings.country = payload.country
+    settings.region = payload.region
+    settings.electricity_provider = payload.electricity_provider
+    settings.currency = payload.currency
+    settings.peak_rate = payload.peak_rate
+    settings.off_peak_rate = payload.off_peak_rate
+    settings.peak_start_hour = payload.peak_start_hour
+    settings.peak_end_hour = payload.peak_end_hour
+    settings.sensor_type = payload.sensor_type
     
     # Also update the user's specific setup complete status
     current_user.is_setup_complete = True
     
     db.commit()
-    if settings_created_or_updated:
-        db.refresh(settings)
-    else:
-        settings = db.query(SystemSettings).first()
-        
     db.refresh(current_user)
     return {"message": "Setup completed successfully", "settings": settings}
 

@@ -1,35 +1,55 @@
 from sqlalchemy.orm import Session
-from app.models.models import SmartMeterReading
+from datetime import datetime, timezone
+from app.models import Meter, Site, SmartMeterReading
 
 class ConsumptionService:
+    @staticmethod
+    def _query_for_user(db: Session, user_id: int):
+        return (
+            db.query(SmartMeterReading)
+            .join(Meter, SmartMeterReading.meter_id == Meter.id)
+            .join(Site, Meter.site_id == Site.id)
+            .filter(Site.user_id == user_id)
+        )
+
     def get_current_consumption(self, db: Session, user_id: int):
-        reading = db.query(SmartMeterReading).order_by(SmartMeterReading.timestamp.desc()).first()
+        reading = self._query_for_user(db, user_id).order_by(SmartMeterReading.timestamp.desc()).first()
         if not reading:
-            return {"kw": 0, "status": "empty"}
+            return {"kw": 0, "status": "empty", "source": None, "age_seconds": None}
+        timestamp = reading.timestamp
+        if timestamp and timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        age_seconds = int(max(0, (datetime.now(timezone.utc) - timestamp).total_seconds())) if timestamp else None
         return {
             "kw": reading.gap,
             "status": "normal" if reading.gap < 4.0 else "high",
             "voltage": reading.voltage,
             "intensity": reading.intensity,
-            "timestamp": reading.timestamp.isoformat() if reading.timestamp else None
+            "timestamp": reading.timestamp.isoformat() if reading.timestamp else None,
+            "source": reading.source,
+            "age_seconds": age_seconds,
         }
 
     def get_history(self, db: Session, user_id: int, hours: int = 24):
-        # We'd normally filter by timestamp > now - hours
-        readings = db.query(SmartMeterReading).order_by(SmartMeterReading.timestamp.desc()).limit(hours * 60).all()
+        readings = (
+            self._query_for_user(db, user_id)
+            .order_by(SmartMeterReading.timestamp.desc())
+            .limit(hours * 60)
+            .all()
+        )
         return [{"kw": r.gap, "timestamp": r.timestamp.isoformat()} for r in readings]
 
     def get_statistics(self, db: Session, user_id: int):
         from sqlalchemy import func
         # 1. Peak Demand (max Global Active Power)
-        max_gap = db.query(func.max(SmartMeterReading.gap)).scalar() or 0.0
+        readings = self._query_for_user(db, user_id)
+        max_gap = readings.with_entities(func.max(SmartMeterReading.gap)).scalar() or 0.0
         
         # 2. Average Daily Power (average hourly active power multiplied by 24h)
-        avg_gap = db.query(func.avg(SmartMeterReading.gap)).scalar() or 0.0
+        avg_gap = readings.with_entities(func.avg(SmartMeterReading.gap)).scalar() or 0.0
         
         # 3. Cumulative Energy Consumption (sum of Global Active Power scaled by 1-minute time blocks to kWh)
-        total_minutes = db.query(func.count(SmartMeterReading.id)).scalar() or 1
-        total_kwh = (db.query(func.sum(SmartMeterReading.gap)).scalar() or 0.0) / 60.0
+        total_kwh = (readings.with_entities(func.sum(SmartMeterReading.gap)).scalar() or 0.0) / 60.0
         
         return {
             "average_daily": round(avg_gap * 24.0, 2), # Daily kWh estimation
@@ -38,4 +58,3 @@ class ConsumptionService:
         }
 
 consumption_service = ConsumptionService()
-

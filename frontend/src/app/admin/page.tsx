@@ -90,7 +90,6 @@ export default function AdminPage() {
   
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [editRole, setEditRole] = useState('');
-  const [editTier, setEditTier] = useState('');
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
@@ -136,7 +135,6 @@ export default function AdminPage() {
     try {
       const updatedUser = await adminApi.updateUser(editUser.id, {
         role: editRole as any,
-        subscription_tier: editTier as any,
       });
       setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
       setIsDialogOpen(false);
@@ -366,9 +364,6 @@ export default function AdminPage() {
                       Role
                     </TableHead>
                     <TableHead className="text-slate-400 font-medium">
-                      Subscription
-                    </TableHead>
-                    <TableHead className="text-slate-400 font-medium">
                       Status
                     </TableHead>
                     <TableHead className="text-slate-400 font-medium">
@@ -382,7 +377,7 @@ export default function AdminPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center">
+                      <TableCell colSpan={5} className="h-24 text-center">
                         <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
                       </TableCell>
                     </TableRow>
@@ -430,18 +425,6 @@ export default function AdminPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] uppercase ${
-                            u.subscription_tier === 'pro'
-                              ? 'border-blue-500/20 text-blue-400 bg-blue-500/10'
-                              : 'border-slate-500/20 text-slate-400 bg-slate-500/10'
-                          }`}
-                        >
-                          {u.subscription_tier || 'free'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
                         <div className="flex items-center gap-1.5">
                           {isOnline(u.last_activity) ? (
                             <>
@@ -469,7 +452,6 @@ export default function AdminPage() {
                           else {
                             setEditUser(u);
                             setEditRole(u.role);
-                            setEditTier(u.subscription_tier || 'free');
                             setIsDialogOpen(true);
                           }
                         }}>
@@ -519,50 +501,12 @@ export default function AdminPage() {
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent className="bg-[#111827] border-white/10">
-                                      <SelectItem
-                                        value="viewer"
-                                        className="text-slate-300"
-                                      >
-                                        Viewer
-                                      </SelectItem>
-                                      <SelectItem
-                                        value="analyst"
-                                        className="text-slate-300"
-                                      >
-                                        Analyst
-                                      </SelectItem>
+                                      <SelectItem value="user" className="text-slate-300">User</SelectItem>
                                       <SelectItem
                                         value="admin"
                                         className="text-slate-300"
                                       >
                                         Admin
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-slate-300">
-                                    Subscription Tier
-                                  </Label>
-                                  <Select
-                                    value={editTier}
-                                    onValueChange={(v) => setEditTier(v ?? 'free')}
-                                  >
-                                    <SelectTrigger className="bg-white/[0.04] border-white/[0.08] text-white">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-[#111827] border-white/10">
-                                      <SelectItem
-                                        value="free"
-                                        className="text-slate-300"
-                                      >
-                                        Free
-                                      </SelectItem>
-                                      <SelectItem
-                                        value="pro"
-                                        className="text-slate-300"
-                                      >
-                                        Pro
                                       </SelectItem>
                                     </SelectContent>
                                   </Select>

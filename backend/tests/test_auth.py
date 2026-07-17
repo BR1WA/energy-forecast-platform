@@ -65,7 +65,7 @@ class TestAuthAndTokens(unittest.TestCase):
             email="loginuser@example.com",
             password_hash=hash_password("loginpassword123"),
             full_name="Login User",
-            role="viewer",
+            role="user",
             is_active=True
         )
         self.db.add(user)
@@ -94,7 +94,7 @@ class TestAuthAndTokens(unittest.TestCase):
             email="refreshuser@example.com",
             password_hash=hash_password("refreshpassword123"),
             full_name="Refresh User",
-            role="viewer",
+            role="user",
             is_active=True
         )
         self.db.add(user)
@@ -141,7 +141,7 @@ class TestAuthAndTokens(unittest.TestCase):
             email="logoutuser@example.com",
             password_hash=hash_password("logoutpassword123"),
             full_name="Logout User",
-            role="viewer",
+            role="user",
             is_active=True
         )
         self.db.add(user)

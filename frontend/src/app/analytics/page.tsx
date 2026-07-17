@@ -1,15 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
-import { can, Feature } from '@/lib/entitlements';
 import {
   BarChart3,
   TrendingUp,
@@ -111,8 +108,6 @@ function getHeatColor(value: number): string {
 }
 
 export default function AnalyticsPage() {
-  const { user } = useAuth();
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
    
@@ -120,7 +115,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
-  const isFree = !can(user, Feature.ANALYTICS_SUMMARY);
+  const isFree = false;
   const finalHeatmapData = analytics?.heatmap_data || heatmapData;
 
   useEffect(() => {
@@ -138,12 +133,6 @@ export default function AnalyticsPage() {
   }, []);
 
   const handleDownloadPDF = async () => {
-    if (!can(user, Feature.PDF_EXPORT)) {
-      toast.warning('PDF Report Export is a Pro tier feature. Please upgrade your plan.');
-      router.push('/plans');
-      return;
-    }
-
     setDownloading(true);
     try {
       const blob = await analyticsApi.downloadReportPDF();
@@ -202,8 +191,6 @@ export default function AnalyticsPage() {
             >
               {downloading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
-              ) : !can(user, Feature.PDF_EXPORT) ? (
-                <Lock className="w-4 h-4 text-blue-200" />
               ) : (
                 <FileText className="w-4 h-4" />
               )}
@@ -488,10 +475,10 @@ export default function AnalyticsPage() {
                     Get hourly breakdowns across the week to discover peak usage hours, optimize your home&apos;s schedule, and save on your electricity bill.
                   </p>
                   <Button
-                    onClick={() => router.push('/plans')}
+                    disabled
                     className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 shadow-lg shadow-blue-500/20"
                   >
-                    Upgrade to Pro Plan
+                    Available to all users
                   </Button>
                 </div>
                 {/* Blurred mockup of heatmap underneath */}

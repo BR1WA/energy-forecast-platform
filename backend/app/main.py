@@ -16,8 +16,8 @@ from app.config import get_settings
 from app.database import engine, Base
 from app.routers import (
     auth, forecast, alerts, analytics, admin, settings as settings_router,
-    multi_site, billing, system, dashboard, data_mode, consumption,
-    simulation, models_registry
+    multi_site, system, dashboard, data_mode, consumption,
+    simulation, models_registry, ingestion
 )
 from app.services.forecast_service import get_forecast_service
 from app.migrations import run_migrations
@@ -165,95 +165,32 @@ async def lifespan(app: FastAPI):
         logger.info("[SIMULATION-LOOP] Starting background simulation loop...")
         from app.services.simulation_service import simulation_service
         from app.database import SessionLocal
-        from app.models import SmartMeterReading
-        from datetime import datetime, timezone
-        import random
-        import math
-        import time
+        from app.models import Meter, SimulationSession
+        from app.schemas import MeterSample
+        from app.services.ingestion_service import ingestion_service
 
         while True:
             try:
-                if simulation_service.is_running:
-                    db = SessionLocal()
-                    try:
-                        # Base load by day part
-                        base_map = {
-                            "morning": 0.8,
-                            "afternoon": 0.4,
-                            "evening": 1.8,
-                            "night": 0.2
-                        }
-                        gap = base_map.get(simulation_service.day_part, 0.5)
-                        
-                        # Add occupants effect
-                        gap += simulation_service.occupants * 0.15
-                        
-                        # Add Air Conditioner effect (scaled by temperature)
-                        ac_map = {
-                            "off": 0.0,
-                            "low": 0.4,
-                            "medium": 0.9,
-                            "high": 1.8
-                        }
-                        ac_base = ac_map.get(simulation_service.ac_level, 0.0)
-                        if simulation_service.temperature > 30.0:
-                            ac_base *= 1.25
-                        gap += ac_base
-                        
-                        # Add Washing Machine effect
-                        if simulation_service.washing_machine:
-                            gap += 0.8
-                            
-                        # Add Solar Panels offset (only during daylight)
-                        solar_map = {
-                            "off": 0.0,
-                            "low": -0.4,
-                            "high": -1.2
-                        }
-                        if simulation_service.day_part in ("morning", "afternoon"):
-                            gap += solar_map.get(simulation_service.solar, 0.0)
-                            
-                        # Add slight noise and clamp positive
-                        gap += random.uniform(-0.08, 0.08)
-                        gap = max(0.02, gap)
-
-                        # sub-metering breakdown (in Wh)
-                        # sub_metering_1: Kitchen (washing machine / appliances)
-                        sub1 = 800.0 if simulation_service.washing_machine else 50.0
-                        sub1 += random.uniform(-10.0, 10.0)
-                        sub1 = max(0.0, sub1)
-                        
-                        # sub_metering_3: HVAC (AC)
-                        sub3 = ac_base * 1000.0
-                        sub3 += random.uniform(-20.0, 20.0)
-                        sub3 = max(0.0, sub3)
-                        
-                        # sub_metering_2: Laundry/Other
-                        sub2 = gap * 150.0 + random.uniform(-15.0, 15.0)
-                        sub2 = max(0.0, sub2)
-
-                        grp = gap * 0.08 + random.uniform(-0.01, 0.01)
-                        voltage = 230.0 + random.uniform(-1.0, 1.0)
-                        intensity = (gap * 1000.0) / voltage
-
-                        db_reading = SmartMeterReading(
-                            gap=round(gap, 3),
-                            grp=round(grp, 3),
-                            voltage=round(voltage, 1),
-                            intensity=round(intensity, 2),
-                            sub_metering_1=round(sub1, 2),
-                            sub_metering_2=round(sub2, 2),
-                            sub_metering_3=round(sub3, 2),
-                            timestamp=datetime.now(timezone.utc)
+                db = SessionLocal()
+                try:
+                    sessions = db.query(SimulationSession).filter(SimulationSession.is_running.is_(True)).all()
+                    for session in sessions:
+                        meter = db.query(Meter).filter(Meter.site_id == session.site_id).order_by(Meter.id).first()
+                        if meter is None:
+                            continue
+                        ingestion_service.ingest(
+                            db,
+                            meter,
+                            [MeterSample.model_validate(simulation_service.reading_for_configuration(session.configuration or {}))],
+                            source="simulation",
                         )
-                        db.add(db_reading)
+                    if sessions:
                         db.commit()
-                        logger.info(f"[SIMULATION-LOOP] Inserted simulated smart meter reading: {gap:.3f} kW")
-                    except Exception as db_err:
-                        logger.error(f"[SIMULATION-LOOP] Database write error: {db_err}")
-                        db.rollback()
-                    finally:
-                        db.close()
+                except Exception as db_err:
+                    logger.error(f"[SIMULATION-LOOP] Database write error: {db_err}")
+                    db.rollback()
+                finally:
+                    db.close()
             except Exception as e:
                 logger.error(f"[SIMULATION-LOOP] Loop exception: {e}")
             await asyncio.sleep(5)
@@ -314,12 +251,12 @@ app.include_router(analytics.router)
 app.include_router(admin.router)
 app.include_router(settings_router.router)
 app.include_router(multi_site.router)
-app.include_router(billing.router)
 app.include_router(system.router)
 app.include_router(dashboard.router)
 app.include_router(data_mode.router)
 app.include_router(consumption.router)
 app.include_router(simulation.router)
+app.include_router(ingestion.router)
 app.include_router(models_registry.router)
 
 

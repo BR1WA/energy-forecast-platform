@@ -8,11 +8,23 @@ from app.services.forecast_service import get_forecast_service
 from app.services.simulation_service import simulation_service
 import numpy as np
 from datetime import datetime, timezone, timedelta
+from types import SimpleNamespace
 
 class DashboardService:
     def get_summary(self, db: Session, user_id: int, lat: float | None = None, lon: float | None = None):
         # 1. Fetch live telemetry logs
-        readings = db.query(SmartMeterReading).order_by(SmartMeterReading.timestamp.desc()).limit(1440).all()
+        from app.models import Meter, Site
+
+        readings = (
+            db.query(SmartMeterReading)
+            .join(Meter, SmartMeterReading.meter_id == Meter.id)
+            .join(Site, Meter.site_id == Site.id)
+            .filter(Site.user_id == user_id)
+            .order_by(SmartMeterReading.timestamp.desc())
+            .limit(1440)
+            .all()
+        )
+        simulation = SimpleNamespace(**simulation_service.get_state(db, user_id))
         total_readings = len(readings)
         
         last_reading = readings[0] if total_readings > 0 else None
@@ -32,21 +44,21 @@ class DashboardService:
             greeting = "Good Evening"
 
         # 3. Simulated appliance states from Virtual House simulation_service
-        ac_status = "Running" if simulation_service.ac_level != "off" else "Off"
-        ac_level = simulation_service.ac_level.upper()
+        ac_status = "Running" if simulation.ac_level != "off" else "Off"
+        ac_level = simulation.ac_level.upper()
         
-        wm_status = "Running" if simulation_service.washing_machine else "Idle"
-        wm_level = "ON" if simulation_service.washing_machine else "OFF"
+        wm_status = "Running" if simulation.washing_machine else "Idle"
+        wm_level = "ON" if simulation.washing_machine else "OFF"
         
-        solar_status = "Generating" if simulation_service.solar != "off" else "Off"
-        solar_level = simulation_service.solar.upper()
+        solar_status = "Generating" if simulation.solar != "off" else "Off"
+        solar_level = simulation.solar.upper()
 
         appliances_status = [
           {"name": "Air Conditioner", "status": ac_status, "level": ac_level},
           {"name": "Washing Machine", "status": wm_status, "level": wm_level},
           {"name": "Solar Panels", "status": solar_status, "level": solar_level},
           {"name": "Lighting", "status": "Normal", "level": "ON"},
-          {"name": "Occupancy", "status": f"{simulation_service.occupants} People", "level": str(simulation_service.occupants)}
+          {"name": "Occupancy", "status": f"{simulation.occupants} People", "level": str(simulation.occupants)}
         ]
 
         # 4. ONEE Moroccan Tariffs & Billing Calculations
@@ -86,20 +98,20 @@ class DashboardService:
 
         # 5. Dynamic Energy Score calculation
         base_score = 95
-        if simulation_service.ac_level == "high":
+        if simulation.ac_level == "high":
             base_score -= 15
-        elif simulation_service.ac_level == "medium":
+        elif simulation.ac_level == "medium":
             base_score -= 8
             
-        if simulation_service.washing_machine:
+        if simulation.washing_machine:
             base_score -= 5
             
-        if simulation_service.solar == "high":
+        if simulation.solar == "high":
             base_score += 8
-        elif simulation_service.solar == "low":
+        elif simulation.solar == "low":
             base_score += 4
             
-        base_score -= (simulation_service.occupants - 2) * 2
+        base_score -= (simulation.occupants - 2) * 2
         energy_score = max(45, min(98, base_score))
 
         # 6. Carbon saved total
@@ -107,11 +119,11 @@ class DashboardService:
 
         # 6b. Today's Story — narrative bullets for executive hero
         today_story = []
-        if simulation_service.solar != "off":
-            solar_kw = 2.4 if simulation_service.solar == "high" else 1.2
+        if simulation.solar != "off":
+            solar_kw = 2.4 if simulation.solar == "high" else 1.2
             today_story.append({"icon": "check", "text": f"Solar panels generating {solar_kw} kW, offsetting grid demand."})
-        if simulation_service.ac_level in ("medium", "high"):
-            today_story.append({"icon": "alert", "text": f"AC running at {simulation_service.ac_level.upper()} — primary load contributor."})
+        if simulation.ac_level in ("medium", "high"):
+            today_story.append({"icon": "alert", "text": f"AC running at {simulation.ac_level.upper()} — primary load contributor."})
         else:
             today_story.append({"icon": "check", "text": "HVAC load is minimal. Efficiency is high."})
         if progress_pct < 75:
@@ -124,7 +136,7 @@ class DashboardService:
         potential_savings = 0
         recs_list = []
         
-        if simulation_service.ac_level in ("medium", "high"):
+        if simulation.ac_level in ("medium", "high"):
             recs_list.append({
                 "id": "rec-ac",
                 "title": "Reduce AC Temperature",
@@ -136,7 +148,7 @@ class DashboardService:
             })
             potential_savings += 21
             
-        if simulation_service.washing_machine:
+        if simulation.washing_machine:
             recs_list.append({
                 "id": "rec-wm",
                 "title": "Delay Large Washing Loads",
@@ -242,8 +254,8 @@ class DashboardService:
         # Body
         savings_delta = int(potential_savings * 0.42)  # simulated daily delta
         ai_body = f"Your projected monthly bill is {round(projected_cost, 0):.0f} MAD. "
-        if simulation_service.ac_level in ("medium", "high"):
-            ai_body += f"The main contributor is HVAC running at {simulation_service.ac_level.upper()} capacity."
+        if simulation.ac_level in ("medium", "high"):
+            ai_body += f"The main contributor is HVAC running at {simulation.ac_level.upper()} capacity."
         else:
             ai_body += "Baseline loads are driving consumption. Standby devices are optimized."
 
@@ -251,13 +263,13 @@ class DashboardService:
         ai_warning = None
         if weather_data["temperature"] > 28:
             ai_warning = f"Tomorrow temperatures are expected to reach {weather_data['temperature']}°C. If AC usage remains unchanged, your bill could increase by approximately 9%."
-        elif simulation_service.ac_level == "high":
+        elif simulation.ac_level == "high":
             ai_warning = "AC is at maximum capacity. Sustained high usage will push you into Tranche 3 pricing."
 
         # Recommended action
-        if simulation_service.ac_level in ("medium", "high"):
+        if simulation.ac_level in ("medium", "high"):
             ai_action = "Increase thermostat by 1°C between 14:00–18:00 to save up to 21 MAD/month."
-        elif simulation_service.washing_machine:
+        elif simulation.washing_machine:
             ai_action = "Shift washing cycles to off-peak hours (after 22:00) to save 9 MAD/month."
         else:
             ai_action = "Replace hallway incandescent bulbs with LED to save 13 MAD/month."
@@ -288,7 +300,7 @@ class DashboardService:
             timeline_list.append({"time": "18:46", "event": "AI recommendations updated", "severity": "success"})
             timeline_list.append({"time": "19:02", "event": "Forecast center updated", "severity": "info"})
             
-        if simulation_service.is_running:
+        if simulation.is_running:
             timeline_list.insert(0, {"time": "19:20", "event": "Linky live telemetry started", "severity": "success"})
 
         # Summary sentence
@@ -296,9 +308,9 @@ class DashboardService:
 
         # Energy flow calculations
         solar_gen = 0.0
-        if simulation_service.solar == "high":
+        if simulation.solar == "high":
             solar_gen = 2.4
-        elif simulation_service.solar == "low":
+        elif simulation.solar == "low":
             solar_gen = 1.2
         grid_import = max(0.0, active_power - solar_gen)
         solar_offset = round((solar_gen / max(active_power, 0.1)) * 100, 0) if solar_gen > 0 else 0
@@ -405,11 +417,11 @@ class DashboardService:
             ai_decisions.append({"text": "Efficiency optimization pending", "done": False})
 
         # 16. Proactive hero sentence
-        if simulation_service.washing_machine and simulation_service.ac_level in ("medium", "high"):
+        if simulation.washing_machine and simulation.ac_level in ("medium", "high"):
             proactive_sentence = f"If you delay the washing machine until after 22:00, you can save approximately {9 + savings_delta} MAD this month while remaining comfortably below your {int(budget_target)} MAD budget target."
-        elif simulation_service.ac_level in ("medium", "high"):
+        elif simulation.ac_level in ("medium", "high"):
             proactive_sentence = f"Reducing AC by 1°C during peak hours (14:00–18:00) could save up to 21 MAD this month. You are projected to stay within {tariff_name}."
-        elif simulation_service.washing_machine:
+        elif simulation.washing_machine:
             proactive_sentence = f"Shifting the washing cycle to off-peak hours (after 22:00) would save 9 MAD while keeping you well below your {int(budget_target)} MAD budget."
         else:
             proactive_sentence = f"No critical actions needed. Your household is on track to finish the month at {round(projected_cost, 0):.0f} MAD — comfortably below your {int(budget_target)} MAD target."

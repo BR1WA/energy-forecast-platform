@@ -1,17 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
-import { can, Feature } from '@/lib/entitlements';
 import {
   Building2,
-  Lock,
   Activity,
   Zap,
   Cpu,
@@ -57,15 +53,12 @@ export interface SiteData {
 }
 
 export default function MultiSitePage() {
-  const { user } = useAuth();
-  const router = useRouter();
   const [selectedSiteId, setSelectedSiteId] = useState('site-casablanca');
   const [isBatteryBackupActive, setIsBatteryBackupActive] = useState(false);
   const [demandResponseStatus, setDemandResponseStatus] = useState<'connected' | 'shedding'>('connected');
    
   const [systemSettings, setSystemSettings] = useState<any>(null);
 
-  const isPro = can(user, Feature.MULTI_SITE);
   const [sitesData, setSitesData] = useState<SiteData[]>([]);
   useEffect(() => {
     // Fetch multi-site telemetry data
@@ -78,10 +71,8 @@ export default function MultiSitePage() {
       }
     };
     
-    if (isPro) {
-      fetchSites();
-    }
-  }, [isPro]);
+    fetchSites();
+  }, []);
 
   useEffect(() => {
     // Fetch system settings for localization and currency
@@ -153,44 +144,6 @@ export default function MultiSitePage() {
     load: s.load,
     daily: s.dailyConsumption,
   }));
-
-  if (!isPro) {
-    return (
-      <AppLayout>
-        <div className="min-h-[75vh] flex items-center justify-center">
-          <Card className="glass-card border-white/[0.06] relative overflow-hidden max-w-2xl w-full p-8 text-center">
-            <div className="absolute inset-0 bg-[#0A0F1C]/90 backdrop-blur-[6px] z-10 flex flex-col items-center justify-center p-6 text-center">
-              <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mb-5">
-                <Lock className="w-7 h-7 text-blue-400" />
-              </div>
-              <h2 className="text-xl font-bold text-white mb-2">Multi-Site Grid Manager</h2>
-              <Badge className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white border-0 text-[10px] mb-4 uppercase tracking-wider font-semibold">
-                Pro Exclusive
-              </Badge>
-              <p className="text-sm text-slate-400 max-w-md mb-8">
-                Aggregate electrical telemetry, manage demand response integrations, simulate load shedding, and compare power metrics across multiple geographic sites in real-time.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button
-                  onClick={() => router.push('/plans')}
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-8 shadow-lg shadow-blue-500/20"
-                >
-                  Upgrade to Pro Plan
-                </Button>
-                <Button
-                  onClick={() => router.push('/dashboard')}
-                  variant="outline"
-                  className="border-white/10 hover:bg-white/5 text-slate-300"
-                >
-                  Return to Dashboard
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </AppLayout>
-    );
-  }
 
   return (
     <AppLayout>
