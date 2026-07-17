@@ -190,25 +190,37 @@ class ForecastService:
 
         db.commit()
 
-    def _resolve_entry(self, model_name: str, db: Session) -> ModelRegistry:
-        """Return the registry entry for *model_name*, falling back to active."""
+    def validate_artifact_contract(self, entry: ModelRegistry) -> list[str]:
+        """Return contract violations before an artifact can be served or activated."""
+        required = ("model.pt", "pipeline.pkl", "config.yaml", "metrics.json")
+        missing = [name for name in required if not os.path.isfile(os.path.join(entry.experiment_path, name))]
+        if missing:
+            return [f"missing artifact: {name}" for name in missing]
+        try:
+            import yaml
+            with open(os.path.join(entry.experiment_path, "config.yaml")) as handle:
+                config = yaml.safe_load(handle) or {}
+            configured_horizon = config.get("experiment", {}).get("horizon")
+            if configured_horizon is not None and int(configured_horizon) != entry.horizon:
+                return ["registry horizon does not match config.yaml"]
+            if not (config.get("architecture", {}).get("name") or config.get("model", {}).get("name")):
+                return ["architecture name missing from config.yaml"]
+        except Exception as exc:
+            return [f"invalid config.yaml: {type(exc).__name__}"]
+        return []
+
+    def _resolve_entry(self, model_name: str, horizon: int, db: Session) -> ModelRegistry:
+        """Resolve an exact registered model; never substitute an active model."""
         entry = (
             db.query(ModelRegistry)
-            .filter(ModelRegistry.name == model_name)
+            .filter(ModelRegistry.name == model_name, ModelRegistry.horizon == horizon)
             .first()
         )
         if entry is None:
-            entry = (
-                db.query(ModelRegistry)
-                .filter(ModelRegistry.active == True)
-                .first()
-            )
-        if entry is None:
-            raise ValueError(
-                "No model found in the registry. "
-                "Train a model and register it via POST /api/v1/models, "
-                "or place experiments in the experiments/ directory."
-            )
+            raise ValueError(f"No registered model named '{model_name}' supports the {horizon}h horizon.")
+        violations = self.validate_artifact_contract(entry)
+        if violations:
+            raise ValueError(f"Model '{model_name}' is not deployable: {'; '.join(violations)}")
         return entry
 
     # ── Model loading ────────────────────────────────────────────────────────
@@ -382,7 +394,7 @@ class ForecastService:
         db = SessionLocal()
         try:
             self._seed_registry_from_disk(db)
-            entry = self._resolve_entry(model_name, db)
+            entry = self._resolve_entry(model_name, horizon, db)
             self._ensure_loaded(entry)
         finally:
             db.close()
