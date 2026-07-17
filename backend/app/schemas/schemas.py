@@ -1,7 +1,7 @@
 """
 Pydantic schemas for request/response validation.
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -27,6 +27,8 @@ class UserLogin(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     full_name: Optional[str] = None
@@ -39,10 +41,6 @@ class UserResponse(BaseModel):
     subscription_tier: Optional[str] = "free"
     is_setup_complete: bool = False
     preferences: Optional[Dict[str, Any]] = None
-
-    class Config:
-        from_attributes = True
-
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -117,6 +115,8 @@ class CheckoutConfirmRequest(BaseModel):
 
 
 class SubscriptionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     tier: str
     status: str
@@ -124,10 +124,6 @@ class SubscriptionResponse(BaseModel):
     started_at: Optional[datetime] = None
     current_period_end: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
 
 class EntitlementsResponse(BaseModel):
     """Current user's tier and unlocked feature keys (UI gates from this)."""
@@ -138,6 +134,8 @@ class EntitlementsResponse(BaseModel):
 # ======================== FORECAST ========================
 
 class ForecastRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     model_name: Optional[str] = Field(None, description="Model to use: 'patchtst', 'sota', 'cnn_bilstm', 'itransformer'")
     sample_name: Optional[str] = Field(None, description="Name of pre-loaded sample dataset")
     data: Optional[List[List[float]]] = Field(None, description="Raw input data [lookback timesteps x 7 features]")
@@ -146,6 +144,8 @@ class ForecastRequest(BaseModel):
 
 
 class ForecastResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
     id: int
     model_name: str
     predictions: List[List[float]]  # [24 x 7]
@@ -154,19 +154,13 @@ class ForecastResponse(BaseModel):
     alerts: List[Dict[str, Any]] = []
     input_data: Optional[List[float]] = None  # GAP lookback values for chart
 
-    class Config:
-        from_attributes = True
-
-
 class ForecastHistoryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
     id: int
     model_name: str
     created_at: datetime
     peak_power: Optional[float] = None
-
-    class Config:
-        from_attributes = True
-
 
 class ModelInfo(BaseModel):
     id: str
@@ -198,16 +192,16 @@ class AlertConfigCreate(BaseModel):
 
 
 class AlertConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     threshold_kw: float
     email_enabled: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
-
 class AlertResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     alert_type: str
     severity: str
@@ -215,10 +209,6 @@ class AlertResponse(BaseModel):
     peak_kw: Optional[float] = None
     is_acknowledged: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
 
 class AlertAcknowledge(BaseModel):
     alert_id: int
@@ -258,6 +248,8 @@ class HeatmapPoint(BaseModel):
     value: float
 
 class AnalyticsSummary(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     total_forecasts: int
     total_alerts: int
     unacknowledged_alerts: int

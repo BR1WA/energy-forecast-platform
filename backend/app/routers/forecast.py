@@ -229,7 +229,7 @@ def predict_upload(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    model_name: str = Form(...),
+    requested_model_name: str = Form(..., alias="model_name"),
     horizon: int = Form(24),
     current_user: User = Depends(require_role(["admin", "analyst"])),
     db: Session = Depends(get_db),
@@ -300,7 +300,7 @@ def predict_upload(
     start_hour = int((df.index[-1].hour + 1) % 24)
     try:
         predictions, alerts_data = service.predict(
-            model_name, targets, calendar, threshold_kw=threshold, 
+            requested_model_name, targets, calendar, threshold_kw=threshold,
             start_hour=start_hour, horizon=horizon, timestamps=df.index
         )
     except ValueError as e:
@@ -321,7 +321,7 @@ def predict_upload(
     # Save forecast
     forecast = Forecast(
         user_id=current_user.id,
-        model_name=model_name,
+        model_name=requested_model_name,
         predictions=predictions.tolist(),
         input_start=input_start,
         input_end=input_end,
@@ -727,4 +727,3 @@ async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db
         print(f"[WS-LIVE] Telemetry stream ended: {e}")
     finally:
         db_session.close()
-

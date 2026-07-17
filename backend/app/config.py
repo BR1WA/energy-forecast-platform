@@ -1,9 +1,8 @@
 """
 Application configuration — environment variables and settings.
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
-import secrets
 import warnings
 
 
@@ -14,7 +13,28 @@ INSECURE_JWT_SECRET = "dev-secret-key-for-local-testing-only"
 INSECURE_ADMIN_PASSWORD = "admin123"
 
 
+def _looks_insecure(value: str, *, minimum_length: int, sentinels: set[str]) -> bool:
+    normalized = (value or "").strip().lower().replace("_", "-")
+    normalized_sentinels = {item.lower().replace("_", "-") for item in sentinels}
+    placeholder_markers = (
+        "change-me",
+        "change-this",
+        "change-in-production",
+        "replace-with",
+        "placeholder",
+        "your-super-secret",
+        "secure-change-me",
+    )
+    return (
+        len(value or "") < minimum_length
+        or normalized in normalized_sentinels
+        or any(marker in normalized for marker in placeholder_markers)
+    )
+
+
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
     # Application
     APP_NAME: str = "EnergyForecast API"
     APP_VERSION: str = "1.0.0"
@@ -52,10 +72,6 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "noreply@energyforecast.com"
     SMTP_TLS: bool = True
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
     def validate_secrets(self) -> None:
         """Fail fast on insecure secrets outside of local development.
 
@@ -65,9 +81,17 @@ class Settings(BaseSettings):
         """
         insecure: list[str] = []
 
-        if self.JWT_SECRET_KEY == INSECURE_JWT_SECRET or not self.JWT_SECRET_KEY:
+        if _looks_insecure(
+            self.JWT_SECRET_KEY,
+            minimum_length=32,
+            sentinels={INSECURE_JWT_SECRET},
+        ):
             insecure.append("JWT_SECRET_KEY")
-        if self.ADMIN_PASSWORD == INSECURE_ADMIN_PASSWORD or not self.ADMIN_PASSWORD:
+        if _looks_insecure(
+            self.ADMIN_PASSWORD,
+            minimum_length=12,
+            sentinels={INSECURE_ADMIN_PASSWORD},
+        ):
             insecure.append("ADMIN_PASSWORD")
 
         if not insecure:

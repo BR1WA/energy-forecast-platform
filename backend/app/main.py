@@ -20,6 +20,7 @@ from app.routers import (
     simulation, models_registry
 )
 from app.services.forecast_service import get_forecast_service
+from app.migrations import run_migrations
 from app.limiter import limiter
 from app.logging_config import configure_logging, RequestIDMiddleware
 
@@ -44,46 +45,17 @@ async def lifespan(app: FastAPI):
     # Ensure static/avatars directory exists
     os.makedirs("static/avatars", exist_ok=True)
 
-    # Create database tables via migrations
-    # Programmatic Database Migrations via Alembic
-    from alembic.config import Config
-    from alembic import command
-
     try:
         logger.info("[DB] Running database migrations...")
-        backend_dir = os.path.dirname(os.path.dirname(__file__))
-        alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
-        alembic_cfg = Config(alembic_ini_path)
-        alembic_cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
-        command.upgrade(alembic_cfg, "head")
+        run_migrations()
         logger.info("[DB] Database migrations completed successfully.")
-    except Exception as e:
-        logger.warning(f"[DB] Migration warning on startup (can be ignored if database is already at head): {e}")
+    except Exception:
+        logger.exception("[DB] Database migration failed; refusing to start.")
+        raise
 
     # Initialise the forecast service singleton (lazy — no model is loaded until a request comes in)
     get_forecast_service()
     logger.info("[ML] ForecastService singleton initialised (model will be loaded on first request).")
-
-    # Seed admin user if none exists
-    from app.database import SessionLocal
-    from app.models import User
-    from app.services.auth_service import hash_password
-    db = SessionLocal()
-    try:
-        admin_user = db.query(User).filter(User.role == "admin").first()
-        if not admin_user:
-            admin = User(
-                email=settings.ADMIN_EMAIL,
-                password_hash=hash_password(settings.ADMIN_PASSWORD),
-                full_name="System Administrator",
-                role="admin",
-                is_active=True,
-            )
-            db.add(admin)
-            db.commit()
-            logger.info(f"[DB] Default admin user created: {settings.ADMIN_EMAIL}")
-    finally:
-        db.close()
 
     # Start auto-forecasting and alert check ticker task
     import asyncio
@@ -364,11 +336,8 @@ def root():
 
 @app.get("/health", tags=["Health"])
 def health_check():
-    """Detailed health check endpoint."""
-    service = get_forecast_service()
+    """Process liveness alias; dependency readiness lives under /api/v1/system/ready."""
     return {
-        "status": "healthy",
-        "active_model_id": service._cached_model_id,
-        "model_loaded": service._model is not None,
+        "status": "alive",
+        "readiness": "/api/v1/system/ready",
     }
-

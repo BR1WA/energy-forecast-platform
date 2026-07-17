@@ -17,26 +17,44 @@ from app.database import SessionLocal
 from app.models import User, Forecast, Alert, ModelRegistry
 from app.services.forecast_service import get_forecast_service
 from app.services.auth_service import hash_password
+from app.config import get_settings
+from app.migrations import run_migrations
 
 def seed_database():
+    if os.getenv("ALLOW_DEMO_SEED", "").lower() != "true":
+        raise SystemExit(
+            "Demo seeding is disabled. Set ALLOW_DEMO_SEED=true explicitly."
+        )
+
+    settings = get_settings()
+    if not settings.DEBUG:
+        raise SystemExit("Demo seeding is allowed only when DEBUG=true.")
+
+    demo_password = os.getenv("DEMO_USER_PASSWORD")
+    if not demo_password or len(demo_password) < 12:
+        raise SystemExit("Set DEMO_USER_PASSWORD to at least 12 characters.")
+
+    run_migrations()
     db = SessionLocal()
     try:
         # Get or create admin user
-        admin = db.query(User).filter(User.email == "admin@energyforecast.com").first()
+        admin = db.query(User).filter(User.email == settings.ADMIN_EMAIL).first()
         if not admin:
             admin = User(
-                email="admin@energyforecast.com",
-                password_hash=hash_password("admin123"),
+                email=settings.ADMIN_EMAIL,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
                 full_name="System Administrator",
                 role="admin",
                 is_active=True,
+                is_setup_complete=True,
+                subscription_tier="pro",
             )
             db.add(admin)
             db.commit()
 
         # Seed additional users if they don't exist
         extra_users = [
-            {"email": "operator@energyforecast.com", "full_name": "Jane Operator", "role": "operator", "is_active": True},
+            {"email": "operator@energyforecast.com", "full_name": "Jane Operator", "role": "analyst", "is_active": True},
             {"email": "viewer@energyforecast.com", "full_name": "Bob Viewer", "role": "viewer", "is_active": False},
             {"email": "alice@example.com", "full_name": "Alice Johnson", "role": "viewer", "is_active": False},
             {"email": "charlie@example.com", "full_name": "Charlie Brown", "role": "analyst", "is_active": True},
@@ -46,7 +64,7 @@ def seed_database():
             if not existing:
                 new_user = User(
                     email=u_data["email"],
-                    password_hash=hash_password("password123"),
+                    password_hash=hash_password(demo_password),
                     full_name=u_data["full_name"],
                     role=u_data["role"],
                     is_active=u_data["is_active"],
@@ -63,7 +81,11 @@ def seed_database():
         sample_data = service.samples[sample_name]
         
         # Get model names from registry table
-        models = [m.name for m in db.query(ModelRegistry).all()]
+        service.get_available_models()
+        models = [
+            m.name
+            for m in db.query(ModelRegistry).filter(ModelRegistry.horizon == 24).all()
+        ]
         if not models:
             print("No models found in database ModelRegistry.")
             return
