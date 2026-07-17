@@ -64,24 +64,10 @@ class SmartMeterService:
                 db.close()
 
         if sensor_type == "real_api" and sensor_api_url:
-            from app.config import get_settings
-            app_settings = get_settings()
-            allow_private = getattr(app_settings, "DEBUG", True)
-            
-            if is_safe_url(sensor_api_url, allow_private=allow_private):
-                import requests
-                try:
-                    response = requests.get(sensor_api_url, timeout=5)
-                    if response.status_code == 200:
-                        data = response.json()
-                        # Expecting data format matching our numpy array or similar. 
-                        # If it's a real API, parse it here. For now, fallback to simulator if error.
-                        if 'readings' in data:
-                            return np.array(data['readings'], dtype=float)[:limit]
-                except Exception as e:
-                    print(f"[SmartMeterService] Failed to fetch from real API, falling back to simulator: {e}")
-            else:
-                print(f"[SmartMeterService] Blocked unsafe sensor API URL: {sensor_api_url}")
+            raise RuntimeError(
+                "Pull meter connectors are not available in this release. "
+                "Use the authenticated push API, CSV import, or the labelled simulator."
+            )
 
         # Simulator (Normalized for Moroccan average households)
         # Moroccan homes use significantly less electricity.

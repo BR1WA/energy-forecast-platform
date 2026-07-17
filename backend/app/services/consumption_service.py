@@ -92,13 +92,15 @@ class ConsumptionService:
         if not settings_by_site:
             return self._empty_month(month)
         default_settings = next(iter(settings_by_site.values()))
-        try:
-            zone = ZoneInfo(default_settings.site.timezone if default_settings.site else "UTC")
-        except Exception:
-            zone = ZoneInfo("UTC")
-        start_local, end_local = _month_bounds(month, zone)
-        start, end = start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
-        records = self._readings_for_user(db, user_id, before=end)
+        site_windows: dict[int, tuple[ZoneInfo, datetime, datetime]] = {}
+        for site_id, settings in settings_by_site.items():
+            try:
+                zone = ZoneInfo(settings.site.timezone if settings.site else "UTC")
+            except Exception:
+                zone = ZoneInfo("UTC")
+            start_local, end_local = _month_bounds(month, zone)
+            site_windows[site_id] = (zone, start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc))
+        records = self._readings_for_user(db, user_id)
         by_meter: dict[int, list[tuple[SmartMeterReading, Meter]]] = defaultdict(list)
         for reading, meter in records:
             by_meter[meter.id].append((reading, meter))
@@ -112,7 +114,15 @@ class ConsumptionService:
             "daily": defaultdict(lambda: {"kwh": 0.0, "cost": 0.0}),
             "peak_kw": 0.0,
         }
+        possible_seconds = 0.0
+        meter_count = 0
         for readings in by_meter.values():
+            if not readings:
+                continue
+            meter_count += 1
+            meter_settings = settings_by_site.get(readings[0][1].site_id, default_settings)
+            zone, start, end = site_windows[meter_settings.site_id]
+            possible_seconds += max(0.0, (min(datetime.now(timezone.utc), end) - start).total_seconds())
             for previous_pair, current_pair in zip(readings, readings[1:]):
                 previous, meter = previous_pair
                 current, _ = current_pair
@@ -135,16 +145,18 @@ class ConsumptionService:
                 clipped_start, clipped_end = max(interval_start, start), min(interval_end, end)
                 clipped_seconds = (clipped_end - clipped_start).total_seconds()
                 clipped_energy = interval_energy * clipped_seconds / elapsed_seconds
-                meter_settings = settings_by_site.get(meter.site_id, default_settings)
                 self._add_interval(totals, clipped_start, clipped_end, clipped_energy, meter_settings, zone)
                 totals["covered_seconds"] += clipped_seconds
                 totals["peak_kw"] = max(totals["peak_kw"], previous.gap, current.gap)
 
-        now_local = datetime.now(zone)
-        period_end = min(now_local, end_local)
-        possible_seconds = max(0.0, (period_end - start_local).total_seconds())
-        days_elapsed = max(1, (period_end.date() - start_local.date()).days + 1)
-        days_in_month = (end_local.date() - start_local.date()).days
+        try:
+            default_zone = ZoneInfo(default_settings.site.timezone if default_settings.site else "UTC")
+        except Exception:
+            default_zone = ZoneInfo("UTC")
+        default_start, default_end = _month_bounds(month, default_zone)
+        period_end = min(datetime.now(default_zone), default_end)
+        days_elapsed = max(1, (period_end.date() - default_start.date()).days + 1)
+        days_in_month = (default_end.date() - default_start.date()).days
         budget = db.query(EnergyBudget).filter(EnergyBudget.user_id == user_id).first()
         budget_target = budget.monthly_budget_mad if budget else None
         projected_cost = totals["total_cost"] / days_elapsed * days_in_month if totals["total_cost"] else 0.0
@@ -163,7 +175,7 @@ class ConsumptionService:
             "average_daily_kwh": round(totals["total_kwh"] / days_elapsed, 3),
             "days_elapsed": days_elapsed,
             "days_in_month": days_in_month,
-            "coverage_pct": round(min(100.0, totals["covered_seconds"] / possible_seconds * 100) if possible_seconds else 0.0, 1),
+            "coverage_pct": round(min(100.0, totals["covered_seconds"] / possible_seconds * 100) if possible_seconds and meter_count else 0.0, 1),
             "peak_kwh": round(totals["peak_kwh"], 4),
             "off_peak_kwh": round(totals["off_peak_kwh"], 4),
             "daily": [

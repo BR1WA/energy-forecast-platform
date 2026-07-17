@@ -26,7 +26,6 @@ import {
   Sparkles,
   TrendingUp,
   AlertCircle,
-  CalendarClock,
 } from 'lucide-react';
 import {
   LineChart,
@@ -75,6 +74,7 @@ interface ModelInfo {
   training_metrics?: { mae: number; rmse: number; mape: number; r2_score: number };
   is_active: boolean;
   parameters?: Record<string, string>;
+  status?: string;
 }
 
 interface SampleInfo {
@@ -304,6 +304,8 @@ export default function ForecastPage() {
     if (model.name.endsWith('_720')) return 720;
     return 24;
   }, []);
+  const availableModels = models.filter((model) => model.status === 'active');
+  const availableHorizons = new Set(availableModels.map(getHorizonForModel));
 
   const getTickInterval = useCallback((dataLength: number, horizon: number): number => {
     if (horizon === 24) return 6; // Show ticks every 6 hours
@@ -340,7 +342,7 @@ export default function ForecastPage() {
         const parsed = data as unknown as ModelInfo[];
         setModels(parsed);
         if (parsed.length > 0) {
-          const filtered = parsed.filter(m => getHorizonForModel(m) === selectedHorizon);
+          const filtered = parsed.filter(m => m.status === 'active' && getHorizonForModel(m) === selectedHorizon);
           let preferredModelName = '';
           if (selectedHorizon === 24) preferredModelName = user?.preferences?.default_model_24 || 'sota';
           else if (selectedHorizon === 168) preferredModelName = user?.preferences?.default_model_168 || 'itransformer_168';
@@ -543,14 +545,14 @@ export default function ForecastPage() {
               <span className="text-xs text-slate-400 px-2 font-medium">Forecast Horizon:</span>
               <div className="flex gap-1">
                 {[
-                  { label: '24 Hours', value: 24, disabled: false },
-                  { label: '1 Week (Coming Soon)', value: 168, disabled: true },
-                  { label: '1 Month (Coming Soon)', value: 720, disabled: true },
+                  { label: '24 Hours', value: 24 },
+                  { label: '1 Week', value: 168 },
+                  { label: '1 Month', value: 720 },
                 ].map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => !opt.disabled && setSelectedHorizon(opt.value)}
-                    disabled={opt.disabled}
+                    onClick={() => availableHorizons.has(opt.value) && setSelectedHorizon(opt.value)}
+                    disabled={!availableHorizons.has(opt.value)}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                       selectedHorizon === opt.value
                         ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
@@ -575,22 +577,12 @@ export default function ForecastPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedHorizon !== 24 ? (
-                  <div className="flex flex-col items-center justify-center py-8 space-y-3 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
-                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                      <CalendarClock className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-slate-300">Coming Soon</p>
-                      <p className="text-xs text-slate-500 mt-1 max-w-[200px]">This forecast horizon is scheduled for the next development phase.</p>
-                    </div>
-                  </div>
-                ) : models.filter((m) => getHorizonForModel(m) === selectedHorizon).length === 0 ? (
+                {availableModels.filter((m) => getHorizonForModel(m) === selectedHorizon).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 space-y-2 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
                     <p className="text-xs text-slate-500">No models available for this horizon.</p>
                   </div>
                 ) : (
-                  models
+                  availableModels
                     .filter((m) => getHorizonForModel(m) === selectedHorizon)
                     .map((model) => {
                     const meta = modelMeta[model.name] || { icon: Brain, color: '#3B82F6' };

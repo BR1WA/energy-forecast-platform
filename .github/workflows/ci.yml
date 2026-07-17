@@ -108,19 +108,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create external artifact directory
-        run: mkdir -p experiments
-
       - name: Validate Compose configuration
         run: docker compose config --quiet
 
       - name: Start stack
         run: docker compose up --build --detach
 
-      - name: Wait for liveness
+      - name: Wait for live services and model readiness
         run: |
           for attempt in {1..30}; do
-            if curl --fail --silent http://localhost:8000/api/v1/system/live >/dev/null && curl --fail --silent http://localhost:3000 >/dev/null; then
+            if curl --fail --silent http://localhost:8000/api/v1/system/live >/dev/null && curl --fail --silent http://localhost:8000/api/v1/system/ready >/dev/null && curl --fail --silent http://localhost:3000 >/dev/null; then
               exit 0
             fi
             sleep 5

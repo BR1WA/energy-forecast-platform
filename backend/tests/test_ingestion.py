@@ -115,3 +115,25 @@ class TestMeterIngestion(unittest.TestCase):
             json={"samples": [{"timestamp": "2026-07-01T10:00:00", "active_power_kw": 1.2}]},
         )
         self.assertEqual(response.status_code, 422)
+
+    def test_push_rejects_samples_older_than_the_latest_meter_reading(self):
+        key = self._push_key()
+        newest = client.post(
+            f"/api/v1/ingestion/meters/{self.meter.id}/samples",
+            headers={"X-Meter-Key": key},
+            json={"idempotency_key": "newest-sample", "samples": [{
+                "timestamp": "2026-07-02T10:00:00Z", "active_power_kw": 1.2,
+            }]},
+        )
+        older = client.post(
+            f"/api/v1/ingestion/meters/{self.meter.id}/samples",
+            headers={"X-Meter-Key": key},
+            json={"idempotency_key": "older-sample", "samples": [{
+                "timestamp": "2026-07-02T09:00:00Z", "active_power_kw": 1.1,
+            }]},
+        )
+        self.assertEqual(newest.status_code, 200)
+        self.assertEqual(older.status_code, 200)
+        self.assertEqual(older.json()["accepted_rows"], 0)
+        self.assertEqual(older.json()["rejected_rows"], 1)
+        self.assertEqual(self.db.query(SmartMeterReading).count(), 1)

@@ -37,11 +37,11 @@ def get_overview(
     """
     response = {
         "currentConsumption": None,
-        "forecast": {"24h": [], "confidence": "high"},
+        "forecast": {"24h": [], "confidence": "not_available"},
         "alerts": [],
         "weather": None,
         "system": {"status": "ok"},
-        "models": {"active": "Hybrid_v2"}
+        "models": {"active": None}
     }
     
     def get_consumption():

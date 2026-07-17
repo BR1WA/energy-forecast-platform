@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 from app.database import get_db
 from app.models.models import ModelRegistry, User
 from app.services.auth_service import get_current_user, require_role
 from app.services.forecast_service import get_forecast_service
+from app.services.audit_service import record_audit_event
 
 router = APIRouter(prefix="/api/v1/models", tags=["Models Registry"])
 
@@ -12,8 +14,12 @@ def serialize_model(m: ModelRegistry):
         "id": m.id,
         "name": m.name,
         "version": m.version,
-        "experiment_path": m.experiment_path,
         "model_fingerprint": m.model_fingerprint,
+        "dataset": m.dataset,
+        "horizon": m.horizon,
+        "lookback": m.lookback,
+        "artifact_contract": m.artifact_contract,
+        "contract_validated_at": m.contract_validated_at.isoformat() if m.contract_validated_at else None,
         "active": m.active,
         "mae": m.mae,
         "rmse": m.rmse,
@@ -62,15 +68,31 @@ def activate_model(
     target_model = db.query(ModelRegistry).filter(ModelRegistry.id == model_id).first()
     if not target_model:
         raise HTTPException(status_code=404, detail="Model not found")
-    violations = get_forecast_service().validate_artifact_contract(target_model)
+    service = get_forecast_service()
+    violations = service.validate_artifact_contract(target_model)
     if violations:
         raise HTTPException(status_code=400, detail=f"Model cannot be activated: {'; '.join(violations)}")
+    try:
+        service._ensure_loaded(target_model)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Model warm-up failed: {type(exc).__name__}") from exc
         
     # Deactivate all others
-    db.query(ModelRegistry).filter(ModelRegistry.horizon == target_model.horizon).update({"active": False})
+    db.query(ModelRegistry).filter(
+        ModelRegistry.dataset == target_model.dataset,
+        ModelRegistry.horizon == target_model.horizon,
+    ).update({"active": False})
     
     # Activate target
     target_model.active = True
+    target_model.contract_validated_at = datetime.now(timezone.utc)
+    record_audit_event(
+        db,
+        "model.activated",
+        actor_user_id=current_user.id,
+        target=f"model:{target_model.id}",
+        metadata={"dataset": target_model.dataset, "horizon": target_model.horizon, "version": target_model.version},
+    )
     db.commit()
     db.refresh(target_model)
     

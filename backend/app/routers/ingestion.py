@@ -7,6 +7,7 @@ from app.models import Meter, Site, User
 from app.schemas import IngestionKeyResponse, IngestionResult, MeterSampleBatch
 from app.services.auth_service import get_current_user
 from app.services.ingestion_service import ingestion_service
+from app.services.audit_service import record_audit_event
 
 
 router = APIRouter(prefix="/api/v1/ingestion", tags=["Ingestion"])
@@ -55,6 +56,7 @@ def rotate_push_key(
     meter = _owned_meter(db, current_user.id, meter_id)
     key = ingestion_service.create_api_key(meter)
     meter.source_type = "push"
+    record_audit_event(db, "ingestion.key_rotated", actor_user_id=current_user.id, site_id=meter.site_id, target=f"meter:{meter.id}")
     db.commit()
     return {"meter_id": meter.id, "api_key": key}
 
@@ -87,6 +89,14 @@ async def import_csv(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     result = ingestion_service.ingest(db, meter, samples, source="csv", initial_errors=errors)
     meter.source_type = "csv"
+    record_audit_event(
+        db,
+        "ingestion.csv_imported",
+        actor_user_id=current_user.id,
+        site_id=meter.site_id,
+        target=f"meter:{meter.id}",
+        metadata={"batch_id": result["batch_id"], "accepted_rows": result["accepted_rows"], "rejected_rows": result["rejected_rows"]},
+    )
     db.commit()
     return result
 
@@ -105,5 +115,12 @@ def push_samples(
         db, meter, payload.samples, source="push", idempotency_key=payload.idempotency_key,
     )
     meter.source_type = "push"
+    record_audit_event(
+        db,
+        "ingestion.push_received",
+        site_id=meter.site_id,
+        target=f"meter:{meter.id}",
+        metadata={"batch_id": result["batch_id"], "accepted_rows": result["accepted_rows"], "idempotency_key": payload.idempotency_key},
+    )
     db.commit()
     return result

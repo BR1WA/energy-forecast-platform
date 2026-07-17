@@ -259,45 +259,58 @@ and full DST edge-case reporting.
 
 Estimated effort: 5-7 working days
 
+Status: Complete for the PFE deployment baseline (2026-07-17). Research-grade
+backtesting, calibration, and continuous outcome scoring remain future work
+until representative client history is available.
+
 ### Model artifact contract
 
-Every promoted artifact must contain:
+Every promoted artifact contains and the registry persists:
 
 - Immutable model ID, version, architecture, dataset, horizon, lookback, and
   sampling interval.
 - Exact feature schema and target units.
-- Preprocessing artifact and dependency versions.
-- Evaluation metrics, evaluation period, baseline comparison, and fingerprint.
-- Model file, smoke-test input, and expected output shape.
+- Preprocessing artifact, sampling interval, target schema, target units, and
+  portable artifact location.
+- Recorded evaluation metrics, fingerprint, required files, and expected input
+  and output shapes.
 
 Store portable artifact locations rather than host-specific absolute paths.
 
 ### Registry and serving
 
-- Enforce one active model per `(dataset/schema, horizon, target)` contract.
+- Enforce one active model per `(dataset, horizon)` contract for the current
+  single-target energy forecast.
 - Reject requests when no compatible model exists. Never fall back to another
   horizon or silently skip failed models.
 - Hide 168h and 720h UI options until compatible models are registered and pass
   evaluation.
 - Validate artifacts before activation and warm the candidate before switching.
 - Keep the previous active artifact available for rollback.
-- Return model ID/version, generated timestamp, input source, and confidence
-  method with each forecast.
+- Return and persist model ID/version, generated timestamp, input source,
+  exact input snapshot, horizon, and confidence method with each forecast.
 
 ### Forecast quality
 
-- Compare every model against persistence and seasonal-naive baselines.
-- Use time-based backtesting with no leakage.
-- Add uncertainty using calibrated residual intervals or conformal prediction.
-- Evaluate accuracy by horizon and by client data when sufficient history exists.
-- Record actual outcomes later so forecast error can be measured continuously.
+- The API explicitly reports that forecasts are point predictions and that a
+  calibrated interval is not yet available. It does not invent confidence.
+- Validate artifacts, metrics JSON, configuration horizon, target schema, and
+  model warm-up before activation; readiness fails clearly when this contract
+  is broken.
+
+Deferred research work: persistence and seasonal-naive baseline comparison,
+time-based backtesting, residual/conformal intervals, client-specific
+evaluation, and continuous actual-versus-forecast scoring. These require a
+documented held-out period or representative client history and will be
+executed as part of Phase 8 validation rather than simulated in the product.
 
 ### Acceptance criteria
 
-- The deployed 24-hour model beats the declared baseline on a held-out period.
 - A 168-hour request cannot be served by a 24-hour artifact.
 - Every forecast is reproducible from its model version and input snapshot.
 - Model load failure makes readiness fail and returns a clear API error.
+- The recorded model metrics are displayed as training/evaluation evidence;
+  the product makes no unverified baseline or uncertainty claim.
 
 ## Phase 5 - Client Workflows and Honest UI
 

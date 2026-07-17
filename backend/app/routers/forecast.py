@@ -8,14 +8,14 @@ import numpy as np
 import io
 
 from app.database import get_db
-from app.models import User, Forecast, Alert, AlertConfig
+from app.models import User, Forecast, Alert, AlertConfig, ModelRegistry
 from app.schemas import (
     ForecastRequest, ForecastResponse, ForecastHistoryItem,
     ModelInfo, SampleDataset
 )
 from app.services.auth_service import get_current_user
 from app.services.site_service import ensure_default_site, get_default_meter
-from app.services.forecast_service import get_forecast_service, TARGET_COLS
+from app.services.forecast_service import get_forecast_service, REQUEST_FEATURE_SCHEMA, TARGET_COLS
 from app.limiter import limiter
 from app.config import get_settings
 
@@ -24,6 +24,24 @@ settings = get_settings()
 router = APIRouter(prefix="/api/v1/forecast", tags=["Forecasting"])
 
 HORIZON_TO_LOOKBACK = {24: 96, 168: 512, 720: 1440}
+CONFIDENCE_METHOD = "point forecast; calibrated interval not available"
+
+
+def build_input_snapshot(
+    targets: np.ndarray,
+    calendar: Optional[np.ndarray] = None,
+    timestamps=None,
+) -> dict:
+    """Persist the exact inference inputs needed to reproduce a forecast."""
+    return {
+        "target_schema": TARGET_COLS,
+        "input_feature_schema": REQUEST_FEATURE_SCHEMA,
+        "targets": np.asarray(targets, dtype=float).tolist(),
+        "calendar": np.asarray(calendar, dtype=float).tolist() if calendar is not None else None,
+        "timestamps": [value.isoformat() if hasattr(value, "isoformat") else str(value) for value in timestamps]
+        if timestamps is not None
+        else None,
+    }
 
 
 @router.get("/models", response_model=List[ModelInfo])
@@ -84,10 +102,10 @@ def predict(
     elif payload.data:
         targets = np.array(payload.data, dtype=np.float32)
         calendar = np.array(payload.calendar, dtype=np.float32) if payload.calendar else None
-        if targets.shape != (lookback, 7):
+        if targets.ndim != 2 or targets.shape != (lookback, len(REQUEST_FEATURE_SCHEMA)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Input data must be shape [{lookback}, 7] for horizon {payload.horizon}h, got {targets.shape}",
+                detail=f"Input data must be [{lookback}, {len(REQUEST_FEATURE_SCHEMA)}] for horizon {payload.horizon}h, got {targets.shape}",
             )
         import datetime
         input_end = datetime.datetime.now(datetime.timezone.utc)
@@ -118,6 +136,13 @@ def predict(
             detail=f"Model inference failed: {str(e)}",
         )
 
+    model_entry = db.query(ModelRegistry).filter(
+        ModelRegistry.name == payload.model_name,
+        ModelRegistry.horizon == payload.horizon,
+    ).first()
+    if model_entry is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The compatible model registration is no longer available.")
+
     # Save forecast to database, using the model name with horizon suffix for clarity
     model_db_name = payload.model_name
     if payload.horizon != 24 and not payload.model_name.endswith(f"_{payload.horizon}"):
@@ -131,6 +156,11 @@ def predict(
         predictions=predictions.tolist(),
         input_start=input_start,
         input_end=input_end,
+        model_registry_id=model_entry.id,
+        horizon=payload.horizon,
+        input_source="sample" if payload.sample_name else "api",
+        input_snapshot=build_input_snapshot(targets, calendar, timestamps),
+        confidence_method=CONFIDENCE_METHOD,
     )
     db.add(forecast)
     db.flush()
@@ -174,6 +204,11 @@ def predict(
         created_at=forecast.created_at,
         alerts=alerts_data,
         input_data=input_gap,
+        model_id=model_entry.id if model_entry else None,
+        model_version=model_entry.version if model_entry else None,
+        horizon=forecast.horizon,
+        input_source=forecast.input_source,
+        confidence_method=forecast.confidence_method or CONFIDENCE_METHOD,
     )
 
 
@@ -205,10 +240,10 @@ def compare_models(
     elif request.data:
         targets = np.array(request.data, dtype=np.float32)
         calendar = np.array(request.calendar, dtype=np.float32) if request.calendar else None
-        if targets.shape != (lookback, 7):
+        if targets.ndim != 2 or targets.shape != (lookback, len(REQUEST_FEATURE_SCHEMA)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Input data must be shape [{lookback}, 7] for horizon {request.horizon}h, got {targets.shape}",
+                detail=f"Input data must be [{lookback}, {len(REQUEST_FEATURE_SCHEMA)}] for horizon {request.horizon}h, got {targets.shape}",
             )
     else:
         raise HTTPException(
@@ -274,18 +309,20 @@ def predict_upload(
     df = df.tail(lookback)
 
     # Rename Global_active_power to gap for compatibility with exported samples
-    if 'Global_active_power' in df.columns:
-        df = df.rename(columns={'Global_active_power': 'gap'})
+    df = df.rename(columns={
+        'Global_active_power': 'gap', 'Global_reactive_power': 'grp',
+        'Voltage': 'voltage', 'Global_intensity': 'current',
+    })
 
     # Validate columns
-    missing = [c for c in TARGET_COLS if c not in df.columns]
+    missing = [c for c in REQUEST_FEATURE_SCHEMA if c not in df.columns]
     if missing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV missing required columns: {missing}. Expected: {TARGET_COLS}",
+            detail=f"CSV missing required columns: {missing}. Expected: {REQUEST_FEATURE_SCHEMA}",
         )
 
-    targets = df[TARGET_COLS].values.astype(np.float32)
+    targets = df[REQUEST_FEATURE_SCHEMA].values.astype(np.float32)
 
     # Generate cyclical calendar features from the datetime index
     hours = df.index.hour.values
@@ -322,6 +359,13 @@ def predict_upload(
         input_start = input_start.replace(tzinfo=datetime.timezone.utc)
         input_end = input_end.replace(tzinfo=datetime.timezone.utc)
 
+    model_entry = db.query(ModelRegistry).filter(
+        ModelRegistry.name == requested_model_name,
+        ModelRegistry.horizon == horizon,
+    ).first()
+    if model_entry is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The compatible model registration is no longer available.")
+
     # Save forecast
     site = ensure_default_site(db, current_user.id)
     forecast = Forecast(
@@ -331,6 +375,11 @@ def predict_upload(
         predictions=predictions.tolist(),
         input_start=input_start,
         input_end=input_end,
+        model_registry_id=model_entry.id,
+        horizon=horizon,
+        input_source="csv_upload",
+        input_snapshot=build_input_snapshot(targets, calendar, df.index),
+        confidence_method=CONFIDENCE_METHOD,
     )
     db.add(forecast)
     db.flush()
@@ -371,6 +420,11 @@ def predict_upload(
         created_at=forecast.created_at,
         alerts=alerts_data,
         input_data=input_gap,
+        model_id=model_entry.id,
+        model_version=model_entry.version,
+        horizon=forecast.horizon,
+        input_source=forecast.input_source,
+        confidence_method=forecast.confidence_method or CONFIDENCE_METHOD,
     )
 
 
@@ -414,17 +468,19 @@ def compare_upload(
     df = df.tail(lookback)
 
     # Rename Global_active_power to gap for compatibility with exported samples
-    if 'Global_active_power' in df.columns:
-        df = df.rename(columns={'Global_active_power': 'gap'})
+    df = df.rename(columns={
+        'Global_active_power': 'gap', 'Global_reactive_power': 'grp',
+        'Voltage': 'voltage', 'Global_intensity': 'current',
+    })
 
-    missing = [c for c in TARGET_COLS if c not in df.columns]
+    missing = [c for c in REQUEST_FEATURE_SCHEMA if c not in df.columns]
     if missing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"CSV missing required columns: {missing}.",
         )
 
-    targets = df[TARGET_COLS].values.astype(np.float32)
+    targets = df[REQUEST_FEATURE_SCHEMA].values.astype(np.float32)
     hours = df.index.hour.values
     days = df.index.dayofweek.values
     months = df.index.month.values
@@ -506,6 +562,13 @@ def sync_smart_meter_forecast(
             detail=f"Smart meter forecast execution failed: {str(e)}",
         )
 
+    model_entry = db.query(ModelRegistry).filter(
+        ModelRegistry.name == model_name,
+        ModelRegistry.horizon == horizon,
+    ).first()
+    if model_entry is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The compatible model registration is no longer available.")
+
     # Save to DB
     input_end = now
     input_start = now - datetime.timedelta(hours=lookback - 1)
@@ -517,6 +580,11 @@ def sync_smart_meter_forecast(
         predictions=predictions.tolist(),
         input_start=input_start,
         input_end=input_end,
+        model_registry_id=model_entry.id,
+        horizon=horizon,
+        input_source="simulator",
+        input_snapshot=build_input_snapshot(targets, calendar, timestamps),
+        confidence_method=CONFIDENCE_METHOD,
     )
     db.add(forecast)
     db.flush()
@@ -563,6 +631,11 @@ def sync_smart_meter_forecast(
             } for a in alerts_data
         ],
         input_data=targets[:, 0].tolist(),
+        model_id=model_entry.id,
+        model_version=model_entry.version,
+        horizon=forecast.horizon,
+        input_source=forecast.input_source,
+        confidence_method=forecast.confidence_method or CONFIDENCE_METHOD,
     )
 
 

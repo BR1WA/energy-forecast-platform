@@ -141,12 +141,30 @@ class SimulationSession(Base):
     site = relationship("Site", back_populates="simulation_sessions")
 
 
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor_user_id = Column(Integer, nullable=True, index=True)
+    target_user_id = Column(Integer, nullable=True, index=True)
+    site_id = Column(Integer, nullable=True, index=True)
+    event_type = Column(String(80), nullable=False, index=True)
+    target = Column(String(160), nullable=True)
+    metadata_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Forecast(Base):
     __tablename__ = "forecasts"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
+    model_registry_id = Column(Integer, ForeignKey("model_registry.id"), nullable=True, index=True)
+    horizon = Column(Integer, nullable=True)
+    input_source = Column(String(20), nullable=True)
+    input_snapshot = Column(JSON, nullable=True)
+    confidence_method = Column(String(120), nullable=True)
     model_name = Column(String(50), nullable=False)
     input_start = Column(DateTime(timezone=True), nullable=True)
     input_end = Column(DateTime(timezone=True), nullable=True)
@@ -195,6 +213,7 @@ class Alert(Base):
 
 class SmartMeterReading(Base):
     __tablename__ = "smart_meter_readings"
+    __table_args__ = (UniqueConstraint("meter_id", "timestamp", name="uq_smart_meter_readings_meter_timestamp"),)
 
     id = Column(Integer, primary_key=True, index=True)
     meter_id = Column(Integer, ForeignKey("meters.id"), nullable=False, index=True)
@@ -227,6 +246,8 @@ class ModelRegistry(Base):
     lookback = Column(Integer, nullable=True)
     experiment_path = Column(String(255), nullable=False)
     model_fingerprint = Column(String(64), nullable=True) # SHA-256 hash
+    artifact_contract = Column(JSON, nullable=True)
+    contract_validated_at = Column(DateTime(timezone=True), nullable=True)
     active = Column(Boolean, default=False, nullable=False)
     mae = Column(Float, nullable=True)
     rmse = Column(Float, nullable=True)
@@ -247,4 +268,3 @@ class EnergyBudget(Base):
 
     # Relationship
     user = relationship("User", back_populates="energy_budget")
-

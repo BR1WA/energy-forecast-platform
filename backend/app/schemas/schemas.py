@@ -148,6 +148,11 @@ class ForecastResponse(BaseModel):
     created_at: datetime
     alerts: List[Dict[str, Any]] = []
     input_data: Optional[List[float]] = None  # GAP lookback values for chart
+    model_id: Optional[int] = None
+    model_version: Optional[str] = None
+    horizon: Optional[int] = None
+    input_source: Optional[str] = None
+    confidence_method: str = "model output without calibrated interval"
 
 class ForecastHistoryItem(BaseModel):
     model_config = ConfigDict(from_attributes=True, protected_namespaces=())

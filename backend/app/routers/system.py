@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.database import get_db
 from app.models import ModelRegistry
+from app.services.forecast_service import get_forecast_service
 
 router = APIRouter(prefix="/api/v1/system", tags=["System"])
 
@@ -39,6 +40,14 @@ def build_readiness(db: Session) -> dict:
             for filename in REQUIRED_MODEL_FILES
             if not (model_dir / filename).is_file()
         ]
+        if not missing_artifacts:
+            contract_violations = get_forecast_service().validate_artifact_contract(active_model)
+            missing_artifacts = contract_violations
+        if not missing_artifacts:
+            try:
+                get_forecast_service().warm_model(active_model)
+            except Exception as exc:
+                missing_artifacts = [f"model warm-up failed: {type(exc).__name__}"]
 
     model_ready = active_model is not None and not missing_artifacts
     ready = database_ready and model_ready

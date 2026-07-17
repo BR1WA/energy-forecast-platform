@@ -1,304 +1,131 @@
+"""Evidence-only dashboard aggregates for the authenticated user's energy data."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from app.models.models import SmartMeterReading, Alert, AlertConfig, ModelRegistry, Forecast
+
+from app.models import Alert, Forecast, Meter, Site, SmartMeterReading
 from app.services.consumption_service import consumption_service
-from app.services.weather_service import weather_service
-from app.services.alert_service import alert_service
-from app.services.forecast_service import get_forecast_service
 from app.services.simulation_service import simulation_service
-import numpy as np
-from datetime import datetime, timezone, timedelta
-from types import SimpleNamespace
+from app.services.weather_service import weather_service
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
 
 class DashboardService:
-    def get_summary(self, db: Session, user_id: int, lat: float | None = None, lon: float | None = None):
-        # 1. Fetch live telemetry logs
-        from app.models import Meter, Site
-
-        readings = (
+    def _readings(self, db: Session, user_id: int, limit: int = 1440) -> list[SmartMeterReading]:
+        return (
             db.query(SmartMeterReading)
             .join(Meter, SmartMeterReading.meter_id == Meter.id)
             .join(Site, Meter.site_id == Site.id)
             .filter(Site.user_id == user_id)
             .order_by(SmartMeterReading.timestamp.desc())
-            .limit(1440)
+            .limit(limit)
             .all()
         )
-        simulation = SimpleNamespace(**simulation_service.get_state(db, user_id))
-        total_readings = len(readings)
-        
-        last_reading = readings[0] if total_readings > 0 else None
-        
-        active_power = last_reading.gap if last_reading else 0.0
-        voltage = last_reading.voltage if last_reading else 0.0
-        intensity = last_reading.intensity if last_reading else 0.0
-        frequency = 50.0
 
-        # 2. Greeting time
+    @staticmethod
+    def _greeting() -> str:
         hour = datetime.now().hour
         if hour < 12:
-            greeting = "Good Morning"
-        elif hour < 17:
-            greeting = "Good Afternoon"
-        else:
-            greeting = "Good Evening"
+            return "Good Morning"
+        if hour < 17:
+            return "Good Afternoon"
+        return "Good Evening"
 
-        # 3. Simulated appliance states from Virtual House simulation_service
-        ac_status = "Running" if simulation.ac_level != "off" else "Off"
-        ac_level = simulation.ac_level.upper()
-        
-        wm_status = "Running" if simulation.washing_machine else "Idle"
-        wm_level = "ON" if simulation.washing_machine else "OFF"
-        
-        solar_status = "Generating" if simulation.solar != "off" else "Off"
-        solar_level = simulation.solar.upper()
+    def _latest_forecast(self, db: Session, user_id: int) -> Forecast | None:
+        return (
+            db.query(Forecast)
+            .filter(Forecast.user_id == user_id)
+            .order_by(Forecast.created_at.desc())
+            .first()
+        )
 
-        appliances_status = [
-          {"name": "Air Conditioner", "status": ac_status, "level": ac_level},
-          {"name": "Washing Machine", "status": wm_status, "level": wm_level},
-          {"name": "Solar Panels", "status": solar_status, "level": solar_level},
-          {"name": "Lighting", "status": "Normal", "level": "ON"},
-          {"name": "Occupancy", "status": f"{simulation.occupants} People", "level": str(simulation.occupants)}
-        ]
+    def _forecast_payload(
+        self,
+        db: Session,
+        user_id: int,
+        forecast: Forecast | None,
+    ) -> dict:
+        if not forecast or not forecast.predictions:
+            return {
+                "points": [],
+                "peak_hour": None,
+                "expected_consumption": None,
+                "estimated_cost": None,
+                "forecast_reliability": "Not available",
+                "explainability": "Run a forecast after importing or ingesting enough meter readings.",
+                "validation": {"available": False, "message": "No persisted forecast is available."},
+                "model_version": None,
+                "confidence_method": None,
+            }
 
-        # 4. Use the shared, timestamp-based calculation service for all billing figures.
-        monthly = consumption_service.get_monthly_summary(db, user_id)
-        total_kwh = monthly["total_kwh"]
-        current_cost = monthly["total_cost"]
-        tariff = monthly["tariff"]
-        tariff_name = "Site peak/off-peak tariff"
-        tariff_rate = tariff.get("peak_rate", 0.0)
-        budget_data = monthly["budget"]
-        budget_target = budget_data["target_mad"] or 0.0
-        projected_cost = budget_data["projected_mad"]
-        progress_pct = budget_data["progress_pct"] or 0.0
-        remaining = budget_data["remaining_mad"] or 0.0
-
-        # 5. Dynamic Energy Score calculation
-        base_score = 95
-        if simulation.ac_level == "high":
-            base_score -= 15
-        elif simulation.ac_level == "medium":
-            base_score -= 8
-            
-        if simulation.washing_machine:
-            base_score -= 5
-            
-        if simulation.solar == "high":
-            base_score += 8
-        elif simulation.solar == "low":
-            base_score += 4
-            
-        base_score -= (simulation.occupants - 2) * 2
-        energy_score = max(45, min(98, base_score))
-
-        # 6. Carbon saved total
-        carbon_saved = round(total_kwh * 0.52, 2)
-
-        # 6b. Today's Story — narrative bullets for executive hero
-        today_story = []
-        if simulation.solar != "off":
-            solar_kw = 2.4 if simulation.solar == "high" else 1.2
-            today_story.append({"icon": "check", "text": f"Solar panels generating {solar_kw} kW, offsetting grid demand."})
-        if simulation.ac_level in ("medium", "high"):
-            today_story.append({"icon": "alert", "text": f"AC running at {simulation.ac_level.upper()} — primary load contributor."})
-        else:
-            today_story.append({"icon": "check", "text": "HVAC load is minimal. Efficiency is high."})
-        if progress_pct < 75:
-            today_story.append({"icon": "check", "text": "Peak demand stayed below budget threshold."})
-        else:
-            today_story.append({"icon": "alert", "text": f"Budget usage at {progress_pct}% — approaching limit."})
-        today_story.append({"icon": "check", "text": f"Billing uses your site's configured peak and off-peak rates."})
-
-        # 7. Priority savings opportunities
-        potential_savings = 0
-        recs_list = []
-        
-        if simulation.ac_level in ("medium", "high"):
-            recs_list.append({
-                "id": "rec-ac",
-                "title": "Reduce AC Temperature",
-                "savings": 21,
-                "difficulty": "Easy",
-                "reliability": "High",
-                "stars": 5,
-                "reason": f"HVAC accounts for 42% of today's load. Lowering level saves up to 21 MAD."
-            })
-            potential_savings += 21
-            
-        if simulation.washing_machine:
-            recs_list.append({
-                "id": "rec-wm",
-                "title": "Delay Large Washing Loads",
-                "savings": 9,
-                "difficulty": "Easy",
-                "reliability": "High",
-                "stars": 5,
-                "reason": "Moving laundry past peak hours (after 22:00) saves 9 MAD."
-            })
-            potential_savings += 9
-            
-        # Default baseline savings
-        recs_list.append({
-            "id": "rec-led",
-            "title": "Replace Hallway Incandescent Bulbs",
-            "savings": 13,
-            "difficulty": "Medium",
-            "reliability": "Medium",
-            "stars": 4,
-            "reason": "Standby loads detected. Upgrading older 60W bulbs to 6W LED saves 13 MAD."
-        })
-        potential_savings += 13
-
-        # 8. Dynamic Forecast Validation & Predict
-        forecast_service = get_forecast_service()
-        lookback = 96
-        
-        # Fetch targets from smart meter service to ensure they are hourly and properly formatted
-        from app.services.smart_meter_service import get_smart_meter_service
-        meter_service = get_smart_meter_service()
-        targets_arr = meter_service.fetch_live_readings(db=db, limit=lookback)
-        
-        # Generate corresponding hourly timestamps ending now (UTC)
-        now_utc = datetime.now(timezone.utc)
-        ts_list = [now_utc - timedelta(hours=(lookback - 1 - i)) for i in range(lookback)]
-            
-        active_model_entry = forecast_service.get_active_model_registry(db)
-        active_model_name = active_model_entry.name if active_model_entry else "cnn_bilstm"
-
-        try:
-            preds, alerts_data = forecast_service.predict(
-                active_model_name,
-                targets_arr,
-                calendar=None,
-                threshold_kw=3.0,
-                horizon=24,
-                timestamps=ts_list
+        values = [float(row[0]) for row in forecast.predictions if row]
+        points = [{"time": f"H+{index + 1}", "predicted": round(value, 3)} for index, value in enumerate(values)]
+        peak_index = values.index(max(values)) if values else None
+        validation = {"available": False, "message": "No matching future reading is available yet."}
+        if forecast.input_end and values:
+            first_expected_at = _as_utc(forecast.input_end) + timedelta(hours=1)
+            actual = (
+                db.query(SmartMeterReading)
+                .join(Meter, SmartMeterReading.meter_id == Meter.id)
+                .join(Site, Meter.site_id == Site.id)
+                .filter(
+                    Site.user_id == user_id,
+                    SmartMeterReading.timestamp >= first_expected_at,
+                )
+                .order_by(SmartMeterReading.timestamp.asc())
+                .first()
             )
-            forecast_points = []
-            for i in range(len(preds)):
-                hour_str = f"H+{i+1}"
-                forecast_points.append({
-                    "time": hour_str,
-                    "predicted": round(float(preds[i][0] if preds.ndim > 1 else preds[i]), 3)
-                })
-        except Exception as e:
-            print(f"[DashboardService] Predict error: {e}")
-            forecast_points = []
-
-        # Forecast validation metrics (Predicted vs. Actual validation comparison)
-        prev_forecast = db.query(Forecast).order_by(Forecast.created_at.desc()).first()
-        if prev_forecast and len(readings) > 24:
-            val_predicted = prev_forecast.predictions[0][0] if isinstance(prev_forecast.predictions[0], list) else prev_forecast.predictions[0]
-            val_actual = readings[0].gap
-            val_error = abs(val_predicted - val_actual) / max(0.1, val_actual) * 100.0
-            validation_data = {
-                "available": True,
-                "predicted": round(val_predicted, 2),
-                "actual": round(val_actual, 2),
-                "error_pct": round(val_error, 1)
-            }
-        else:
-            validation_data = {
-                "available": False,
-                "message": "Insufficient historical forecasts to compute reliability."
-            }
-
-        # 9. Weather summary
-        weather_data = {"temperature": 25.0, "condition": "Sunny"}
-        try:
-            actual_lat = lat if lat is not None else 33.5731
-            actual_lon = lon if lon is not None else -7.5898
-            w = weather_service.get_weather(actual_lat, actual_lon, mode="current")
-            if w:
-                weather_data = {
-                    "temperature": w.get("temperature", 25.0),
-                    "condition": w.get("condition", "Sunny"),
-                    "wind_speed": w.get("wind_speed", 0.0),
-                    "is_day": w.get("is_day", True)
+            if actual:
+                error_pct = abs(values[0] - actual.gap) / max(0.1, actual.gap) * 100.0
+                validation = {
+                    "available": True,
+                    "predicted": round(values[0], 2),
+                    "actual": round(actual.gap, 2),
+                    "error_pct": round(error_pct, 1),
                 }
+
+        return {
+            "points": points,
+            "peak_hour": f"H+{peak_index + 1}" if peak_index is not None else None,
+            "expected_consumption": round(sum(values), 3) if values else None,
+            "estimated_cost": None,
+            "forecast_reliability": "Point forecast (not calibrated)",
+            "explainability": f"Persisted forecast from {forecast.model_name}.",
+            "validation": validation,
+            "model_version": forecast.model_name,
+            "confidence_method": forecast.confidence_method,
+        }
+
+    def get_summary(self, db: Session, user_id: int, lat: float | None = None, lon: float | None = None):
+        readings = self._readings(db, user_id)
+        latest = readings[0] if readings else None
+        monthly = consumption_service.get_monthly_summary(db, user_id)
+        forecast = self._latest_forecast(db, user_id)
+        forecast_payload = self._forecast_payload(db, user_id, forecast)
+        simulation = simulation_service.get_state(db, user_id)
+        alerts = (
+            db.query(Alert)
+            .filter(Alert.user_id == user_id)
+            .order_by(Alert.created_at.desc())
+            .limit(10)
+            .all()
+        )
+
+        weather_data = None
+        try:
+            weather_data = weather_service.get_weather(lat or 33.5731, lon or -7.5898, mode="current")
         except Exception:
-            pass
+            weather_data = None
 
-        # 10. AI Assistant structured narrative
-        # Headline
-        if energy_score >= 85:
-            ai_headline = "Good news."
-        elif energy_score >= 70:
-            ai_headline = "Things are stable."
-        else:
-            ai_headline = "Attention needed."
-
-        # Body
-        savings_delta = int(potential_savings * 0.42)  # simulated daily delta
-        ai_body = f"Your projected monthly bill is {round(projected_cost, 0):.0f} MAD. "
-        if simulation.ac_level in ("medium", "high"):
-            ai_body += f"The main contributor is HVAC running at {simulation.ac_level.upper()} capacity."
-        else:
-            ai_body += "Baseline loads are driving consumption. Standby devices are optimized."
-
-        # Warning (nullable)
-        ai_warning = None
-        if weather_data["temperature"] > 28:
-            ai_warning = f"Tomorrow temperatures are expected to reach {weather_data['temperature']}°C. If AC usage remains unchanged, your bill could increase by approximately 9%."
-        elif simulation.ac_level == "high":
-            ai_warning = "AC is at maximum capacity. Sustained high usage will push you into Tranche 3 pricing."
-
-        # Recommended action
-        if simulation.ac_level in ("medium", "high"):
-            ai_action = "Increase thermostat by 1°C between 14:00–18:00 to save up to 21 MAD/month."
-        elif simulation.washing_machine:
-            ai_action = "Shift washing cycles to off-peak hours (after 22:00) to save 9 MAD/month."
-        else:
-            ai_action = "Replace hallway incandescent bulbs with LED to save 13 MAD/month."
-
-        # Legacy explanation (backward compat)
-        explanation = f"{ai_headline} {ai_body}"
-        if ai_warning:
-            explanation += f" {ai_warning}"
-        explanation += f" Recommended: {ai_action}"
-
-        # 11. Timeline events
-        timeline_list = []
-        recent_alerts = db.query(Alert).filter(Alert.user_id == user_id).order_by(Alert.created_at.desc()).limit(10).all()
-        
-        for a in recent_alerts:
-            # Format time label as HH:MM
-            time_label = a.created_at.strftime("%H:%M") if a.created_at else "12:00"
-            severity = "warning" if a.severity == "high" else "info"
-            timeline_list.append({
-                "time": time_label,
-                "event": a.message,
-                "severity": severity
-            })
-            
-        # Virtual simulator timelines if list is short
-        if len(timeline_list) < 3:
-            timeline_list.append({"time": "18:42", "event": "Peak demand warning generated", "severity": "warning"})
-            timeline_list.append({"time": "18:46", "event": "AI recommendations updated", "severity": "success"})
-            timeline_list.append({"time": "19:02", "event": "Forecast center updated", "severity": "info"})
-            
-        if simulation.is_running:
-            timeline_list.insert(0, {"time": "19:20", "event": "Linky live telemetry started", "severity": "success"})
-
-        # Summary sentence
-        sum_sentence = f"Consumption is {14 if energy_score > 80 else 22}% lower than yesterday. You are projected to remain inside {tariff_name}."
-
-        # Energy flow calculations
-        solar_gen = 0.0
-        if simulation.solar == "high":
-            solar_gen = 2.4
-        elif simulation.solar == "low":
-            solar_gen = 1.2
-        grid_import = max(0.0, active_power - solar_gen)
-        solar_offset = round((solar_gen / max(active_power, 0.1)) * 100, 0) if solar_gen > 0 else 0
-
-        # Budget scenario projections
-        projected_without_recs = round(projected_cost, 2)
-        projected_with_recs = round(max(current_cost, projected_cost - potential_savings), 2)
-        savings_if_applied = round(projected_without_recs - projected_with_recs, 2)
-
-        # Budget mission status
+        active_power = latest.gap if latest else 0.0
+        source = latest.source if latest else None
+        budget = monthly["budget"]
+        progress_pct = budget["progress_pct"] or 0.0
         if progress_pct > 90:
             mission_status = "Over Budget"
         elif progress_pct > 70:
@@ -306,185 +133,114 @@ class DashboardService:
         else:
             mission_status = "On Track"
 
-        # 12. House Intelligence Radar — 5 dimensions
-        grid_dependency = 100 - int(solar_offset) if solar_gen > 0 else 100
-        budget_health = max(0, 100 - progress_pct)
-        carbon_level = "Low" if carbon_saved < 80 else ("Medium" if carbon_saved < 150 else "High")
-        
-        # Forecast confidence with detail
-        forecast_count = db.query(Forecast).count()
-        if forecast_count >= 30:
-            confidence_pct = max(70, 100 - int(validation_data.get("error_pct", 5) * 2)) if validation_data.get("available") else 85
-            confidence_basis = f"Based on last {min(forecast_count, 30)} forecasts"
-        elif forecast_count >= 5:
-            confidence_pct = max(60, 95 - int(validation_data.get("error_pct", 8) * 2)) if validation_data.get("available") else 75
-            confidence_basis = f"Growing — {forecast_count} forecasts available"
-        else:
-            confidence_pct = 68
-            confidence_basis = f"Only {max(1, forecast_count)} day(s) of history available"
+        today_story = [
+            {"icon": "check", "text": f"Latest reading source: {source or 'no meter reading yet'}."},
+            {"icon": "check", "text": "Billing uses the configured site peak and off-peak rates."},
+        ]
+        if budget["target_mad"] is not None:
+            today_story.append({"icon": "alert" if progress_pct >= 75 else "check", "text": f"Budget progress: {progress_pct}% of the monthly target."})
 
-        if energy_score >= 85:
-            radar_condition = "Excellent"
-            radar_message = "The household is operating efficiently. No critical action is required."
-        elif energy_score >= 70:
-            radar_condition = "Good"
-            radar_message = "The household is stable. Minor optimizations available."
-        elif energy_score >= 55:
-            radar_condition = "Fair"
-            radar_message = "Some attention needed. Review recommendations to improve efficiency."
-        else:
-            radar_condition = "Needs Attention"
-            radar_message = "Multiple areas need optimization. Consider applying recommendations."
-
-        intelligence_radar = {
-            "dimensions": [
-                {"label": "Energy Efficiency", "value": energy_score, "unit": "%", "status": "green" if energy_score >= 80 else ("amber" if energy_score >= 60 else "red")},
-                {"label": "Grid Dependency", "value": grid_dependency, "unit": "%", "status": "green" if grid_dependency < 50 else ("amber" if grid_dependency < 80 else "red")},
-                {"label": "Budget Health", "value": budget_health, "unit": "%", "status": "green" if budget_health > 30 else ("amber" if budget_health > 10 else "red")},
-                {"label": "Carbon Footprint", "value": carbon_level, "unit": "", "status": "green" if carbon_level == "Low" else ("amber" if carbon_level == "Medium" else "red")},
-                {"label": "Forecast Confidence", "value": confidence_pct, "unit": "%", "status": "blue"}
-            ],
-            "condition": radar_condition,
-            "message": radar_message,
-            "confidence": {
-                "pct": confidence_pct,
-                "basis": confidence_basis,
-                "trend": "Growing" if forecast_count < 20 else "Stable"
+        timeline = [
+            {
+                "time": _as_utc(alert.created_at).strftime("%H:%M") if alert.created_at else "",
+                "event": alert.message or alert.alert_type,
+                "severity": "warning" if alert.severity == "high" else "info",
             }
-        }
+            for alert in alerts
+        ]
+        if simulation["is_running"]:
+            timeline.insert(0, {"time": "", "event": "Simulator session is running.", "severity": "info"})
 
-        # 13. Today vs Yesterday comparison
-        # Use simulated deltas based on energy score for defense demo
-        yesterday_energy = round(total_kwh * 1.14, 1)
-        yesterday_peak = round((max([r.gap for r in readings]) if readings else 3.82) * 1.18, 1)
-        yesterday_cost = round(current_cost * 1.17, 1)
-        yesterday_carbon = round(carbon_saved * 1.21, 1)
-
-        today_vs_yesterday = {
-            "metrics": [
-                {"label": "Energy", "today": round(total_kwh, 1), "yesterday": yesterday_energy, "unit": "kWh"},
-                {"label": "Peak", "today": round((max([r.gap for r in readings]) if readings else 3.82), 1), "yesterday": yesterday_peak, "unit": "kW"},
-                {"label": "Cost", "today": round(current_cost, 1), "yesterday": yesterday_cost, "unit": "MAD"},
-                {"label": "Carbon", "today": round(carbon_saved, 1), "yesterday": yesterday_carbon, "unit": "kg"}
+        appliances = []
+        if simulation["is_running"]:
+            appliances = [
+                {"name": "Simulator", "status": "Running", "level": "SIMULATED"},
+                {"name": "Configured occupants", "status": "Simulation", "level": str(simulation["occupants"])},
             ]
-        }
 
-        # 14. Trend deltas for KPIs
-        bill_delta = round(current_cost - yesterday_cost, 1)  # negative = savings
-        score_delta = 6 if energy_score > 80 else (-3 if energy_score < 65 else 2)
-        savings_trend = "up" if potential_savings > 20 else "stable"
-
-        # 15. AI Decisions Today (replaces activity feed)
-        ai_decisions = []
-        ai_decisions.append({"text": "Forecast recalculated", "done": True})
-        if len(forecast_points) > 0:
-            peak_val = max(p["predicted"] for p in forecast_points) if forecast_points else 0
-            if peak_val > 2.5:
-                ai_decisions.append({"text": "Peak demand detected", "done": True})
-        if progress_pct < 80:
-            ai_decisions.append({"text": "Budget remains on target", "done": True})
-        else:
-            ai_decisions.append({"text": "Budget alert triggered", "done": True})
-        if len(recs_list) > 0:
-            ai_decisions.append({"text": f"{len(recs_list)} recommendation(s) generated", "done": True})
-        if solar_gen > 0:
-            ai_decisions.append({"text": "Solar offset increased", "done": True})
-        if energy_score >= 80:
-            ai_decisions.append({"text": "Household efficiency improved", "done": True})
-        else:
-            ai_decisions.append({"text": "Efficiency optimization pending", "done": False})
-
-        # 16. Proactive hero sentence
-        if simulation.washing_machine and simulation.ac_level in ("medium", "high"):
-            proactive_sentence = f"If you delay the washing machine until after 22:00, you can save approximately {9 + savings_delta} MAD this month while remaining comfortably below your {int(budget_target)} MAD budget target."
-        elif simulation.ac_level in ("medium", "high"):
-            proactive_sentence = f"Reducing AC by 1°C during peak hours (14:00–18:00) could save up to 21 MAD this month. You are projected to stay within {tariff_name}."
-        elif simulation.washing_machine:
-            proactive_sentence = f"Shifting the washing cycle to off-peak hours (after 22:00) would save 9 MAD while keeping you well below your {int(budget_target)} MAD budget."
-        else:
-            proactive_sentence = f"No critical actions needed. Your household is on track to finish the month at {round(projected_cost, 0):.0f} MAD — comfortably below your {int(budget_target)} MAD target."
-
-        # Enrich recs with confidence info
-        for rec in recs_list:
-            rec["confidence_pct"] = 92 if rec.get("reliability") == "High" else 78
-            rec["evidence"] = f"Detected over {12 if rec.get('reliability') == 'High' else 6} similar usage patterns."
+        forecast_available = bool(forecast_payload["points"])
+        confidence_pct = 0
+        confidence_basis = "Calibrated confidence is not available."
+        if forecast_available:
+            confidence_basis = forecast_payload["confidence_method"] or "Point forecast; calibrated interval not available."
 
         return {
             "executive": {
-                "greeting": greeting,
-                "household_name": "Main Residence",
-                "energy_score": int(energy_score),
-                "estimated_bill": round(current_cost, 2),
-                "potential_savings": int(potential_savings),
-                "forecast_reliability": "High" if energy_score > 80 else "Medium",
-                "current_tariff_tier": tariff_name,
-                "summary_sentence": sum_sentence,
+                "greeting": self._greeting(),
+                "household_name": "Your site",
+                "energy_score": 0,
+                "estimated_bill": monthly["total_cost"],
+                "potential_savings": 0,
+                "forecast_reliability": forecast_payload["forecast_reliability"],
+                "current_tariff_tier": "Site peak/off-peak tariff",
+                "summary_sentence": "Import meter data or run the labelled simulator to populate your dashboard.",
                 "today_story": today_story,
-                "bill_delta": bill_delta,
-                "score_delta": score_delta,
-                "proactive_sentence": proactive_sentence
+                "bill_delta": None,
+                "score_delta": None,
+                "proactive_sentence": "Recommendations appear only when supported by measured data.",
             },
             "assistant": {
-                "headline": ai_headline,
-                "body": ai_body,
-                "warning": ai_warning,
-                "recommended_action": ai_action,
-                "response": explanation,
-                "quick_actions": ["View Forecast", "Open Recommendations", "Run Simulation", "View Budget", "Export Report"]
+                "headline": "Evidence-based status",
+                "body": "No appliance-level recommendations are generated without device or sub-meter evidence.",
+                "warning": None,
+                "recommended_action": "Review your meter data quality and configured tariff.",
+                "response": "Recommendations are unavailable until enough measured data is available.",
+                "quick_actions": ["View Forecast", "Run Simulation", "View Budget", "Export Report"],
             },
             "live_status": {
-                "appliances": appliances_status,
+                "appliances": appliances,
                 "load": {
                     "active_power": round(active_power, 2),
-                    "voltage": round(voltage, 1),
-                    "current": round(intensity, 2),
-                    "frequency": frequency
-                }
+                    "voltage": round(latest.voltage, 1) if latest else None,
+                    "current": round(latest.intensity, 2) if latest else None,
+                    "frequency": None,
+                    "source": source,
+                },
             },
             "live_consumption": {
                 "current_power": round(active_power, 2),
-                "today_energy": round(total_kwh, 2),
-                "today_peak": round(max([r.gap for r in readings]) if readings else 3.82, 2),
-                "average_load": round(np.mean([r.gap for r in readings]) if readings else 1.65, 2)
+                "today_energy": monthly["total_kwh"],
+                "today_peak": monthly["peak_kw"],
+                "average_load": round(sum(reading.gap for reading in readings) / len(readings), 2) if readings else None,
             },
             "energy_flow": {
-                "solar_generation": round(solar_gen, 1),
-                "grid_import": round(grid_import, 2),
+                "solar_generation": 0.0,
+                "grid_import": round(active_power, 2),
                 "house_consumption": round(active_power, 2),
-                "solar_offset_pct": int(solar_offset),
-                "current_tariff_rate": tariff_rate
+                "solar_offset_pct": 0,
+                "current_tariff_rate": monthly["tariff"].get("peak_rate"),
             },
-            "forecast": {
-                "points": forecast_points,
-                "peak_hour": "18:30 (Evening Peak)",
-                "expected_consumption": round(total_kwh * 1.1, 2),
-                "estimated_cost": round(projected_cost / 30.0, 2),
-                "forecast_reliability": "High" if energy_score > 80 else "Medium",
-                "explainability": "Tomorrow's demand is expected to increase because temperatures will rise by 6°C. Historical weekend patterns also indicate higher afternoon consumption.",
-                "validation": validation_data
-            },
-            "recommendations": {
-                "priority_list": recs_list,
-                "potential_savings": int(potential_savings),
-                "carbon_reduction": round(carbon_saved, 2)
-            },
+            "forecast": forecast_payload,
+            "recommendations": {"priority_list": [], "potential_savings": 0, "carbon_reduction": None},
             "budget": {
-                "target": budget_target,
-                "current_cost": round(current_cost, 2),
+                "target": budget["target_mad"],
+                "current_cost": monthly["total_cost"],
                 "progress_pct": progress_pct,
-                "projected_cost": round(projected_cost, 2),
-                "tariff_tier": tariff_name,
-                "remaining": round(remaining, 2),
-                "projected_without_recs": projected_without_recs,
-                "projected_with_recs": projected_with_recs,
-                "savings_if_applied": savings_if_applied,
-                "mission_status": mission_status
+                "projected_cost": budget["projected_mad"],
+                "tariff_tier": "Site peak/off-peak tariff",
+                "remaining": budget["remaining_mad"],
+                "projected_without_recs": budget["projected_mad"],
+                "projected_with_recs": budget["projected_mad"],
+                "savings_if_applied": 0,
+                "mission_status": mission_status,
             },
-            "timeline": timeline_list,
+            "timeline": timeline,
             "weather": weather_data,
-            "intelligence_radar": intelligence_radar,
-            "today_vs_yesterday": today_vs_yesterday,
-            "ai_decisions": ai_decisions
+            "intelligence_radar": {
+                "dimensions": [
+                    {"label": "Budget Health", "value": round(max(0, 100 - progress_pct), 1), "unit": "%", "status": "green" if progress_pct < 70 else "amber"},
+                    {"label": "Forecast Confidence", "value": confidence_pct, "unit": "%", "status": "blue"},
+                ],
+                "condition": "Measured data only",
+                "message": "The dashboard does not infer appliance state or savings without evidence.",
+                "confidence": {"pct": confidence_pct, "basis": confidence_basis, "trend": "Not calibrated"},
+            },
+            "today_vs_yesterday": {"metrics": []},
+            "ai_decisions": [
+                {"text": "Persisted forecast available" if forecast_available else "No persisted forecast available", "done": forecast_available},
+                {"text": "Simulator is running" if simulation["is_running"] else "Simulator is stopped", "done": simulation["is_running"]},
+            ],
         }
+
 
 dashboard_service = DashboardService()

@@ -38,7 +38,7 @@ services:
       PYTHONUNBUFFERED: "1"
     volumes:
       - ./models:/app/models:ro
-      - ./experiments:/app/experiments:ro
+      - ./backend/experiments:/app/experiments:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/live', timeout=3)"]
       interval: 10s

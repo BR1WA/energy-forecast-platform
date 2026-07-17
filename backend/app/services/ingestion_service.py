@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import IngestionBatch, Meter, SmartMeterReading
@@ -39,6 +40,10 @@ CSV_ALIASES = {
     "sub_metering_3": "sub_metering_3_wh",
     "energy_kwh": "energy_kwh",
 }
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 def _normalise_column(name: str) -> str:
@@ -139,7 +144,7 @@ class IngestionService:
         accepted = 0
         duplicates = 0
         seen_timestamps: set[datetime] = set()
-        latest_seen = meter.last_seen_at
+        latest_seen = _as_utc(meter.last_seen_at) if meter.last_seen_at is not None else None
         for row_number, sample in enumerate(sample_list, start=1):
             timestamp = sample.timestamp.astimezone(timezone.utc)
             if timestamp > datetime.now(timezone.utc) + timedelta(minutes=5):
@@ -149,6 +154,9 @@ class IngestionService:
                 duplicates += 1
                 continue
             seen_timestamps.add(timestamp)
+            if source == "push" and latest_seen is not None and timestamp < latest_seen:
+                errors.append({"row": row_number, "message": "push samples must not be older than the meter's latest reading"})
+                continue
             if (
                 db.query(SmartMeterReading.id)
                 .filter(SmartMeterReading.meter_id == meter.id, SmartMeterReading.timestamp == timestamp)
@@ -175,7 +183,7 @@ class IngestionService:
             current_a = sample.current_a
             if current_a is None:
                 current_a = (sample.active_power_kw * 1000) / sample.voltage_v
-            db.add(SmartMeterReading(
+            reading = SmartMeterReading(
                 meter_id=meter.id,
                 ingestion_batch_id=batch.id,
                 timestamp=timestamp,
@@ -189,7 +197,14 @@ class IngestionService:
                 energy_kwh=sample.energy_kwh,
                 source=source,
                 quality="validated",
-            ))
+            )
+            try:
+                with db.begin_nested():
+                    db.add(reading)
+                    db.flush()
+            except IntegrityError:
+                duplicates += 1
+                continue
             accepted += 1
             if latest_seen is None or timestamp > latest_seen:
                 latest_seen = timestamp

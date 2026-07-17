@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models import User, Forecast, Alert, ModelRegistry
 from app.schemas import UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role
+from app.services.audit_service import record_audit_event
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
@@ -46,6 +47,14 @@ def update_user(
         user.role = data.role.value
     if data.is_active is not None:
         user.is_active = data.is_active
+    record_audit_event(
+        db,
+        "admin.user_updated",
+        actor_user_id=current_user.id,
+        target_user_id=user.id,
+        target=f"user:{user.id}",
+        metadata=data.model_dump(exclude_none=True),
+    )
     db.commit()
     db.refresh(user)
     return UserResponse.model_validate(user)
@@ -68,6 +77,14 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    record_audit_event(
+        db,
+        "admin.user_deleted",
+        actor_user_id=current_user.id,
+        target_user_id=user.id,
+        target=f"user:{user.id}",
+        metadata={"email": user.email},
+    )
     db.delete(user)
     db.commit()
     return {"message": f"User {user.email} deleted"}

@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import EnergyBudget, SiteSettings, User
 from app.services.auth_service import get_current_user
 from app.services.site_service import ensure_default_site
+from app.services.audit_service import record_audit_event
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -86,6 +87,14 @@ def save_setup(
     
     # Also update the user's specific setup complete status
     current_user.is_setup_complete = True
+    record_audit_event(
+        db,
+        "settings.site_updated",
+        actor_user_id=current_user.id,
+        site_id=site.id,
+        target=f"site:{site.id}",
+        metadata={"currency": settings.currency, "peak_rate": settings.peak_rate, "off_peak_rate": settings.off_peak_rate},
+    )
     
     db.commit()
     db.refresh(current_user)
@@ -147,6 +156,14 @@ def update_budget(
     
     budget.monthly_budget_mad = payload.monthly_budget_mad
     budget.monthly_budget_kwh = payload.monthly_budget_kwh
+    record_audit_event(
+        db,
+        "budget.updated",
+        actor_user_id=current_user.id,
+        site_id=site.id,
+        target=f"budget:{budget.id or 'new'}",
+        metadata=payload.model_dump(),
+    )
     
     db.commit()
     db.refresh(budget)

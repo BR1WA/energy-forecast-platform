@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import inspect
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -33,6 +35,9 @@ from training.features.feature_engineering import FeaturePipeline
 # ---------------------------------------------------------------------------
 
 TARGET_COLS = ["gap"]
+REQUEST_FEATURE_SCHEMA = [
+    "gap", "grp", "voltage", "current", "sub_metering_1", "sub_metering_2", "sub_metering_3",
+]
 
 # The experiments directory is mounted into the container at /app/experiments.
 EXPERIMENTS_DIR = os.environ.get("EXPERIMENTS_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "experiments"))
@@ -141,18 +146,43 @@ class ForecastService:
 
                 # Parse Phase 3 vs Legacy config
                 exp_meta = cfg.get("experiment", {})
+                architecture_config = cfg.get("architecture", {}) or cfg.get("model", {})
                 exp_id = exp_meta.get("id", None)
                 exp_name = exp_meta.get("name", exp_folder_name)
                 dataset_name = exp_meta.get("dataset", "ihepc")
-                horizon = exp_meta.get("horizon", 24)
-                lookback = exp_meta.get("lookback", cfg.get("model", {}).get("lookback", 96))
+                horizon = int(exp_meta.get("horizon") or architecture_config.get("forecast_horizon") or 24)
+                lookback = int(exp_meta.get("lookback") or architecture_config.get("lookback") or 96)
                 
                 # Check if it already exists in the DB (by name, as name must be unique)
                 entry = db.query(ModelRegistry).filter(ModelRegistry.name == exp_name).first()
-                if entry and entry.updated_at and entry.updated_at.timestamp() >= mtime:
+                if (
+                    entry
+                    and entry.updated_at
+                    and entry.updated_at.timestamp() >= mtime
+                    and entry.artifact_contract
+                    and entry.artifact_contract.get("expected_model_input_shape") == [lookback, len(REQUEST_FEATURE_SCHEMA)]
+                ):
                     continue  # Already up to date
 
                 m = summary.get("final_unscaled") or summary.get("metrics", {}).get("final_unscaled") or summary.get("final") or summary.get("metrics", {}).get("final", {})
+                contract = {
+                    "architecture": cfg.get("architecture", {}).get("name") or cfg.get("model", {}).get("name"),
+                    "dataset": dataset_name,
+                    "horizon": horizon,
+                    "lookback": lookback,
+                    "sampling_interval": "1h",
+                    "target_schema": TARGET_COLS,
+                    "request_feature_schema": REQUEST_FEATURE_SCHEMA,
+                    "target_unit": "kW",
+                    "preprocessing": {"artifact": "pipeline.pkl", "feature_schema": ["gap"]},
+                    "required_files": list(required_files),
+                    "artifact_location": os.path.relpath(exp_path, EXPERIMENTS_DIR),
+                    "evaluation_metrics": m,
+                    "expected_model_input_shape": [lookback, len(REQUEST_FEATURE_SCHEMA)],
+                    "accepted_request_shapes": [[lookback, len(REQUEST_FEATURE_SCHEMA)]],
+                    "expected_output_shape": [horizon, len(TARGET_COLS)],
+                    "fingerprint": summary.get("model_fingerprint"),
+                }
                 
                 if entry:
                     # Update existing entry
@@ -164,6 +194,8 @@ class ForecastService:
                     entry.model_fingerprint = summary.get("model_fingerprint")
                     entry.mae = m.get("mae")
                     entry.rmse = m.get("rmse")
+                    entry.artifact_contract = contract
+                    entry.contract_validated_at = datetime.now(timezone.utc)
                     entry.updated_at = datetime.fromtimestamp(mtime, tz=timezone.utc)
                 else:
                     # Create new entry
@@ -176,6 +208,8 @@ class ForecastService:
                         lookback=lookback,
                         experiment_path=exp_path,
                         model_fingerprint=summary.get("model_fingerprint"),
+                        artifact_contract=contract,
+                        contract_validated_at=datetime.now(timezone.utc),
                         active=False,  # Never auto-activate
                         mae=m.get("mae"),
                         rmse=m.get("rmse"),
@@ -192,6 +226,8 @@ class ForecastService:
 
     def validate_artifact_contract(self, entry: ModelRegistry) -> list[str]:
         """Return contract violations before an artifact can be served or activated."""
+        if not entry.artifact_contract:
+            return ["artifact contract metadata is missing"]
         required = ("model.pt", "pipeline.pkl", "config.yaml", "metrics.json")
         missing = [name for name in required if not os.path.isfile(os.path.join(entry.experiment_path, name))]
         if missing:
@@ -200,24 +236,85 @@ class ForecastService:
             import yaml
             with open(os.path.join(entry.experiment_path, "config.yaml")) as handle:
                 config = yaml.safe_load(handle) or {}
-            configured_horizon = config.get("experiment", {}).get("horizon")
+            with open(os.path.join(entry.experiment_path, "metrics.json")) as handle:
+                metrics = json.load(handle)
+            configured_horizon = (
+                config.get("experiment", {}).get("horizon")
+                or config.get("architecture", {}).get("forecast_horizon")
+                or config.get("model", {}).get("forecast_horizon")
+                or config.get("forecast_horizon")
+            )
             if configured_horizon is not None and int(configured_horizon) != entry.horizon:
                 return ["registry horizon does not match config.yaml"]
             if not (config.get("architecture", {}).get("name") or config.get("model", {}).get("name")):
                 return ["architecture name missing from config.yaml"]
+            if not isinstance(metrics, dict):
+                return ["metrics.json must contain an object"]
+            contract = entry.artifact_contract
+            if contract.get("horizon") != entry.horizon or contract.get("lookback") != entry.lookback:
+                return ["artifact contract does not match registry horizon or lookback"]
+            if contract.get("target_schema") != TARGET_COLS:
+                return ["artifact contract target schema is unsupported"]
+            if contract.get("request_feature_schema") != REQUEST_FEATURE_SCHEMA:
+                return ["artifact contract request feature schema is unsupported"]
+            if contract.get("expected_model_input_shape") != [entry.lookback, len(REQUEST_FEATURE_SCHEMA)]:
+                return ["artifact contract model input shape is invalid"]
+            if contract.get("accepted_request_shapes") != [[entry.lookback, len(REQUEST_FEATURE_SCHEMA)]]:
+                return ["artifact contract accepted request shapes are invalid"]
+            if os.path.isabs(contract.get("artifact_location", "")):
+                return ["artifact contract must use a portable relative location"]
+            with open(os.path.join(entry.experiment_path, "model.pt"), "rb") as handle:
+                model_fingerprint = hashlib.file_digest(handle, "sha256").hexdigest()
+            if model_fingerprint != contract.get("fingerprint") or model_fingerprint != entry.model_fingerprint:
+                return ["model.pt fingerprint does not match registry metadata"]
         except Exception as exc:
-            return [f"invalid config.yaml: {type(exc).__name__}"]
+            return [f"invalid model metadata: {type(exc).__name__}"]
         return []
+
+    def sync_registry(self, db: Session) -> None:
+        """Refresh registry metadata and ensure startup has a deployable model."""
+        self._seed_registry_from_disk(db)
+        active_entries = db.query(ModelRegistry).filter(ModelRegistry.active.is_(True)).all()
+        for entry in active_entries:
+            if self.validate_artifact_contract(entry):
+                entry.active = False
+        db.flush()
+
+        active_pairs = {
+            (entry.dataset, entry.horizon)
+            for entry in db.query(ModelRegistry).filter(ModelRegistry.active.is_(True)).all()
+        }
+        candidates = (
+            db.query(ModelRegistry)
+            .filter(ModelRegistry.active.is_(False))
+            .order_by(ModelRegistry.updated_at.desc(), ModelRegistry.id.desc())
+            .all()
+        )
+        for entry in candidates:
+            pair = (entry.dataset, entry.horizon)
+            if pair in active_pairs or self.validate_artifact_contract(entry):
+                continue
+            try:
+                self.warm_model(entry)
+            except Exception:
+                continue
+            entry.active = True
+            active_pairs.add(pair)
+        db.commit()
 
     def _resolve_entry(self, model_name: str, horizon: int, db: Session) -> ModelRegistry:
         """Resolve an exact registered model; never substitute an active model."""
         entry = (
             db.query(ModelRegistry)
-            .filter(ModelRegistry.name == model_name, ModelRegistry.horizon == horizon)
+            .filter(
+                ModelRegistry.name == model_name,
+                ModelRegistry.horizon == horizon,
+                ModelRegistry.active.is_(True),
+            )
             .first()
         )
         if entry is None:
-            raise ValueError(f"No registered model named '{model_name}' supports the {horizon}h horizon.")
+            raise ValueError(f"No active model named '{model_name}' supports the {horizon}h horizon.")
         violations = self.validate_artifact_contract(entry)
         if violations:
             raise ValueError(f"Model '{model_name}' is not deployable: {'; '.join(violations)}")
@@ -264,6 +361,12 @@ class ForecastService:
             # These legacy models expect the full config dict
             model = ModelClass(config.get("model", {}))
         else:
+            accepted_parameters = inspect.signature(ModelClass.__init__).parameters
+            model_kwargs = {
+                key: value
+                for key, value in model_kwargs.items()
+                if key in accepted_parameters
+            }
             model = ModelClass(**model_kwargs)
 
         model.to(self.device)
@@ -273,10 +376,16 @@ class ForecastService:
         self._model = model
         self._cached_model_id = entry.id
 
+    def warm_model(self, entry: ModelRegistry) -> None:
+        """Load a validated registry entry so readiness proves inference can start."""
+        self._ensure_loaded(entry)
+
     def load_active_model(self, db: Session) -> bool:
         """Load the currently active model.  Returns True if one was found."""
         entry = db.query(ModelRegistry).filter(ModelRegistry.active == True).first()
         if not entry:
+            return False
+        if self.validate_artifact_contract(entry):
             return False
         self._ensure_loaded(entry)
         return True
@@ -330,8 +439,8 @@ class ForecastService:
                     "last_trained":      (
                         entry.created_at.isoformat() if entry.created_at else None
                     ),
-                    "parameters": {},
-                    "status":    "active" if entry.active else "registered",
+                    "parameters": {"forecast_horizon": str(entry.horizon), "lookback": str(entry.lookback or "")},
+                    "status": "invalid" if self.validate_artifact_contract(entry) else ("active" if entry.active else "inactive"),
                 })
             return result
         finally:
@@ -414,6 +523,7 @@ class ForecastService:
             "grp": 1,
             "voltage": 2,
             "gi": 3,
+            "current": 3,
             "sub_metering_1": 4,
             "sub_metering_2": 5,
             "sub_metering_3": 6
@@ -468,9 +578,19 @@ class ForecastService:
             torch.tensor(processed[cols].values, dtype=torch.float32)
             .unsqueeze(0).to(self.device)
         )
-        feat_cols = [c for c in processed.columns if c != "timestamp" and c not in cols]
+        if calendar is not None:
+            calendar_values = np.asarray(calendar, dtype=np.float32)[-lookback:]
+        else:
+            calendar_index = pd.DatetimeIndex(ts[-lookback:])
+            calendar_values = generate_calendar_features(
+                calendar_index.hour.values,
+                calendar_index.dayofweek.values,
+                calendar_index.month.values,
+            )
+        if calendar_values.shape != (lookback, 6):
+            raise ValueError(f"Calendar features must be [{lookback}, 6], got {calendar_values.shape}.")
         temp = (
-            torch.tensor(processed[feat_cols].values, dtype=torch.float32)
+            torch.tensor(calendar_values, dtype=torch.float32)
             .unsqueeze(0).to(self.device)
         )
 
@@ -483,7 +603,12 @@ class ForecastService:
         # 7. Inverse transform to return real kW values
         if hasattr(self._pipeline, 'scaler'):
             preds_np = self._pipeline.scaler.inverse_transform(preds_np)
-            
+
+        # The bundled models are multi-channel, but the user-facing product
+        # forecasts Global Active Power (GAP) only.
+        if preds_np.ndim > 1:
+            preds_np = preds_np[:, :1]
+
         # Ensure Global Active Power (column 0) is never negative
         if preds_np.ndim > 1:
             preds_np[:, 0] = np.clip(preds_np[:, 0], 0.01, None)
@@ -510,7 +635,12 @@ class ForecastService:
         db = SessionLocal()
         try:
             self._seed_registry_from_disk(db)
-            names = [e.name for e in db.query(ModelRegistry).all()]
+            names = [
+                e.name for e in db.query(ModelRegistry).filter(
+                    ModelRegistry.horizon == horizon,
+                    ModelRegistry.active.is_(True),
+                ).all()
+            ]
         finally:
             db.close()
 

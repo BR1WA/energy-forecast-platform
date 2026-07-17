@@ -331,7 +331,7 @@ export default function DashboardPage() {
               <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4">
                 <KPICard icon={<DollarSign className="w-4 h-4" />} label="Estimated Bill" value={`${exec?.estimated_bill || 0}`} unit="MAD" color="text-emerald-400" bgColor="bg-emerald-600/10" delta={exec?.bill_delta} deltaUnit="MAD" />
                 <KPICard icon={<Sparkles className="w-4 h-4" />} label="Potential Savings" value={`${exec?.potential_savings || 0}`} unit="MAD" color="text-amber-400" bgColor="bg-amber-600/10" />
-                <KPICard icon={<Shield className="w-4 h-4" />} label="Forecast" value={`${radar?.confidence?.pct || 85}%`} unit="" color="text-indigo-400" bgColor="bg-indigo-600/10" isText subtitle={radar?.confidence?.basis} />
+                <KPICard icon={<Shield className="w-4 h-4" />} label="Forecast" value={`${radar?.confidence?.pct ?? 0}%`} unit="" color="text-indigo-400" bgColor="bg-indigo-600/10" isText subtitle={radar?.confidence?.basis || 'Not calibrated'} />
               </div>
             </div>
 
@@ -532,9 +532,9 @@ export default function DashboardPage() {
               {/* Load metrics */}
               <div className="mt-3 p-3 rounded-xl bg-[#0A0F1C]/80 border border-white/[0.04] grid grid-cols-2 gap-2.5">
                 <LoadMetric label="Power" value={`${liveStatus?.load?.active_power || 0}`} unit="kW" />
-                <LoadMetric label="Voltage" value={`${liveStatus?.load?.voltage || 230}`} unit="V" />
+                <LoadMetric label="Voltage" value={`${liveStatus?.load?.voltage ?? 'N/A'}`} unit="V" />
                 <LoadMetric label="Current" value={`${liveStatus?.load?.current || 0}`} unit="A" />
-                <LoadMetric label="Frequency" value={`${liveStatus?.load?.frequency || 50}`} unit="Hz" />
+                <LoadMetric label="Frequency" value={`${liveStatus?.load?.frequency ?? 'N/A'}`} unit="Hz" />
               </div>
             </CardContent>
           </Card>
@@ -656,9 +656,10 @@ export default function DashboardPage() {
                 <div className="absolute left-3 top-0 bottom-0 w-[1px] bg-gradient-to-b from-indigo-500/40 via-indigo-500/20 to-transparent" />
                 <div className="space-y-3 pl-8">
                   <TimelineEvent time="Now" label="Current consumption" detail={`${liveCons?.current_power || 0} kW`} severity="live" />
-                  <TimelineEvent time={forecast?.peak_hour?.split(' ')[0] || '18:30'} label="Peak expected" detail="Highest demand period" severity="warning" />
-                  <TimelineEvent time="16:00" label="High temperature" detail={`${weather?.temperature || 25}°C expected`} severity="info" />
-                  <TimelineEvent time="22:00" label="Off-peak tariff begins" detail="Lower rates available" severity="success" />
+                  {forecast?.peak_hour && <TimelineEvent time={forecast.peak_hour} label="Forecast peak" detail="From the persisted forecast" severity="warning" />}
+                  {weather?.temperature !== undefined && weather?.temperature !== null && (
+                    <TimelineEvent time="Now" label="Observed temperature" detail={`${weather.temperature}°C`} severity="info" />
+                  )}
                 </div>
               </div>
 
@@ -666,7 +667,7 @@ export default function DashboardPage() {
               <div className="p-4 rounded-xl bg-[#0A0F1C]/60 border border-white/[0.04] grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Expected Peak</p>
-                  <p className="text-sm font-bold text-white mt-0.5">{forecast?.peak_hour?.split(' ')[0] || '18:30'}</p>
+                  <p className="text-sm font-bold text-white mt-0.5">{forecast?.peak_hour || 'Not available'}</p>
                 </div>
                 <div>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Est. Cost</p>
@@ -674,11 +675,11 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Confidence</p>
-                  <p className="text-sm font-bold text-emerald-400 mt-0.5">{forecast?.forecast_reliability || 'High'}</p>
+                  <p className="text-sm font-bold text-emerald-400 mt-0.5">{forecast?.forecast_reliability || 'Not available'}</p>
                 </div>
                 <div>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Reason</p>
-                  <p className="text-xs text-slate-400 mt-0.5 leading-snug">Temperature + Pattern</p>
+                  <p className="text-xs text-slate-400 mt-0.5 leading-snug">{forecast?.explainability || 'No forecast available'}</p>
                 </div>
               </div>
 
@@ -716,7 +717,7 @@ export default function DashboardPage() {
               <BudgetRing
                 progress={budget?.progress_pct || 0}
                 current={budget?.current_cost || 0}
-                target={budget?.target || 400}
+                target={budget?.target ?? 0}
               />
 
               {/* Mission Status */}

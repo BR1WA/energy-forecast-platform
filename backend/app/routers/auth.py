@@ -23,6 +23,7 @@ from app.services.auth_service import (
     verify_refresh_token
 )
 from app.services.site_service import ensure_default_site
+from app.services.audit_service import record_audit_event
 from app.limiter import limiter
 from app.config import get_settings
 
@@ -57,6 +58,7 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     db.commit()
     db.refresh(user)
     ensure_default_site(db, user.id)
+    record_audit_event(db, "auth.registered", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
     db.commit()
 
     # Generate tokens
@@ -87,6 +89,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
 
     # Update last login
     user.last_login = datetime.now(timezone.utc)
+    record_audit_event(db, "auth.login", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
     db.commit()
 
     # Generate tokens
@@ -302,4 +305,3 @@ def delete_avatar(
         db.refresh(current_user)
         
     return UserResponse.model_validate(current_user)
-

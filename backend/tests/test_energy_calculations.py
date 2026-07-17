@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
-from app.models import EnergyBudget, SiteSettings, SmartMeterReading, User
+from app.models import EnergyBudget, Meter, Site, SiteSettings, SmartMeterReading, User
 from app.services.auth_service import hash_password
 from app.services.consumption_service import consumption_service
 from app.services.site_service import ensure_default_site, get_default_meter
@@ -55,6 +55,51 @@ def test_interval_energy_tariff_budget_and_long_gap_handling():
         assert summary["budget"]["target_mad"] == 20.0
         assert summary["budget"]["spent_mad"] == summary["total_cost"]
         assert summary["coverage_pct"] > 0
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_monthly_summary_uses_each_site_timezone_and_tariff():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(bind=engine)
+    db = sessionmaker(bind=engine)()
+    try:
+        user = User(email="multi-site@example.com", password_hash=hash_password("password123"), role="user", is_active=True)
+        db.add(user)
+        db.commit()
+        utc_site = ensure_default_site(db, user.id)
+        utc_site.timezone = "UTC"
+        utc_settings = db.query(SiteSettings).filter(SiteSettings.site_id == utc_site.id).one()
+        utc_settings.peak_rate = 2.0
+        utc_settings.off_peak_rate = 1.0
+        utc_settings.peak_start_hour = 0
+        utc_settings.peak_end_hour = 1
+        utc_meter = get_default_meter(db, user.id)
+
+        tokyo_site = Site(user_id=user.id, name="Tokyo site", timezone="Asia/Tokyo")
+        db.add(tokyo_site)
+        db.flush()
+        tokyo_meter = Meter(site_id=tokyo_site.id, name="Tokyo meter", source_type="csv")
+        tokyo_settings = SiteSettings(
+            site_id=tokyo_site.id, peak_rate=3.0, off_peak_rate=1.0,
+            peak_start_hour=7, peak_end_hour=8,
+        )
+        db.add_all([tokyo_meter, tokyo_settings])
+        db.flush()
+        start = datetime(2026, 7, 1, 22, 0, tzinfo=timezone.utc)
+        for meter in (utc_meter, tokyo_meter):
+            db.add_all([
+                SmartMeterReading(meter_id=meter.id, timestamp=start, gap=1.0, grp=0.0, voltage=230, intensity=4.3, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0, source="csv", quality="validated"),
+                SmartMeterReading(meter_id=meter.id, timestamp=start + timedelta(hours=1), gap=1.0, grp=0.0, voltage=230, intensity=4.3, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0, source="csv", quality="validated"),
+            ])
+        db.commit()
+
+        summary = consumption_service.get_monthly_summary(db, user.id, "2026-07")
+        assert summary["total_kwh"] == 2.0
+        assert summary["total_cost"] == 4.0
+        assert summary["off_peak_kwh"] == 1.0
+        assert summary["peak_kwh"] == 1.0
     finally:
         db.close()
         Base.metadata.drop_all(bind=engine)
