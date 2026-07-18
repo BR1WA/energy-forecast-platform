@@ -23,12 +23,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import torch
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models.models import ModelRegistry
 from training.features.feature_engineering import FeaturePipeline
+
+try:
+    import torch
+except Exception:  # pragma: no cover - handled at runtime when inference is requested
+    torch = None
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -109,7 +113,11 @@ class ForecastService:
         self._model = None
         self._pipeline: Optional[FeaturePipeline] = None
         self._config: Optional[dict] = None
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            if torch is not None
+            else "cpu"
+        )
         # Lazy-loaded sample datasets
         self._samples: Optional[Dict[str, Any]] = None
 
@@ -574,6 +582,8 @@ class ForecastService:
             )
 
         # 5. Build tensors (cols maintains correct features dimension)
+        if torch is None:
+            raise RuntimeError("PyTorch is required for inference but is not installed in this environment.")
         x = (
             torch.tensor(processed[cols].values, dtype=torch.float32)
             .unsqueeze(0).to(self.device)

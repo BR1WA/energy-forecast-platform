@@ -9,12 +9,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ARG INSTALL_TORCH=1
+RUN if [ "$INSTALL_TORCH" = "1" ]; then \
+      pip install --no-cache-dir -r requirements.txt; \
+    else \
+      grep -vE '^torch([<>=!~].*)?$' requirements.txt > requirements-no-torch.txt && \
+      pip install --no-cache-dir -r requirements-no-torch.txt; \
+    fi
 
 FROM dependencies AS test-dependencies
 
 COPY backend/requirements-dev.txt ./requirements-dev.txt
-RUN pip install --no-cache-dir -r requirements-dev.txt
+ARG INSTALL_TORCH=1
+RUN if [ "$INSTALL_TORCH" = "1" ]; then \
+      pip install --no-cache-dir -r requirements-dev.txt; \
+    else \
+      grep -vE '^-r[[:space:]]+requirements.txt$' requirements-dev.txt > requirements-dev-only.txt && \
+      pip install --no-cache-dir -r requirements-dev-only.txt; \
+    fi
 
 FROM dependencies AS application
 
