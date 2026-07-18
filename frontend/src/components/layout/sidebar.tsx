@@ -21,6 +21,7 @@ import {
   Sparkles,
   Target,
   FileText,
+  Shield,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -96,6 +97,13 @@ const navItems: NavItem[] = [
     translationKey: 'nav.models',
     href: '/models',
     icon: Cpu,
+  },
+  {
+    label: 'Admin Panel',
+    translationKey: 'nav.admin',
+    href: '/admin',
+    icon: Shield,
+    adminOnly: true,
   },
   {
     label: 'Settings',
