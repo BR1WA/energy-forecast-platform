@@ -63,7 +63,7 @@ jobs:
         run: python -m pytest -q
 
       - name: Build backend test image
-        run: docker build --target test -t energy-backend-test -f backend/Dockerfile .
+        run: docker build --build-arg INSTALL_TORCH=0 --target test -t energy-backend-test -f backend/Dockerfile .
 
   frontend:
     name: Frontend Quality Gates
