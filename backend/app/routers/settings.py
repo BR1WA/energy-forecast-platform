@@ -10,8 +10,8 @@ from app.services.audit_service import record_audit_event
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 class SetupPayload(BaseModel):
-    site_name: str = "Default site"
-    timezone: str = "Africa/Casablanca"
+    site_name: str | None = None
+    timezone: str | None = None
     country: str
     region: str
     electricity_provider: str
@@ -49,8 +49,6 @@ def get_settings(
     current_user: User = Depends(get_current_user)
 ):
     site = ensure_default_site(db, current_user.id)
-    site.name = payload.site_name.strip() or "Default site"
-    site.timezone = payload.timezone
     settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first()
     if not settings:
         return {
@@ -74,6 +72,10 @@ def save_setup(
     current_user: User = Depends(get_current_user)
 ):
     site = ensure_default_site(db, current_user.id)
+    if payload.site_name is not None:
+        site.name = payload.site_name.strip() or "Default site"
+    if payload.timezone is not None:
+        site.timezone = payload.timezone
     settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first()
     if not settings:
         settings = SiteSettings(site_id=site.id)
