@@ -1,29 +1,68 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, MapPin, Wallet, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, MapPin, Radio, Upload, Wallet, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+import { ingestionApi, settingsApi, simulationApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { settingsApi } from '@/lib/api';
+
+type DataPath = 'csv' | 'simulator' | 'push';
 
 export default function SetupWizard() {
   const router = useRouter();
   const { refreshUser } = useAuth();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [siteName, setSiteName] = useState('My site');
   const [region, setRegion] = useState('Casablanca-Settat');
   const [provider, setProvider] = useState('ONEE');
   const [budget, setBudget] = useState('400');
+  const [dataPath, setDataPath] = useState<DataPath>('csv');
+  const [meterId, setMeterId] = useState<number | null>(null);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<{ valid_rows: number; rejected_rows: number } | null>(null);
+
+  useEffect(() => {
+    ingestionApi.getMeters().then((meters) => setMeterId(meters[0]?.id ?? null)).catch(() => undefined);
+  }, []);
+
+  const previewCsv = async (file: File) => {
+    if (!meterId) {
+      toast.error('Your meter is still being prepared. Try again in a moment.');
+      return;
+    }
+    setCsvFile(file);
+    setPreview(null);
+    try {
+      const result = await ingestionApi.previewCsv(meterId, file);
+      setPreview(result);
+      if (result.valid_rows === 0) toast.error('This file has no valid readings.');
+    } catch (error) {
+      setCsvFile(null);
+      toast.error(error instanceof Error ? error.message : 'Unable to check this CSV.');
+    }
+  };
 
   const completeSetup = async () => {
+    if (dataPath === 'csv' && (!csvFile || !preview || preview.valid_rows === 0)) {
+      toast.error('Choose a CSV with at least one valid reading before continuing.');
+      return;
+    }
     setSaving(true);
     try {
-      await settingsApi.postSetup({ country: 'Morocco', region, electricity_provider: provider, currency: 'MAD', peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22, sensor_type: 'simulator', sensor_api_url: null });
+      await settingsApi.postSetup({
+        site_name: siteName.trim() || 'My site', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Casablanca',
+        country: 'Morocco', region, electricity_provider: provider, currency: 'MAD',
+        peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22,
+        sensor_type: dataPath, sensor_api_url: null,
+      });
       await settingsApi.setBudget({ monthly_budget_mad: Number(budget) || 0 });
+      if (dataPath === 'csv' && csvFile && meterId) await ingestionApi.importCsv(meterId, csvFile);
+      if (dataPath === 'simulator') await simulationApi.start();
       await refreshUser();
       toast.success('Your energy workspace is ready.');
-      router.push('/dashboard');
+      router.push(dataPath === 'push' ? '/smart-meter' : '/dashboard');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to complete setup.');
     } finally {
@@ -31,5 +70,21 @@ export default function SetupWizard() {
     }
   };
 
-  return <main className="min-h-screen bg-[#0A0F1C] px-6 py-12 text-slate-200"><div className="mx-auto max-w-xl"><div className="mb-10 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500 text-white"><Zap className="h-5 w-5" /></div><div><h1 className="text-xl font-bold text-white">Set up your site</h1><p className="text-sm text-slate-400">A couple of details and you are ready to monitor energy.</p></div></div>{step === 1 ? <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><MapPin className="h-5 w-5" /><h2 className="font-semibold">Location and provider</h2></div><label className="block text-sm">Region<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={region} onChange={(event) => setRegion(event.target.value)} /></label><label className="block text-sm">Electricity provider<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={provider} onChange={(event) => setProvider(event.target.value)} /></label><button className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setStep(2)}>Next <ArrowRight className="h-4 w-4" /></button></section> : <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><Wallet className="h-5 w-5" /><h2 className="font-semibold">Monthly budget</h2></div><label className="block text-sm">Budget in MAD<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></label><div className="flex gap-3"><button className="rounded-md border border-white/10 px-4 py-2 text-sm" onClick={() => setStep(1)}>Back</button><button className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white" onClick={completeSetup} disabled={saving}>{saving ? 'Saving...' : 'Complete setup'}</button></div></section>}</div></main>;
+  return (
+    <main className="min-h-screen bg-[#0A0F1C] px-5 py-10 text-slate-200 sm:px-8">
+      <div className="mx-auto max-w-2xl">
+        <header className="mb-8 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white"><Zap className="h-5 w-5" /></div>
+          <div><h1 className="text-xl font-bold text-white">Set up your energy workspace</h1><p className="text-sm text-slate-400">Configure a site, tariff, budget, and a deliberate data source.</p></div>
+        </header>
+        <div className="mb-8 flex gap-2 text-xs text-slate-400"><span className={step >= 1 ? 'text-blue-300' : ''}>1 Site</span><span>/</span><span className={step >= 2 ? 'text-blue-300' : ''}>2 Budget</span><span>/</span><span className={step >= 3 ? 'text-blue-300' : ''}>3 Data</span></div>
+
+        {step === 1 && <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><MapPin className="h-5 w-5" /><h2 className="font-semibold">Site and tariff</h2></div><label className="block text-sm">Site name<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={siteName} onChange={(event) => setSiteName(event.target.value)} /></label><label className="block text-sm">Region<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={region} onChange={(event) => setRegion(event.target.value)} /></label><label className="block text-sm">Electricity provider<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={provider} onChange={(event) => setProvider(event.target.value)} /></label><button className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setStep(2)}>Next <ArrowRight className="h-4 w-4" /></button></section>}
+
+        {step === 2 && <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><Wallet className="h-5 w-5" /><h2 className="font-semibold">Monthly budget</h2></div><label className="block text-sm">Budget in MAD<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></label><div className="flex gap-3"><button className="flex items-center gap-2 rounded-md border border-white/10 px-4 py-2 text-sm" onClick={() => setStep(1)}><ArrowLeft className="h-4 w-4" /> Back</button><button className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setStep(3)}>Next <ArrowRight className="h-4 w-4" /></button></div></section>}
+
+        {step === 3 && <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><Radio className="h-5 w-5" /><h2 className="font-semibold">Choose your first data source</h2></div><div className="grid gap-3 sm:grid-cols-3">{([{ id: 'csv', label: 'Import CSV', detail: 'Validate and import meter readings now.' }, { id: 'simulator', label: 'Simulator', detail: 'Generate clearly labelled sample readings.' }, { id: 'push', label: 'Push API', detail: 'Connect a meter with its API key next.' }] as const).map((option) => <button key={option.id} onClick={() => setDataPath(option.id)} className={`min-h-28 rounded-md border p-3 text-left ${dataPath === option.id ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-[#111827]'}`}><p className="text-sm font-semibold text-white">{option.label}</p><p className="mt-2 text-xs text-slate-400">{option.detail}</p></button>)}</div>{dataPath === 'csv' && <div className="rounded-md border border-white/10 bg-[#111827] p-4"><label className="flex cursor-pointer items-center gap-2 text-sm text-white"><Upload className="h-4 w-4" /> Choose UTF-8 CSV<input className="sr-only" type="file" accept=".csv,text/csv" onChange={(event) => event.target.files?.[0] && previewCsv(event.target.files[0])} /></label>{preview && <p className="mt-3 text-xs text-slate-300"><CheckCircle2 className="mr-1 inline h-3.5 w-3.5 text-emerald-400" />{preview.valid_rows} valid rows, {preview.rejected_rows} rejected. The import uses the validated rows only.</p>}</div>}<div className="flex gap-3"><button className="flex items-center gap-2 rounded-md border border-white/10 px-4 py-2 text-sm" onClick={() => setStep(2)}><ArrowLeft className="h-4 w-4" /> Back</button><button className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" onClick={completeSetup} disabled={saving}>{saving ? 'Completing...' : dataPath === 'push' ? 'Continue to connection' : 'Complete setup'}</button></div></section>}
+      </div>
+    </main>
+  );
 }

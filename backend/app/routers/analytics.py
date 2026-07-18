@@ -10,7 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Alert, Forecast, User
+from app.models import Alert, Forecast, ModelRegistry, Site, SiteSettings, User
 from app.schemas import AnalyticsSummary, ForecastHistoryItem
 from app.services.auth_service import get_current_user
 
@@ -105,12 +105,41 @@ def export_pdf_report(
         story.append(Paragraph("No persisted forecast is available for this account.", styles["BodyText"]))
     else:
         values = _forecast_values(forecast)
+        site = (
+            db.query(Site)
+            .filter(Site.id == forecast.site_id, Site.user_id == current_user.id)
+            .first()
+            if forecast.site_id is not None
+            else None
+        )
+        site_settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first() if site else None
+        model = db.query(ModelRegistry).filter(ModelRegistry.id == forecast.model_registry_id).first() if forecast.model_registry_id else None
+        period = (
+            f"{forecast.input_start.isoformat()} to {forecast.input_end.isoformat()}"
+            if forecast.input_start and forecast.input_end
+            else "Input period was not recorded"
+        )
         story.extend([
             Spacer(1, 12),
+            Paragraph(f"Site: {site.name if site else 'Not recorded'}", styles["BodyText"]),
+            Paragraph(f"Site timezone: {site.timezone if site else 'Not recorded'}", styles["BodyText"]),
+            Paragraph(f"Input source: {forecast.input_source or 'Not recorded'}", styles["BodyText"]),
+            Paragraph(f"Input period: {period}", styles["BodyText"]),
             Paragraph(f"Model: {forecast.model_name}", styles["BodyText"]),
+            Paragraph(f"Model version: {model.version if model else 'Not recorded'}", styles["BodyText"]),
             Paragraph(f"Created: {forecast.created_at.isoformat() if forecast.created_at else 'Unknown'}", styles["BodyText"]),
             Paragraph(f"Forecast horizon: {len(values)} steps", styles["BodyText"]),
             Paragraph(f"Peak predicted demand: {max(values):.3f} kW" if values else "No prediction values were stored.", styles["BodyText"]),
+            Paragraph(
+                f"Tariff context: {site_settings.currency} peak {site_settings.peak_rate:.3f}, off-peak {site_settings.off_peak_rate:.3f}"
+                if site_settings
+                else "Tariff context was not recorded for this forecast site.",
+                styles["BodyText"],
+            ),
+            Paragraph(
+                f"Uncertainty: {forecast.confidence_method or 'Point forecast without a calibrated interval.'}",
+                styles["BodyText"],
+            ),
             Spacer(1, 12),
         ])
         rows = [["Step", "Predicted demand (kW)"]] + [[str(index + 1), f"{value:.3f}"] for index, value in enumerate(values)]

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import EnergyBudget, SiteSettings, User
+from app.models import EnergyBudget, Site, SiteSettings, User
 from app.services.auth_service import get_current_user
 from app.services.site_service import ensure_default_site
 from app.services.audit_service import record_audit_event
@@ -10,6 +10,8 @@ from app.services.audit_service import record_audit_event
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 class SetupPayload(BaseModel):
+    site_name: str = "Default site"
+    timezone: str = "Africa/Casablanca"
     country: str
     region: str
     electricity_provider: str
@@ -47,6 +49,8 @@ def get_settings(
     current_user: User = Depends(get_current_user)
 ):
     site = ensure_default_site(db, current_user.id)
+    site.name = payload.site_name.strip() or "Default site"
+    site.timezone = payload.timezone
     settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first()
     if not settings:
         return {

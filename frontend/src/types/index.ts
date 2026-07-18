@@ -87,10 +87,11 @@ export interface ForecastMetrics {
 export interface ForecastHistory {
   id: string;
   model_name: string;
-  created_at: string;
-  status: 'completed' | 'processing' | 'failed';
+  created_at: string | null;
+  peak_power?: number | null;
+  status?: 'completed' | 'processing' | 'failed';
   metrics?: ForecastMetrics;
-  data_points: number;
+  data_points?: number;
 }
 
 export interface SampleDataset {
@@ -105,11 +106,17 @@ export interface SampleDataset {
 // ============================================================
 export interface AnalyticsSummary {
   total_forecasts: number;
+  total_alerts: number;
   unacknowledged_alerts: number;
-  avg_peak_power: number;
-  models_used: number;
+  avg_peak_power: number | null;
+  models_used: Record<string, number>;
   recent_forecasts: ForecastHistory[];
-  consumption_trend?: ConsumptionPoint[];
+  consumption_trend: ConsumptionPoint[];
+  weekly_consumption?: Array<Record<string, unknown>>;
+  consumption_by_hour?: Array<Record<string, unknown>>;
+  monthly_accuracy?: Array<Record<string, unknown>>;
+  model_performance?: Array<Record<string, unknown>>;
+  heatmap_data?: Array<Record<string, unknown>>;
 }
 
 export interface ModelUsage {
@@ -266,11 +273,14 @@ export interface SiteCircuit {
 export interface Site {
   id: string;
   name: string;
-  meterId: string;
+  meterId: string | null;
   status: string;
   load: number;
   dailyConsumption: number;
   peakPower: number;
   monthlyCost: number;
-  circuits: SiteCircuit[];
+  currency?: string;
+  source?: string | null;
+  lastSeenAt?: string | null;
+  ageSeconds?: number | null;
 }

@@ -36,7 +36,9 @@ def _is_peak(hour: int, settings: SiteSettings) -> bool:
 
 class ConsumptionService:
     @staticmethod
-    def _readings_for_user(db: Session, user_id: int, before: datetime | None = None):
+    def _readings_for_user(
+        db: Session, user_id: int, before: datetime | None = None, site_id: int | None = None,
+    ):
         query = (
             db.query(SmartMeterReading, Meter)
             .join(Meter, SmartMeterReading.meter_id == Meter.id)
@@ -45,18 +47,22 @@ class ConsumptionService:
         )
         if before is not None:
             query = query.filter(SmartMeterReading.timestamp < before)
+        if site_id is not None:
+            query = query.filter(Site.id == site_id)
         return query.order_by(Meter.id, SmartMeterReading.timestamp).all()
 
     @staticmethod
-    def _settings_for_user(db: Session, user_id: int) -> dict[int, SiteSettings]:
+    def _settings_for_user(db: Session, user_id: int, site_id: int | None = None) -> dict[int, SiteSettings]:
+        query = (
+            db.query(SiteSettings)
+            .join(Site, SiteSettings.site_id == Site.id)
+            .filter(Site.user_id == user_id)
+        )
+        if site_id is not None:
+            query = query.filter(Site.id == site_id)
         return {
             settings.site_id: settings
-            for settings in (
-                db.query(SiteSettings)
-                .join(Site, SiteSettings.site_id == Site.id)
-                .filter(Site.user_id == user_id)
-                .all()
-            )
+            for settings in query.all()
         }
 
     def _add_interval(
@@ -87,20 +93,20 @@ class ConsumptionService:
             totals["daily"][day]["cost"] += segment_kwh * rate
             cursor = segment_end
 
-    def _month_calculation(self, db: Session, user_id: int, month: str) -> dict:
-        settings_by_site = self._settings_for_user(db, user_id)
+    def _month_calculation(self, db: Session, user_id: int, month: str, site_id: int | None = None) -> dict:
+        settings_by_site = self._settings_for_user(db, user_id, site_id)
         if not settings_by_site:
             return self._empty_month(month)
         default_settings = next(iter(settings_by_site.values()))
         site_windows: dict[int, tuple[ZoneInfo, datetime, datetime]] = {}
-        for site_id, settings in settings_by_site.items():
+        for settings_site_id, settings in settings_by_site.items():
             try:
                 zone = ZoneInfo(settings.site.timezone if settings.site else "UTC")
             except Exception:
                 zone = ZoneInfo("UTC")
             start_local, end_local = _month_bounds(month, zone)
-            site_windows[site_id] = (zone, start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc))
-        records = self._readings_for_user(db, user_id)
+            site_windows[settings_site_id] = (zone, start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc))
+        records = self._readings_for_user(db, user_id, site_id=site_id)
         by_meter: dict[int, list[tuple[SmartMeterReading, Meter]]] = defaultdict(list)
         for reading, meter in records:
             by_meter[meter.id].append((reading, meter))
@@ -157,7 +163,8 @@ class ConsumptionService:
         period_end = min(datetime.now(default_zone), default_end)
         days_elapsed = max(1, (period_end.date() - default_start.date()).days + 1)
         days_in_month = (default_end.date() - default_start.date()).days
-        budget = db.query(EnergyBudget).filter(EnergyBudget.user_id == user_id).first()
+        budget_query = db.query(EnergyBudget).filter(EnergyBudget.user_id == user_id)
+        budget = budget_query.filter(EnergyBudget.site_id == site_id).first() if site_id is not None else budget_query.first()
         budget_target = budget.monthly_budget_mad if budget else None
         projected_cost = totals["total_cost"] / days_elapsed * days_in_month if totals["total_cost"] else 0.0
         tariff = {
@@ -202,13 +209,15 @@ class ConsumptionService:
             "budget": {"target_mad": None, "spent_mad": 0.0, "remaining_mad": None, "progress_pct": None, "projected_mad": 0.0},
         }
 
-    def get_monthly_summary(self, db: Session, user_id: int, month: str | None = None) -> dict:
+    def get_monthly_summary(
+        self, db: Session, user_id: int, month: str | None = None, site_id: int | None = None,
+    ) -> dict:
         now = datetime.now(timezone.utc)
         selected_month = month or now.strftime("%Y-%m")
-        current = self._month_calculation(db, user_id, selected_month)
+        current = self._month_calculation(db, user_id, selected_month, site_id)
         year, month_number = (int(part) for part in selected_month.split("-"))
         previous_month = f"{year - 1}-12" if month_number == 1 else f"{year}-{month_number - 1:02d}"
-        previous = self._month_calculation(db, user_id, previous_month)
+        previous = self._month_calculation(db, user_id, previous_month, site_id)
         current["previous_month"] = {
             "month": previous["month"],
             "total_kwh": previous["total_kwh"],
@@ -230,6 +239,9 @@ class ConsumptionService:
             "status": "normal" if reading.gap < 4.0 else "high",
             "voltage": reading.voltage,
             "intensity": reading.intensity,
+            "sub_metering_1": reading.sub_metering_1,
+            "sub_metering_2": reading.sub_metering_2,
+            "sub_metering_3": reading.sub_metering_3,
             "timestamp": timestamp.isoformat(),
             "source": reading.source,
             "age_seconds": int(max(0, (datetime.now(timezone.utc) - timestamp).total_seconds())),

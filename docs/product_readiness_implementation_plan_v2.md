@@ -316,6 +316,10 @@ executed as part of Phase 8 validation rather than simulated in the product.
 
 Estimated effort: 4-6 working days
 
+Status: Complete for the PFE client-workflow baseline (2026-07-18). Outcome
+charts and recommendations remain deliberately unavailable until measured
+observations support them.
+
 ### Onboarding
 
 - Create the user's first site.
@@ -336,7 +340,8 @@ Estimated effort: 4-6 working days
 
 - Server-backed time ranges and pagination.
 - Consistent units and timezone labels.
-- Forecast confidence band and model provenance.
+- Model provenance and an explicit disclosure when a calibrated confidence
+  interval is not available.
 - Actual-versus-forecast chart after observations arrive.
 - Real CSV export generated for the selected site and period.
 

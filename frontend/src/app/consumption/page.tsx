@@ -5,7 +5,7 @@ import AppLayout from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Zap, TrendingUp, Activity, Download, RefreshCw, Sparkles, AlertTriangle, CheckCircle, Flame, Upload } from 'lucide-react';
+import { Zap, TrendingUp, Activity, Download, RefreshCw, Sparkles, AlertTriangle, CheckCircle, Upload } from 'lucide-react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -29,11 +29,7 @@ export default function ConsumptionPage() {
   const [current, setCurrent] = useState<{ kw: number; status: string; voltage?: number; intensity?: number; source?: string | null; age_seconds?: number | null; sub_metering_1?: number; sub_metering_2?: number; sub_metering_3?: number }>({
     kw: 0,
     status: 'normal',
-    voltage: 230,
     intensity: 0,
-    sub_metering_1: 0,
-    sub_metering_2: 0,
-    sub_metering_3: 0
   });
   const [history, setHistory] = useState<Array<{ kw: number; timestamp: string; timeLabel: string }>>([]);
   const [meters, setMeters] = useState<Array<{ id: number; name: string }>>([]);
@@ -122,32 +118,6 @@ export default function ConsumptionPage() {
     }
   };
 
-  // Dynamic Appliance Breakdown calculation (using sub-metering values)
-  const calculateAppliancePercentages = () => {
-    const sub1 = current.sub_metering_1 ?? 0;
-    const sub2 = current.sub_metering_2 ?? 0;
-    const sub3 = current.sub_metering_3 ?? 0;
-    const total_wh = (current.kw ?? 0) * 1000.0; // Wh equivalent
-
-    if (total_wh <= 0) {
-      return { airCon: 42, laundry: 15, kitchen: 26, lighting: 17 };
-    }
-
-    const airConPct = Math.min(80, Math.max(10, Math.round((sub3 / total_wh) * 100)));
-    const kitchenPct = Math.min(60, Math.max(5, Math.round((sub1 / total_wh) * 100)));
-    const laundryPct = Math.min(50, Math.max(5, Math.round((sub2 / total_wh) * 100)));
-    const otherPct = Math.max(5, 100 - (airConPct + kitchenPct + laundryPct));
-
-    return {
-      airCon: airConPct,
-      kitchen: kitchenPct,
-      laundry: laundryPct,
-      lighting: otherPct
-    };
-  };
-
-  const appliances = calculateAppliancePercentages();
-
   const tariff = stats.tariff;
 
   return (
@@ -158,7 +128,7 @@ export default function ConsumptionPage() {
             <h1 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-2">
               <Sparkles className="text-indigo-400 w-8 h-8" /> Energy Consumption & Insights
             </h1>
-            <p className="text-slate-400">Track dynamic household metrics, progressive utility tariffs, and real-time AI appliance analysis.</p>
+            <p className="text-slate-400">Review measured consumption, tariff costs, and data coverage for this site.</p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -202,7 +172,7 @@ export default function ConsumptionPage() {
                 {loading ? '...' : `${(current?.kw ?? 0).toFixed(3)} kW`}
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Active feed: {(current.voltage ?? 230).toFixed(1)}V / {(current.intensity ?? 0).toFixed(2)}A
+                Active feed: {current.voltage == null ? 'Voltage unavailable' : `${current.voltage.toFixed(1)}V`} / {current.intensity == null ? 'Current unavailable' : `${current.intensity.toFixed(2)}A`}
               </p>
               <p className="text-xs text-slate-500 mt-1">
                 Source: {current.source || 'none'}{current.age_seconds !== undefined && current.age_seconds !== null ? `, ${current.age_seconds}s ago` : ''}
@@ -324,28 +294,21 @@ export default function ConsumptionPage() {
                 <div className="flex gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                   <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-slate-300">
-                    Consumption is <strong>8% lower</strong> than yesterday&apos;s average daily profile.
+                    The monthly projection is <strong>{tariff.currency} {stats.budget.projected_mad.toFixed(2)}</strong>, calculated from recorded intervals.
                   </p>
                 </div>
 
                 <div className="flex gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                   <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-slate-300">
-                    Peak usage occurred at <strong>18:30</strong> (off-peak shifts recommended).
+                    Data coverage for this month is <strong>{stats.coverage_pct.toFixed(1)}%</strong>. Long gaps are excluded from interval estimates.
                   </p>
                 </div>
 
                 <div className="flex gap-3 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
                   <Sparkles className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-slate-300">
-                    Projected month-end cost is <strong>{tariff.currency} {stats.budget.projected_mad.toFixed(2)}</strong> based on recorded intervals.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                  <Flame className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-slate-300">
-                    Running washing machine after <strong>22:00 (Off-Peak Hour)</strong> would save approximately <strong>6%</strong>.
+                    Appliance recommendations are unavailable until supported by device or sub-meter evidence.
                   </p>
                 </div>
               </CardContent>
@@ -360,33 +323,12 @@ export default function ConsumptionPage() {
                 <CardDescription className="text-slate-400 text-xs">Real-time load spikes and status markers detected today.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 relative before:absolute before:inset-y-0 before:left-[17px] before:w-0.5 before:bg-white/5">
-                {/* Event 1 */}
-                <div className="flex gap-4 relative z-10">
-                  <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
-                  <div>
-                    <span className="text-[10px] font-mono text-slate-500">18:45</span>
-                    <p className="text-xs font-semibold text-white">Oven activated</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Peak load detected: +2.3 kW</p>
-                  </div>
-                </div>
-
-                {/* Event 2 */}
-                <div className="flex gap-4 relative z-10">
-                  <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                  <div>
-                    <span className="text-[10px] font-mono text-slate-500">20:11</span>
-                    <p className="text-xs font-semibold text-white">Peak demand warning</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Overall load exceeded daily alert threshold</p>
-                  </div>
-                </div>
-
-                {/* Event 3 */}
                 <div className="flex gap-4 relative z-10">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                   <div>
-                    <span className="text-[10px] font-mono text-slate-500">22:05</span>
-                    <p className="text-xs font-semibold text-white">Consumption normalized</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">HVAC load cycled off; drawing 0.15 kW</p>
+                    <span className="text-[10px] font-mono text-slate-500">Latest reading</span>
+                    <p className="text-xs font-semibold text-white">{current.source || 'No meter data'}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{current.age_seconds === null || current.age_seconds === undefined ? 'No reading timestamp is available.' : `Received ${current.age_seconds} seconds ago.`}</p>
                   </div>
                 </div>
               </CardContent>
@@ -398,53 +340,21 @@ export default function ConsumptionPage() {
             {/* Appliance breakdown */}
             <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
               <CardHeader>
-                <CardTitle className="text-white text-base">Appliance Energy Breakdown</CardTitle>
-                <CardDescription className="text-slate-400 text-xs">Estimated active load distribution mapped from smart meter sub-channels.</CardDescription>
+                <CardTitle className="text-white text-base">Sub-meter channels</CardTitle>
+                <CardDescription className="text-slate-400 text-xs">Raw channel values are shown without inferring appliance identities.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Air Conditioner */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-slate-300">
-                    <span>Air Conditioning & HVAC</span>
-                    <span className="font-semibold">{appliances.airCon}%</span>
+              <CardContent className="grid gap-3 sm:grid-cols-3">
+                {[
+                  { label: 'Sub-meter channel 1', value: current.sub_metering_1 },
+                  { label: 'Sub-meter channel 2', value: current.sub_metering_2 },
+                  { label: 'Sub-meter channel 3', value: current.sub_metering_3 },
+                ].map((channel) => (
+                  <div key={channel.label} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                    <p className="text-xs text-slate-400">{channel.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{channel.value == null ? 'Unavailable' : channel.value.toFixed(1)}</p>
+                    <p className="text-xs text-slate-500">Raw meter value</p>
                   </div>
-                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-400 rounded-full" style={{ width: `${appliances.airCon}%` }} />
-                  </div>
-                </div>
-
-                {/* Water Heater */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-slate-300">
-                    <span>Kitchen & Oven</span>
-                    <span className="font-semibold">{appliances.kitchen}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full" style={{ width: `${appliances.kitchen}%` }} />
-                  </div>
-                </div>
-
-                {/* Laundry */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-slate-300">
-                    <span>Laundry & Dryer</span>
-                    <span className="font-semibold">{appliances.laundry}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" style={{ width: `${appliances.laundry}%` }} />
-                  </div>
-                </div>
-
-                {/* Lighting & Base */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-slate-300">
-                    <span>Lighting & Always-On Base Load</span>
-                    <span className="font-semibold">{appliances.lighting}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-slate-500 to-slate-400 rounded-full" style={{ width: `${appliances.lighting}%` }} />
-                  </div>
-                </div>
+                ))}
               </CardContent>
             </Card>
 

@@ -364,7 +364,20 @@ export const settingsApi = {
   getSetupStatus: (): Promise<{ is_setup_complete: boolean }> =>
     apiFetch('/api/v1/settings/setup-status'),
 
-  postSetup: (data: Omit<SystemSettings, 'id' | 'is_setup_complete' | 'updated_at'>): Promise<{ message: string; settings: SystemSettings }> =>
+  postSetup: (data: {
+    site_name?: string;
+    timezone?: string;
+    country: string;
+    region: string;
+    electricity_provider: string;
+    currency: string;
+    peak_rate: number;
+    off_peak_rate: number;
+    peak_start_hour: number;
+    peak_end_hour: number;
+    sensor_type: string;
+    sensor_api_url: string | null;
+  }): Promise<{ message: string; settings: SystemSettings }> =>
     apiFetch('/api/v1/settings/setup', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -401,7 +414,7 @@ export const settingsApi = {
 // Consumption API
 // ============================================================
 export const consumptionApi = {
-  getCurrent: (): Promise<{ kw: number; status: string; voltage?: number; intensity?: number; timestamp?: string; source?: string | null; age_seconds?: number | null }> =>
+  getCurrent: (): Promise<{ kw: number; status: string; voltage?: number; intensity?: number; timestamp?: string; source?: string | null; age_seconds?: number | null; sub_metering_1?: number; sub_metering_2?: number; sub_metering_3?: number }> =>
     apiFetch('/api/v1/consumption/current'),
 
   getHistory: (timeframe?: 'live' | 'day' | 'week' | 'month' | 'all'): Promise<Array<{ kw: number; timestamp: string }>> =>
