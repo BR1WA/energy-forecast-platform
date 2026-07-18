@@ -200,7 +200,7 @@ export default function Navbar() {
 
   const searchPages = [
     { name: t('nav.dashboard'), path: '/dashboard', icon: LayoutDashboard, description: language === 'ar' ? 'بيانات القياس والتحميل المباشر للعداد الذكي' : language === 'fr' ? 'Télémesures et puissances du compteur en temps réel' : 'Real-time smart meter telemetry and load rates' },
-    { name: t('nav.forecast'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
+    { name: t('nav.forecasts'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
     { name: t('nav.analytics'), path: '/analytics', icon: BarChart3, description: t('analytics.subtitle') },
     { name: t('nav.alerts'), path: '/alerts', icon: AlertTriangle, description: t('alerts.subtitle') },
     { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle') },

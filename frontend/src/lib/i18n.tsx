@@ -22,6 +22,9 @@ const translations: Record<Language, Translations> = {
     'nav.profile': 'Profile',
     'nav.logout': 'Sign Out',
     'nav.telemetry': 'Live Telemetry',
+    'nav.recommendations': 'Recommendations',
+    'nav.budget': 'Budget & Goals',
+    'nav.reports': 'Reports',
 
     // Dashboard
     'dashboard.title': 'Energy Forecast Dashboard',
@@ -128,6 +131,9 @@ const translations: Record<Language, Translations> = {
     'nav.profile': 'Profil',
     'nav.logout': 'Déconnexion',
     'nav.telemetry': 'Télémesure Live',
+    'nav.recommendations': 'Recommandations',
+    'nav.budget': 'Budget et Objectifs',
+    'nav.reports': 'Rapports',
 
     // Dashboard
     'dashboard.title': 'Tableau de bord énergétique',
@@ -234,6 +240,9 @@ const translations: Record<Language, Translations> = {
     'nav.profile': 'الملف الشخصي',
     'nav.logout': 'تسجيل الخروج',
     'nav.telemetry': 'القياس المباشر',
+    'nav.recommendations': 'توصيات',
+    'nav.budget': 'الميزانية والأهداف',
+    'nav.reports': 'التقارير',
 
     // Dashboard
     'dashboard.title': 'لوحة التنبؤ بالطاقة',
