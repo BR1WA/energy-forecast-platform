@@ -186,7 +186,7 @@ export default function RegisterPage() {
               <p className="text-sm text-slate-400">
                 Already have an account?{' '}
                 <Link
-                  href="/"
+                  href="/login"
                   id="register-login-link"
                   className="text-blue-400 hover:text-blue-300 font-medium transition-colors duration-200"
                 >
