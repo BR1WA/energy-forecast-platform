@@ -2,6 +2,8 @@ FROM python:3.11-slim AS dependencies
 
 WORKDIR /app
 
+ARG INSTALL_TORCH=1
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev && \
@@ -9,12 +11,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN if [ "$INSTALL_TORCH" = "1" ]; then \
+      pip install --no-cache-dir -r requirements.txt; \
+    else \
+      grep -vE '^torch([<>=!~].*)?$' requirements.txt > requirements-no-torch.txt && \
+      pip install --no-cache-dir -r requirements-no-torch.txt; \
+    fi
 
 FROM dependencies AS test-dependencies
 
 COPY backend/requirements-dev.txt ./requirements-dev.txt
-RUN pip install --no-cache-dir -r requirements-dev.txt
+RUN if [ "$INSTALL_TORCH" = "1" ]; then \
+      pip install --no-cache-dir -r requirements-dev.txt; \
+    else \
+      grep -vE '^-r requirements\.txt$' requirements-dev.txt > requirements-dev-no-runtime.txt && \
+      pip install --no-cache-dir -r requirements-dev-no-runtime.txt; \
+    fi
 
 FROM dependencies AS application
 

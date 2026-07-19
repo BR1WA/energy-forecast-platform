@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "noreply@energyforecast.com"
     SMTP_TLS: bool = True
 
+    # Alert worker
+    ALERT_WORKER_INTERVAL_SECONDS: int = 60
+
     def validate_secrets(self) -> None:
         """Fail fast on insecure secrets outside of local development.
 

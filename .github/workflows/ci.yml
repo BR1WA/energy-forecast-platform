@@ -63,7 +63,16 @@ jobs:
         run: python -m pytest -q
 
       - name: Build backend test image
-        run: docker build --target test -t energy-backend-test -f backend/Dockerfile .
+        run: docker build --build-arg INSTALL_TORCH=0 --target test -t energy-backend-test -f backend/Dockerfile .
+
+      - name: Run tests in the backend test image
+        run: >-
+          docker run --rm
+          -e DATABASE_URL=sqlite:///./energy_forecast.db
+          -e DEBUG=true
+          -e JWT_SECRET_KEY=ci-only-jwt-secret-with-more-than-32-characters
+          -e ADMIN_PASSWORD=ci-only-admin-password
+          energy-backend-test python -m pytest -q
 
   frontend:
     name: Frontend Quality Gates

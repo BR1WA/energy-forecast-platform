@@ -9,6 +9,7 @@ from app.models import Alert, Forecast, Meter, Site, SmartMeterReading
 from app.services.consumption_service import consumption_service
 from app.services.simulation_service import simulation_service
 from app.services.weather_service import weather_service
+from app.services.recommendation_service import recommendation_service
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -115,6 +116,10 @@ class DashboardService:
             .limit(10)
             .all()
         )
+        recommendations = recommendation_service.list_for_user(db, user_id)
+        excess_cost_per_hour = round(
+            sum(item.estimated_excess_cost_per_hour_mad or 0 for item in recommendations), 4
+        )
 
         weather_data = None
         try:
@@ -159,7 +164,6 @@ class DashboardService:
             ]
 
         forecast_available = bool(forecast_payload["points"])
-        confidence_pct = 0
         confidence_basis = "Calibrated confidence is not available."
         if forecast_available:
             confidence_basis = forecast_payload["confidence_method"] or "Point forecast; calibrated interval not available."
@@ -170,21 +174,29 @@ class DashboardService:
                 "household_name": "Your site",
                 "energy_score": 0,
                 "estimated_bill": monthly["total_cost"],
-                "potential_savings": 0,
+                "actionable_recommendations": len(recommendations),
                 "forecast_reliability": forecast_payload["forecast_reliability"],
                 "current_tariff_tier": "Site peak/off-peak tariff",
                 "summary_sentence": "Import meter data or run the labelled simulator to populate your dashboard.",
                 "today_story": today_story,
                 "bill_delta": None,
                 "score_delta": None,
-                "proactive_sentence": "Recommendations appear only when supported by measured data.",
+                "proactive_sentence": (
+                    f"{len(recommendations)} evidence-backed action(s) are ready for review."
+                    if recommendations
+                    else "Recommendations appear only when supported by measured data."
+                ),
             },
             "assistant": {
                 "headline": "Evidence-based status",
-                "body": "No appliance-level recommendations are generated without device or sub-meter evidence.",
+                "body": (
+                    recommendations[0].message
+                    if recommendations
+                    else "No appliance-level recommendations are generated without device or sub-meter evidence."
+                ),
                 "warning": None,
-                "recommended_action": "Review your meter data quality and configured tariff.",
-                "response": "Recommendations are unavailable until enough measured data is available.",
+                "recommended_action": recommendations[0].title if recommendations else "Review your meter data quality and configured tariff.",
+                "response": "Review the evidence and complete or dismiss each action." if recommendations else "Recommendations are unavailable until enough measured data is available.",
                 "quick_actions": ["View Forecast", "Run Simulation", "View Budget", "Export Report"],
             },
             "live_status": {
@@ -211,7 +223,19 @@ class DashboardService:
                 "current_tariff_rate": monthly["tariff"].get("peak_rate"),
             },
             "forecast": forecast_payload,
-            "recommendations": {"priority_list": [], "potential_savings": 0, "carbon_reduction": None},
+            "recommendations": {
+                "priority_list": [
+                    {
+                        "id": item.id,
+                        "title": item.title,
+                        "message": item.message,
+                        "category": item.category,
+                        "estimated_excess_cost_per_hour_mad": item.estimated_excess_cost_per_hour_mad,
+                    }
+                    for item in recommendations[:3]
+                ],
+                "excess_cost_per_hour_mad": excess_cost_per_hour if recommendations else None,
+            },
             "budget": {
                 "target": budget["target_mad"],
                 "current_cost": monthly["total_cost"],
@@ -229,11 +253,11 @@ class DashboardService:
             "intelligence_radar": {
                 "dimensions": [
                     {"label": "Budget Health", "value": round(max(0, 100 - progress_pct), 1), "unit": "%", "status": "green" if progress_pct < 70 else "amber"},
-                    {"label": "Forecast Confidence", "value": confidence_pct, "unit": "%", "status": "blue"},
+                    {"label": "Forecast", "value": "Available" if forecast_available else "Not run", "unit": "", "status": "blue"},
                 ],
                 "condition": "Measured data only",
                 "message": "The dashboard does not infer appliance state or savings without evidence.",
-                "confidence": {"pct": confidence_pct, "basis": confidence_basis, "trend": "Not calibrated"},
+                "confidence": {"pct": None, "basis": confidence_basis, "trend": "Not calibrated"},
             },
             "today_vs_yesterday": {"metrics": []},
             "ai_decisions": [

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models import IngestionBatch, Meter, SmartMeterReading
 from app.schemas import MeterSample
+from app.services.alert_service import alert_service
 
 
 CSV_ALIASES = {
@@ -143,6 +144,7 @@ class IngestionService:
 
         accepted = 0
         duplicates = 0
+        accepted_readings: list[SmartMeterReading] = []
         seen_timestamps: set[datetime] = set()
         latest_seen = _as_utc(meter.last_seen_at) if meter.last_seen_at is not None else None
         for row_number, sample in enumerate(sample_list, start=1):
@@ -206,6 +208,7 @@ class IngestionService:
                 duplicates += 1
                 continue
             accepted += 1
+            accepted_readings.append(reading)
             if latest_seen is None or timestamp > latest_seen:
                 latest_seen = timestamp
 
@@ -214,6 +217,13 @@ class IngestionService:
         batch.duplicate_rows = duplicates
         batch.rejected_rows = len(errors)
         batch.errors = errors[:100]
+        # CSV imports are often historical. Alert only current push/simulator
+        # readings so an import cannot create a false backlog of live incidents.
+        if source in {"push", "simulation"}:
+            freshness_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+            for reading in accepted_readings:
+                if _as_utc(reading.timestamp) >= freshness_cutoff:
+                    alert_service.evaluate_reading(db, meter, reading)
         db.flush()
         return self._batch_result(batch)
 

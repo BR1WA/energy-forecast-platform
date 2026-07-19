@@ -143,7 +143,7 @@ export interface ConsumptionPoint {
 // ============================================================
 export interface Alert {
   id: string;
-  type: 'high_consumption' | 'anomaly' | 'threshold' | 'system' | 'peak_demand' | 'cost_threshold' | 'budget_warning';
+  type: 'high_consumption' | 'missing_data' | 'anomaly' | 'threshold' | 'system' | 'peak_demand' | 'cost_threshold' | 'budget_warning';
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
   message: string;
@@ -154,9 +154,21 @@ export interface Alert {
 
 export interface AlertConfig {
   high_consumption_threshold: number;
-  anomaly_sensitivity: 'low' | 'medium' | 'high';
+  cooldown_minutes: number;
+  missing_data_minutes: number;
   notification_email: boolean;
-  notification_push: boolean;
+}
+
+export interface Recommendation {
+  id: number;
+  category: 'peak_load' | 'data_quality';
+  title: string;
+  message: string;
+  status: 'open' | 'completed' | 'dismissed';
+  estimated_excess_cost_per_hour_mad?: number | null;
+  evidence_json: Record<string, unknown>;
+  created_at: string;
+  updated_at?: string | null;
 }
 
 // ============================================================
@@ -249,6 +261,8 @@ export interface AlertConfigResponse {
   id: number;
   user_id: number;
   threshold_kw: number;
+  cooldown_minutes: number;
+  missing_data_minutes: number;
   email_enabled: boolean;
   created_at: string;
   updated_at: string;

@@ -19,6 +19,7 @@ import type {
   AlertConfigResponse,
   UserPreferences,
   Site,
+  Recommendation,
 } from '@/types';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -294,15 +295,17 @@ export const alertsApi = {
     const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config');
     return {
       high_consumption_threshold: raw.threshold_kw,
-      anomaly_sensitivity: 'medium',
+      cooldown_minutes: raw.cooldown_minutes,
+      missing_data_minutes: raw.missing_data_minutes,
       notification_email: raw.email_enabled,
-      notification_push: true,
     };
   },
 
   configureAlerts: async (config: AlertConfig): Promise<AlertConfig> => {
     const backendPayload = {
       threshold_kw: config.high_consumption_threshold,
+      cooldown_minutes: config.cooldown_minutes,
+      missing_data_minutes: config.missing_data_minutes,
       email_enabled: config.notification_email,
     };
     const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config', {
@@ -311,9 +314,9 @@ export const alertsApi = {
     });
     return {
       high_consumption_threshold: raw.threshold_kw,
-      anomaly_sensitivity: config.anomaly_sensitivity,
+      cooldown_minutes: raw.cooldown_minutes,
+      missing_data_minutes: raw.missing_data_minutes,
       notification_email: raw.email_enabled,
-      notification_push: config.notification_push,
     };
   },
 
@@ -321,6 +324,20 @@ export const alertsApi = {
     apiFetch('/api/v1/alerts/acknowledge', {
       method: 'POST',
       body: JSON.stringify({ alert_id: Number(alertId) }),
+    }),
+};
+
+// ============================================================
+// Recommendations API
+// ============================================================
+export const recommendationsApi = {
+  getAll: (includeClosed = false): Promise<Recommendation[]> =>
+    apiFetch(`/api/v1/recommendations${includeClosed ? '?include_closed=true' : ''}`),
+
+  updateStatus: (id: number, status: Recommendation['status']): Promise<Recommendation> =>
+    apiFetch(`/api/v1/recommendations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
     }),
 };
 
@@ -505,67 +522,8 @@ export const simulationApi = {
 };
 
 export const dashboardApi = {
-  getSummary: (lat?: number, lon?: number): Promise<{
-    kpis: {
-      energy_score: number;
-      estimated_bill: number;
-      monthly_savings: number;
-      carbon_saved: number;
-      forecast_reliability: string;
-    };
-    tariff: {
-      tier: number;
-      name: string;
-      rate: string;
-      pct: number;
-      total_kwh: number;
-    };
-    forecast: {
-      points: Array<{ time: string; predicted: number }>;
-      peak_hour: string;
-      estimated_daily_cost: number;
-      temp_correlation: string;
-      validation: {
-        available: boolean;
-        predicted?: number;
-        actual?: number;
-        error_pct?: number;
-        message?: string;
-      };
-    };
-    recommendations: Array<{
-      id: string;
-      title: string;
-      savings: number;
-      difficulty: string;
-      impact: string;
-      reliability: string;
-      stars: number;
-      reason: string;
-    }>;
-    alerts: Array<{
-      id: string;
-      title: string;
-      message: string;
-      severity: string;
-      created_at: string | null;
-      is_read: boolean;
-    }>;
-    weather: any;
-    simulation: {
-      running: boolean;
-      day_part?: string;
-      occupants?: number;
-      temperature?: number;
-      ac_level?: string;
-      washing_machine?: boolean;
-      solar?: string;
-    };
-    budget: {
-      target: number;
-      daily_limit: number;
-    };
-  }> => {
+  // The dashboard is a composite endpoint with independently optional sections.
+  getSummary: (lat?: number, lon?: number): Promise<any> => {
     let url = '/api/v1/dashboard/summary';
     if (lat !== undefined && lon !== undefined) {
       url += `?lat=${lat}&lon=${lon}`;

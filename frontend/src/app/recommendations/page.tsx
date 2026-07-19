@@ -1,157 +1,85 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AppLayout from '@/components/layout/app-layout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Leaf, TrendingDown, Star } from 'lucide-react';
-import { dashboardApi } from '@/lib/api';
-
-interface Recommendation {
-  id: string;
-  title: string;
-  savings: number;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-  impact: 'Low' | 'Medium' | 'High';
-  reliability: 'Low' | 'Medium' | 'High';
-  stars: number;
-  reason: string;
-}
+import { CheckCircle2, CircleAlert, Loader2, RotateCcw, Sparkles, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { recommendationsApi } from '@/lib/api';
+import type { Recommendation } from '@/types';
 
 export default function RecommendationsPage() {
-  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [items, setItems] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [carbonSaved, setCarbonSaved] = useState(18.2);
+  const [updating, setUpdating] = useState<number | null>(null);
+  const [showClosed, setShowClosed] = useState(false);
 
-  const fetchRecs = async () => {
+  const load = useCallback(async (includeClosed = false) => {
+    setLoading(true);
     try {
-      const data = await dashboardApi.getSummary();
-      setRecs(data.recommendations as unknown as Recommendation[]);
-      setCarbonSaved(data.kpis.carbon_saved);
-    } catch (err) {
-      console.error('Failed to fetch recommendations:', err);
+      setItems(await recommendationsApi.getAll(includeClosed));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to load recommendations.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchRecs();
-    // Poll every 5s to keep recommendations in sync with the simulator
-    const interval = setInterval(fetchRecs, 5000);
-    return () => clearInterval(interval);
   }, []);
 
-  const totalSavings = recs.reduce((acc, curr) => acc + curr.savings, 0);
+  useEffect(() => { void load(false); }, [load]);
+
+  const updateStatus = async (item: Recommendation, status: Recommendation['status']) => {
+    setUpdating(item.id);
+    try {
+      const updated = await recommendationsApi.updateStatus(item.id, status);
+      setItems((current) => showClosed
+        ? current.map((entry) => entry.id === updated.id ? updated : entry)
+        : current.filter((entry) => entry.id !== updated.id));
+      toast.success(status === 'completed' ? 'Action marked complete.' : status === 'dismissed' ? 'Action dismissed.' : 'Action reopened.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update this action.');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const toggleHistory = () => {
+    const next = !showClosed;
+    setShowClosed(next);
+    load(next);
+  };
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-2">
-            <Sparkles className="text-indigo-400 w-8 h-8" /> AI Recommendations
-          </h1>
-          <p className="text-slate-400">Personalized actions to optimize consumption, reduce bills, and lower carbon emissions.</p>
+      <div className="mx-auto max-w-5xl space-y-6 p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-white"><Sparkles className="h-6 w-6 text-blue-400" />Recommendations</h1>
+            <p className="mt-1 text-sm text-slate-400">Actions are generated from persisted alert evidence and your configured tariff, never appliance guesses.</p>
+          </div>
+          <Button variant="outline" onClick={toggleHistory} className="gap-2 border-white/10 text-white hover:bg-white/5">
+            <RotateCcw className="h-4 w-4" />{showClosed ? 'Open actions only' : 'Show history'}
+          </Button>
         </div>
 
-        {/* Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden">
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Potential Monthly Savings</p>
-                <p className="text-4xl font-extrabold text-white mt-1 font-mono">
-                  {loading ? '...' : `${totalSavings} MAD`}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">Calculated from active efficiency rules</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                <TrendingDown className="w-6 h-6 text-emerald-400" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden">
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-purple-500 to-indigo-400" />
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Carbon Reduction Offset</p>
-                <p className="text-4xl font-extrabold text-white mt-1 font-mono">
-                  {loading ? '...' : `${carbonSaved} kg`}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">Equivalent CO₂ emissions avoided</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                <Leaf className="w-6 h-6 text-purple-400" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Priority list */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-white tracking-wide">Priority Savings Actions</h2>
-          
-          {loading ? (
-            <div className="space-y-4">
-              <div className="h-28 bg-[#111827]/40 rounded-xl border border-white/5 animate-pulse" />
-              <div className="h-28 bg-[#111827]/40 rounded-xl border border-white/5 animate-pulse" />
-            </div>
-          ) : recs.length === 0 ? (
-            <div className="p-12 text-center rounded-2xl border border-dashed border-white/10 bg-[#111827]/40">
-              <p className="text-slate-400 font-medium">All systems operating optimally. No savings recommendations available.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {recs.map((rec) => (
-                <Card key={rec.id} className="bg-[#111827]/80 border-white/10 hover:border-indigo-500/30 transition-all duration-300">
-                  <CardContent className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div className="space-y-3 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-base font-bold text-white">{rec.title}</span>
-                        <div className="flex gap-0.5 ml-2">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-3.5 h-3.5 ${
-                                i < rec.stars ? 'text-amber-400 fill-amber-400' : 'text-slate-600'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-300 leading-relaxed">{rec.reason}</p>
-                      
-                      <div className="flex flex-wrap gap-2 text-[10px]">
-                        <Badge variant="outline" className="border-indigo-500/20 text-indigo-400 bg-indigo-500/10 font-mono">
-                          Difficulty: {rec.difficulty}
-                        </Badge>
-                        <Badge variant="outline" className="border-cyan-500/20 text-cyan-400 bg-cyan-500/10 font-mono">
-                          Impact: {rec.impact}
-                        </Badge>
-                        <Badge variant="outline" className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10 font-mono">
-                          Reliability: {rec.reliability}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-row md:flex-col items-baseline md:items-end justify-between w-full md:w-auto shrink-0 border-t md:border-t-0 border-white/5 pt-4 md:pt-0 gap-4">
-                      <div className="text-left md:text-right">
-                        <span className="text-[10px] text-slate-500 font-bold uppercase block">Monthly Savings</span>
-                        <span className="text-xl font-extrabold text-emerald-400 font-mono">{rec.savings} MAD</span>
-                      </div>
-                      <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-8 px-4 rounded-lg">
-                        Dismiss Action
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+        {loading ? <div className="flex min-h-48 items-center justify-center text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading actions...</div> : items.length ? (
+          <div className="space-y-4">
+            {items.map((item) => {
+              const isOpen = item.status === 'open';
+              const isUpdating = updating === item.id;
+              const observed = typeof item.evidence_json.observed_kw === 'number' ? item.evidence_json.observed_kw.toFixed(2) : null;
+              const threshold = typeof item.evidence_json.threshold_kw === 'number' ? item.evidence_json.threshold_kw.toFixed(2) : null;
+              return <Card key={item.id} className="border-white/[0.08] bg-[#111827]/80">
+                <CardHeader className="pb-3"><div className="flex items-start justify-between gap-4"><CardTitle className="flex items-center gap-2 text-base text-white">{item.category === 'peak_load' ? <CircleAlert className="h-5 w-5 text-amber-400" /> : <CircleAlert className="h-5 w-5 text-rose-400" />}{item.title}</CardTitle><span className="shrink-0 rounded border border-white/10 px-2 py-1 text-xs capitalize text-slate-300">{item.status}</span></div></CardHeader>
+                <CardContent className="space-y-4"><p className="text-sm leading-6 text-slate-300">{item.message}</p>
+                  {observed && threshold && <p className="rounded border border-white/[0.06] bg-black/10 p-3 text-sm text-slate-300">Evidence: {observed} kW measured against a {threshold} kW configured threshold.</p>}
+                  {item.estimated_excess_cost_per_hour_mad != null && <p className="text-sm text-amber-300">Estimated excess-load cost: {item.estimated_excess_cost_per_hour_mad.toFixed(4)} MAD per hour at the configured tariff. This is not a projected saving.</p>}
+                  <div className="flex flex-wrap gap-2">{isOpen ? <><Button size="sm" disabled={isUpdating} onClick={() => updateStatus(item, 'completed')} className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500"><CheckCircle2 className="h-4 w-4" />Mark complete</Button><Button size="sm" variant="outline" disabled={isUpdating} onClick={() => updateStatus(item, 'dismissed')} className="gap-2 border-white/10 text-white hover:bg-white/5"><X className="h-4 w-4" />Dismiss</Button></> : <Button size="sm" variant="outline" disabled={isUpdating} onClick={() => updateStatus(item, 'open')} className="gap-2 border-white/10 text-white hover:bg-white/5"><RotateCcw className="h-4 w-4" />Reopen</Button>}</div>
+                </CardContent>
+              </Card>;
+            })}
+          </div>
+        ) : <Card className="border-white/[0.06] bg-[#111827]/80"><CardContent className="flex min-h-44 flex-col items-center justify-center text-center"><CheckCircle2 className="mb-3 h-7 w-7 text-emerald-400" /><p className="font-medium text-white">No {showClosed ? '' : 'open '}evidence-backed actions</p><p className="mt-1 max-w-lg text-sm text-slate-400">Connect a meter, import readings, or run the labelled simulator. Alert rules create actions only when a measured condition needs attention.</p></CardContent></Card>}
       </div>
     </AppLayout>
   );

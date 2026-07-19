@@ -169,3 +169,27 @@ class TestAuthAndTokens(unittest.TestCase):
         # Try to refresh -> should fail
         refresh_res = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         self.assertEqual(refresh_res.status_code, 401)
+
+    def test_password_change_revokes_existing_refresh_tokens(self):
+        user = User(
+            email="passworduser@example.com",
+            password_hash=hash_password("oldpassword123"),
+            full_name="Password User",
+            role="user",
+            is_active=True,
+        )
+        self.db.add(user)
+        self.db.commit()
+
+        login_res = client.post("/api/v1/auth/login", json={"email": user.email, "password": "oldpassword123"})
+        self.assertEqual(login_res.status_code, 200)
+        tokens = login_res.json()
+        change_res = client.put(
+            "/api/v1/auth/password",
+            json={"current_password": "oldpassword123", "new_password": "newpassword123"},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        self.assertEqual(change_res.status_code, 200)
+        self.assertIn("Sign in again", change_res.json()["message"])
+        self.assertTrue(all(token.is_revoked for token in self.db.query(RefreshToken).filter(RefreshToken.user_id == user.id).all()))
+        self.assertEqual(client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}).status_code, 401)

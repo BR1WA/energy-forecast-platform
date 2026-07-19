@@ -1,11 +1,11 @@
 from app.models.models import (
     User, Forecast, AlertConfig, Alert, SmartMeterReading, ModelRegistry, RefreshToken, EnergyBudget,
-    Site, Meter, SiteSettings, SimulationSession, IngestionBatch, AuditEvent,
+    Site, Meter, SiteSettings, SimulationSession, IngestionBatch, AuditEvent, Recommendation,
 )
 from app.models.settings import SystemSettings
 
 __all__ = [
     "User", "Forecast", "AlertConfig", "Alert", "SmartMeterReading",
     "ModelRegistry", "SystemSettings", "RefreshToken", "EnergyBudget", "Site", "Meter",
-    "SiteSettings", "SimulationSession", "IngestionBatch", "AuditEvent",
+    "SiteSettings", "SimulationSession", "IngestionBatch", "AuditEvent", "Recommendation",
 ]

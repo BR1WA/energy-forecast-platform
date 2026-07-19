@@ -23,12 +23,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import torch
+try:
+    import torch
+except ModuleNotFoundError:  # Allows non-inference CI tests to run in a lean image.
+    torch = None
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models.models import ModelRegistry
-from training.features.feature_engineering import FeaturePipeline
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -107,9 +109,11 @@ class ForecastService:
     def __init__(self) -> None:
         self._cached_model_id: Optional[int] = None
         self._model = None
-        self._pipeline: Optional[FeaturePipeline] = None
+        self._pipeline: Optional[Any] = None
         self._config: Optional[dict] = None
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = None
+        if torch is not None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Lazy-loaded sample datasets
         self._samples: Optional[Dict[str, Any]] = None
 
@@ -324,8 +328,14 @@ class ForecastService:
 
     def _ensure_loaded(self, entry: ModelRegistry) -> None:
         """Load model and pipeline from *entry* into memory if not already cached."""
+        if torch is None or self.device is None:
+            raise RuntimeError("PyTorch is required for forecast inference but is not installed in this environment.")
         if self._cached_model_id == entry.id:
             return
+
+        # Keep the training package out of the API/test import path. It is only
+        # needed when a real inference request loads an artifact.
+        from training.features.feature_engineering import FeaturePipeline
 
         exp_path = entry.experiment_path
         model_path    = os.path.join(exp_path, "model.pt")

@@ -30,6 +30,7 @@ class User(Base):
     forecasts = relationship("Forecast", back_populates="user", cascade="all, delete-orphan")
     alert_configs = relationship("AlertConfig", back_populates="user", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
+    recommendations = relationship("Recommendation", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     energy_budget = relationship("EnergyBudget", back_populates="user", uselist=False, cascade="all, delete-orphan")
     sites = relationship("Site", back_populates="user", cascade="all, delete-orphan")
@@ -184,6 +185,8 @@ class AlertConfig(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
     threshold_kw = Column(Float, nullable=False, default=3.0)
+    cooldown_minutes = Column(Integer, nullable=False, default=60)
+    missing_data_minutes = Column(Integer, nullable=False, default=60)
     email_enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -200,15 +203,41 @@ class Alert(Base):
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
     forecast_id = Column(Integer, ForeignKey("forecasts.id"), nullable=True)
     alert_type = Column(String(30), nullable=False)  # peak_demand, cost_threshold
+    rule_key = Column(String(160), nullable=True, index=True)
     severity = Column(String(10), default="medium")  # low, medium, high
     message = Column(Text, nullable=True)
     peak_kw = Column(Float, nullable=True)
+    evidence_json = Column(JSON, nullable=True)
     is_acknowledged = Column(Boolean, default=False)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     user = relationship("User", back_populates="alerts")
     forecast = relationship("Forecast", back_populates="alerts")
+    recommendations = relationship("Recommendation", back_populates="alert", cascade="all, delete-orphan")
+
+
+class Recommendation(Base):
+    __tablename__ = "recommendations"
+    __table_args__ = (UniqueConstraint("alert_id", name="uq_recommendations_alert_id"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
+    alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=True, index=True)
+    category = Column(String(40), nullable=False)
+    title = Column(String(160), nullable=False)
+    message = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="open", index=True)
+    estimated_excess_cost_per_hour_mad = Column(Float, nullable=True)
+    evidence_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="recommendations")
+    alert = relationship("Alert", back_populates="recommendations")
 
 
 class SmartMeterReading(Base):

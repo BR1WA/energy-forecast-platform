@@ -370,6 +370,12 @@ observations support them.
 
 Estimated effort: 3-5 working days
 
+Status: Complete for the PFE release baseline (2026-07-19). The application
+uses a dedicated alert worker for missing push data, persists evidence and
+cooldowns, and provides user-owned actions with complete/dismiss lifecycle
+state. Email delivery remains deferred until a transactional SMTP provider is
+configured and verified in deployment.
+
 ### Alert engine
 
 - Move alert evaluation out of the web process into a scheduled worker.
@@ -396,6 +402,13 @@ Estimated effort: 3-5 working days
 ## Phase 7 - PFE Security and Deployment Readiness
 
 Estimated effort: 3-5 working days
+
+Status: Deployment baseline complete (2026-07-19). Secret validation, strict
+production CORS, rate-limited auth, JWT refresh rotation, session revocation on
+password change, ownership/audit tests, Compose deployment, readiness checks,
+CI, and backup/restore commands are implemented. Password-reset and email
+verification delivery require a transactional email provider and remain a
+pre-public-launch integration rather than a simulated feature.
 
 ### Required for the PFE
 
@@ -436,6 +449,11 @@ Estimated effort: 3-5 working days
 ## Phase 8 - Validation and PFE Launch
 
 Estimated effort: 2-3 working days plus validation time
+
+Status: Release candidate. Automated regression, migration, frontend build, and
+Compose configuration checks are complete. Volunteer/client validation and a
+documented held-out forecast evaluation must be collected from representative
+real meter data before calling this a public commercial launch.
 
 ### Validation
 

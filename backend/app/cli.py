@@ -43,6 +43,7 @@ def main() -> None:
         "create-admin",
         help="Create the administrator configured by ADMIN_EMAIL and ADMIN_PASSWORD",
     )
+    subparsers.add_parser("run-alert-worker", help="Run periodic missing-data alert checks")
     args = parser.parse_args()
 
     if args.command == "migrate":
@@ -50,6 +51,9 @@ def main() -> None:
         print("Database is at Alembic head.")
     elif args.command == "create-admin":
         create_admin()
+    elif args.command == "run-alert-worker":
+        from app.alert_worker import main as run_alert_worker
+        run_alert_worker()
 
 
 if __name__ == "__main__":

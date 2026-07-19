@@ -105,3 +105,26 @@ operators can distinguish a dead process from an unready dependency.
 Database migrations run before background tasks start. Any migration error stops
 backend startup. Inspect backend logs, correct the migration or configuration,
 and restart; do not bypass a failed migration.
+
+## Backups and restore
+
+Run backups from the repository root while the Compose stack is running. Store
+the resulting file outside this repository and outside the application host when
+possible:
+
+```powershell
+.\scripts\backup_postgres.ps1 -OutputPath "D:\energyai-backups\energyai-$(Get-Date -Format yyyyMMdd-HHmmss).dump"
+```
+
+The restore command replaces data in the Compose database. Verify the backup and
+target first, stop application writes, then use the explicit `-Force` switch:
+
+```powershell
+docker compose stop backend alerts-worker
+.\scripts\restore_postgres.ps1 -BackupPath "D:\energyai-backups\energyai-20260719-120000.dump" -Force
+docker compose up -d backend alerts-worker
+curl --fail http://localhost:8000/api/v1/system/ready
+```
+
+Do not test restores against a client database. Rehearse the procedure on a
+separate environment before deployment.

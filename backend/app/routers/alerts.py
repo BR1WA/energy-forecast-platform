@@ -1,6 +1,8 @@
 """
 Alerts router — alert management and configuration.
 """
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import List
@@ -9,6 +11,9 @@ from app.database import get_db
 from app.models import User, Alert, AlertConfig
 from app.schemas import AlertResponse, AlertConfigCreate, AlertConfigResponse, AlertAcknowledge
 from app.services.auth_service import get_current_user
+from app.services.alert_service import alert_service
+from app.services.audit_service import record_audit_event
+from app.services.site_service import ensure_default_site
 from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
@@ -62,6 +67,15 @@ def acknowledge_alert(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
     alert.is_acknowledged = True
+    alert.acknowledged_at = datetime.now(timezone.utc)
+    record_audit_event(
+        db,
+        "alert.acknowledged",
+        actor_user_id=current_user.id,
+        site_id=alert.site_id,
+        target=f"alert:{alert.id}",
+        metadata={"alert_type": alert.alert_type, "rule_key": alert.rule_key},
+    )
     db.commit()
     return {"message": "Alert acknowledged", "alert_id": data.alert_id}
 
@@ -72,13 +86,10 @@ def get_alert_config(
     db: Session = Depends(get_db),
 ):
     """Get the user's alert configuration."""
-    config = db.query(AlertConfig).filter(AlertConfig.user_id == current_user.id).first()
-    if not config:
-        # Create default config
-        config = AlertConfig(user_id=current_user.id, threshold_kw=3.0, email_enabled=True)
-        db.add(config)
-        db.commit()
-        db.refresh(config)
+    site = ensure_default_site(db, current_user.id)
+    config = alert_service.config_for_site(db, site)
+    db.commit()
+    db.refresh(config)
     return AlertConfigResponse.model_validate(config)
 
 
@@ -89,17 +100,20 @@ def update_alert_config(
     db: Session = Depends(get_db),
 ):
     """Update alert threshold configuration."""
-    config = db.query(AlertConfig).filter(AlertConfig.user_id == current_user.id).first()
-    if config:
-        config.threshold_kw = data.threshold_kw
-        config.email_enabled = data.email_enabled
-    else:
-        config = AlertConfig(
-            user_id=current_user.id,
-            threshold_kw=data.threshold_kw,
-            email_enabled=data.email_enabled,
-        )
-        db.add(config)
+    site = ensure_default_site(db, current_user.id)
+    config = alert_service.config_for_site(db, site)
+    config.threshold_kw = data.threshold_kw
+    config.cooldown_minutes = data.cooldown_minutes
+    config.missing_data_minutes = data.missing_data_minutes
+    config.email_enabled = data.email_enabled
+    record_audit_event(
+        db,
+        "alert.config_updated",
+        actor_user_id=current_user.id,
+        site_id=site.id,
+        target=f"alert-config:{config.id or 'new'}",
+        metadata=data.model_dump(),
+    )
 
     db.commit()
     db.refresh(config)

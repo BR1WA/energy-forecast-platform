@@ -34,7 +34,6 @@ import {
   ChevronRight,
   BarChart3,
   Download,
-  Star,
   Shield,
   Gauge,
   Lightbulb,
@@ -124,13 +123,6 @@ function EnergyScoreGauge({ score }: { score: number }) {
         <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Score</span>
       </div>
     </div>
-  );
-}
-
-// ── Star Icon ──────────────────────────────────────────────────────────
-function StarIcon({ filled }: { filled: boolean }) {
-  return (
-    <Star className={cn("w-3 h-3", filled ? "fill-amber-400 text-amber-400" : "text-slate-700")} />
   );
 }
 
@@ -329,9 +321,9 @@ export default function DashboardPage() {
 
               {/* Right: KPI Cards with Trends */}
               <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4">
-                <KPICard icon={<DollarSign className="w-4 h-4" />} label="Estimated Bill" value={`${exec?.estimated_bill || 0}`} unit="MAD" color="text-emerald-400" bgColor="bg-emerald-600/10" delta={exec?.bill_delta} deltaUnit="MAD" />
-                <KPICard icon={<Sparkles className="w-4 h-4" />} label="Potential Savings" value={`${exec?.potential_savings || 0}`} unit="MAD" color="text-amber-400" bgColor="bg-amber-600/10" />
-                <KPICard icon={<Shield className="w-4 h-4" />} label="Forecast" value={`${radar?.confidence?.pct ?? 0}%`} unit="" color="text-indigo-400" bgColor="bg-indigo-600/10" isText subtitle={radar?.confidence?.basis || 'Not calibrated'} />
+                <KPICard icon={<DollarSign className="w-4 h-4" />} label="Estimated Bill" value={exec?.estimated_bill == null ? '—' : `${exec.estimated_bill.toFixed(2)}`} unit={exec?.estimated_bill == null ? '' : 'MAD'} color="text-emerald-400" bgColor="bg-emerald-600/10" delta={exec?.bill_delta} deltaUnit="MAD" />
+                <KPICard icon={<Sparkles className="w-4 h-4" />} label="Open Actions" value={`${exec?.actionable_recommendations ?? 0}`} unit="" color="text-amber-400" bgColor="bg-amber-600/10" />
+                <KPICard icon={<Shield className="w-4 h-4" />} label="Forecast" value={forecast?.points?.length ? 'Available' : '—'} unit="" color="text-indigo-400" bgColor="bg-indigo-600/10" isText subtitle={radar?.confidence?.basis || 'Not calibrated'} />
               </div>
             </div>
 
@@ -773,39 +765,19 @@ export default function DashboardPage() {
               {(recs?.priority_list || []).slice(0, 3).map((rec: any, i: number) => (
                 <div key={rec.id || i} className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all hover:translate-y-[-1px] group">
                   <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: 5 }).map((_, s) => (
-                        <StarIcon key={s} filled={s < (rec.stars || 0)} />
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Badge className={cn(
-                        "text-[8px] font-bold uppercase px-1.5",
-                        rec.difficulty === 'Easy' ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/20' : 'bg-amber-600/20 text-amber-300 border-amber-500/20'
-                      )}>
-                        {rec.difficulty}
-                      </Badge>
-                    </div>
+                    <Badge className="bg-blue-600/15 text-blue-300 border-blue-500/20 text-[8px] font-bold uppercase px-1.5">{rec.category?.replace('_', ' ') || 'action'}</Badge>
+                    <Button variant="ghost" size="sm" onClick={() => router.push('/recommendations')} className="h-auto p-0 text-[10px] text-blue-300 hover:text-blue-200">Review</Button>
                   </div>
                   <p className="text-xs text-white font-semibold">{rec.title}</p>
-                  <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-sm font-black text-emerald-400">{rec.savings} <span className="text-[9px] font-medium text-slate-500">MAD</span></span>
-                    {rec.confidence_pct && (
-                      <Badge className="bg-indigo-600/15 text-indigo-300 border-indigo-500/20 text-[8px] font-bold px-1.5">
-                        {rec.confidence_pct}% confident
-                      </Badge>
-                    )}
-                  </div>
-                  {rec.evidence && (
-                    <p className="text-[9px] text-slate-600 mt-1.5 italic">{rec.evidence}</p>
-                  )}
+                  <p className="mt-1.5 text-[10px] leading-4 text-slate-400">{rec.message}</p>
+                  {rec.estimated_excess_cost_per_hour_mad != null && <p className="mt-2 text-[10px] font-medium text-amber-300">Excess-load cost: {rec.estimated_excess_cost_per_hour_mad} MAD/hour</p>}
                 </div>
               ))}
 
-              {(recs?.potential_savings || 0) > 0 && (
+              {recs?.excess_cost_per_hour_mad != null && (
                 <div className="text-center pt-2 border-t border-white/[0.06]">
-                  <p className="text-[10px] text-slate-500">Total Potential</p>
-                  <p className="text-lg font-black text-emerald-400">{recs.potential_savings} <span className="text-xs font-medium text-slate-500">MAD/mo</span></p>
+                  <p className="text-[10px] text-slate-500">Open excess-load cost</p>
+                  <p className="text-lg font-black text-amber-400">{recs.excess_cost_per_hour_mad} <span className="text-xs font-medium text-slate-500">MAD/hour</span></p>
                 </div>
               )}
             </CardContent>

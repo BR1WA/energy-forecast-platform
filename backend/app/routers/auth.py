@@ -212,8 +212,19 @@ def update_password(
             detail="Current password is incorrect",
         )
     current_user.password_hash = hash_password(data.new_password)
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id,
+        RefreshToken.is_revoked.is_(False),
+    ).update({"is_revoked": True})
+    record_audit_event(
+        db,
+        "auth.password_changed",
+        actor_user_id=current_user.id,
+        target_user_id=current_user.id,
+        target=f"user:{current_user.id}",
+    )
     db.commit()
-    return {"message": "Password updated successfully"}
+    return {"message": "Password updated. Sign in again on your other devices."}
 
 
 @router.post("/me/avatar", response_model=UserResponse)

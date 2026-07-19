@@ -188,6 +188,8 @@ class SampleDataset(BaseModel):
 
 class AlertConfigCreate(BaseModel):
     threshold_kw: float = Field(ge=0.1, le=20.0, default=3.0)
+    cooldown_minutes: int = Field(ge=5, le=1440, default=60)
+    missing_data_minutes: int = Field(ge=5, le=10080, default=60)
     email_enabled: bool = True
 
 
@@ -196,6 +198,8 @@ class AlertConfigResponse(BaseModel):
 
     id: int
     threshold_kw: float
+    cooldown_minutes: int
+    missing_data_minutes: int
     email_enabled: bool
     created_at: datetime
 
@@ -207,11 +211,32 @@ class AlertResponse(BaseModel):
     severity: str
     message: Optional[str] = None
     peak_kw: Optional[float] = None
+    evidence_json: Optional[Dict[str, Any]] = None
     is_acknowledged: bool
+    acknowledged_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
     created_at: datetime
 
 class AlertAcknowledge(BaseModel):
     alert_id: int
+
+
+class RecommendationStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(open|completed|dismissed)$")
+
+
+class RecommendationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    category: str
+    title: str
+    message: str
+    status: str
+    estimated_excess_cost_per_hour_mad: Optional[float] = None
+    evidence_json: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 class ConsumptionTrendPoint(BaseModel):

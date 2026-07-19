@@ -71,5 +71,23 @@ services:
       backend:
         condition: service_healthy
 
+  alerts-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m app.cli run-alert-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-energy_forecast}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      DEBUG: ${DEBUG:-false}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./models:/app/models:ro
+      - ./backend/experiments:/app/experiments:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:

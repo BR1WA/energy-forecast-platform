@@ -17,7 +17,7 @@ from app.database import engine, Base, SessionLocal
 from app.routers import (
     auth, forecast, alerts, analytics, admin, settings as settings_router,
     multi_site, system, dashboard, data_mode, consumption,
-    simulation, models_registry, ingestion
+    simulation, models_registry, ingestion, recommendations
 )
 from app.services.forecast_service import get_forecast_service
 from app.migrations import run_migrations
@@ -131,10 +131,13 @@ app.add_middleware(RequestIDMiddleware)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
+# CORS: only the configured deployed frontend is trusted outside local development.
+cors_origins = [settings.FRONTEND_URL]
+if settings.DEBUG:
+    cors_origins.extend(["http://localhost:3000", "http://localhost:3001"])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000", "http://localhost:3001"],
+    allow_origins=list(dict.fromkeys(cors_origins)),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -158,6 +161,7 @@ app.include_router(consumption.router)
 app.include_router(simulation.router)
 app.include_router(ingestion.router)
 app.include_router(models_registry.router)
+app.include_router(recommendations.router)
 
 
 @app.get("/", tags=["Health"])

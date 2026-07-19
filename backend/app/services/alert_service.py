@@ -1,87 +1,179 @@
-"""
-Alert service — handles alert creation, verification, and email notifications.
-"""
-import smtplib
-from email.mime.text import MIMEText
-from app.config import get_settings
-from sqlalchemy.orm import Session
-from app.models.models import Alert
+"""Persisted, evidence-backed alert evaluation for owned meter data."""
+from __future__ import annotations
 
-settings = get_settings()
+import logging
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.orm import Session
+
+from app.models import Alert, AlertConfig, Meter, Site, SmartMeterReading
+from app.services.recommendation_service import recommendation_service
+
+logger = logging.getLogger(__name__)
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
 
 class AlertService:
     def get_recent_alerts(self, db: Session, user_id: int, limit: int = 5):
         alerts = db.query(Alert).filter(Alert.user_id == user_id).order_by(Alert.created_at.desc()).limit(limit).all()
         return [
             {
-                "id": a.id,
-                "type": a.alert_type,
-                "severity": a.severity,
-                "message": a.message,
-                "timestamp": a.created_at.isoformat() if a.created_at else None
+                "id": alert.id,
+                "type": alert.alert_type,
+                "severity": alert.severity,
+                "message": alert.message,
+                "timestamp": alert.created_at.isoformat() if alert.created_at else None,
             }
-            for a in alerts
+            for alert in alerts
         ]
 
+    def config_for_site(self, db: Session, site: Site) -> AlertConfig:
+        config = (
+            db.query(AlertConfig)
+            .filter(AlertConfig.user_id == site.user_id, AlertConfig.site_id == site.id)
+            .first()
+        )
+        if config is not None:
+            return config
+
+        legacy_config = (
+            db.query(AlertConfig)
+            .filter(AlertConfig.user_id == site.user_id, AlertConfig.site_id.is_(None))
+            .first()
+        )
+        if legacy_config is not None:
+            legacy_config.site_id = site.id
+            return legacy_config
+
+        config = AlertConfig(user_id=site.user_id, site_id=site.id)
+        db.add(config)
+        db.flush()
+        return config
+
+    def _create_if_due(
+        self,
+        db: Session,
+        *,
+        site: Site,
+        config: AlertConfig,
+        rule_key: str,
+        alert_type: str,
+        severity: str,
+        message: str,
+        peak_kw: float | None,
+        evidence: dict,
+        now: datetime,
+    ) -> Alert | None:
+        cutoff = now - timedelta(minutes=config.cooldown_minutes)
+        recent = (
+            db.query(Alert.id)
+            .filter(
+                Alert.user_id == site.user_id,
+                Alert.site_id == site.id,
+                Alert.rule_key == rule_key,
+                Alert.created_at >= cutoff,
+            )
+            .first()
+        )
+        if recent is not None:
+            return None
+
+        alert = Alert(
+            user_id=site.user_id,
+            site_id=site.id,
+            alert_type=alert_type,
+            rule_key=rule_key,
+            severity=severity,
+            message=message,
+            peak_kw=peak_kw,
+            evidence_json=evidence,
+        )
+        db.add(alert)
+        db.flush()
+        recommendation_service.create_for_alert(db, alert)
+        return alert
+
+    def evaluate_reading(self, db: Session, meter: Meter, reading: SmartMeterReading) -> Alert | None:
+        site = db.query(Site).filter(Site.id == meter.site_id).first()
+        if site is None or reading.gap < 0:
+            return None
+
+        config = self.config_for_site(db, site)
+        if reading.gap < config.threshold_kw:
+            return None
+
+        severity = "critical" if reading.gap >= config.threshold_kw * 1.25 else "high"
+        observed_at = _as_utc(reading.timestamp)
+        return self._create_if_due(
+            db,
+            site=site,
+            config=config,
+            rule_key=f"high_load:{meter.id}",
+            alert_type="high_consumption",
+            severity=severity,
+            message=(
+                f"Meter '{meter.name}' recorded {reading.gap:.3f} kW, above the "
+                f"configured {config.threshold_kw:.3f} kW threshold."
+            ),
+            peak_kw=reading.gap,
+            evidence={
+                "meter_id": meter.id,
+                "meter_name": meter.name,
+                "observed_at": observed_at.isoformat(),
+                "observed_kw": reading.gap,
+                "threshold_kw": config.threshold_kw,
+                "source": reading.source,
+            },
+            now=datetime.now(timezone.utc),
+        )
+
+    def evaluate_missing_push_data(self, db: Session, now: datetime | None = None) -> list[Alert]:
+        now = now or datetime.now(timezone.utc)
+        created: list[Alert] = []
+        meters = (
+            db.query(Meter)
+            .filter(Meter.source_type == "push", Meter.status == "active")
+            .order_by(Meter.id)
+            .all()
+        )
+        for meter in meters:
+            if meter.last_seen_at is None:
+                continue
+            site = db.query(Site).filter(Site.id == meter.site_id).first()
+            if site is None:
+                continue
+            config = self.config_for_site(db, site)
+            last_seen = _as_utc(meter.last_seen_at)
+            age_minutes = (now - last_seen).total_seconds() / 60
+            if age_minutes < config.missing_data_minutes:
+                continue
+            alert = self._create_if_due(
+                db,
+                site=site,
+                config=config,
+                rule_key=f"missing_data:{meter.id}",
+                alert_type="missing_data",
+                severity="high",
+                message=(
+                    f"Meter '{meter.name}' has not sent push data for "
+                    f"{int(age_minutes)} minutes."
+                ),
+                peak_kw=None,
+                evidence={
+                    "meter_id": meter.id,
+                    "meter_name": meter.name,
+                    "last_seen_at": last_seen.isoformat(),
+                    "age_minutes": round(age_minutes, 1),
+                    "missing_data_minutes": config.missing_data_minutes,
+                },
+                now=now,
+            )
+            if alert is not None:
+                created.append(alert)
+        return created
+
+
 alert_service = AlertService()
-
-
-def send_alert_email(email_to: str, alert_type: str, severity: str, message: str):
-    """
-    Dispatches email notifications when energy anomalies or peak demands are forecasted.
-    If SMTP_USER or SMTP_PASSWORD is not configured, falls back to mock console output.
-    """
-    subject = f"Energy Forecast Platform — {severity.upper()} Alert: {alert_type.replace('_', ' ').capitalize()}"
-    
-    body = (
-        f"Hello,\n\n"
-        f"The Energy Forecast Platform has generated an active alert:\n\n"
-        f"============================================================\n"
-        f"  Alert Type:   {alert_type.replace('_', ' ').capitalize()}\n"
-        f"  Severity:     {severity.upper()}\n"
-        f"  Description:  {message}\n"
-        f"============================================================\n\n"
-        f"Please check your dashboard for cost-saving recommendations and mitigation pathways.\n\n"
-        f"Best regards,\n"
-        f"Energy Management Team"
-    )
-
-    # If SMTP is not configured, fall back to console mock logging
-    if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
-        print("=" * 70)
-        print(f"[SMTP MOCK] Dispatching Alert Notification to: {email_to}")
-        print(f"Subject: {subject}")
-        print("-" * 70)
-        print(body)
-        print("=" * 70)
-        return
-
-    # If SMTP is configured, attempt sending email
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = settings.SMTP_FROM
-    msg["To"] = email_to
-
-    try:
-        # Establish connection
-        server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
-        
-        # Configure TLS if enabled
-        if settings.SMTP_TLS:
-            server.starttls()
-            
-        # Authenticate and send
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        server.sendmail(settings.SMTP_FROM, [email_to], msg.as_string())
-        server.quit()
-        
-        print(f"[SMTP] Successfully dispatched alert email to {email_to}")
-    except Exception as e:
-        print(f"[SMTP ERROR] Failed to send alert email to {email_to}: {str(e)}")
-        # Print mock email to console as fallback so the alert is still visible in logs
-        print("=" * 70)
-        print(f"[SMTP MOCK FALLBACK] Target: {email_to}")
-        print(f"Subject: {subject}")
-        print("-" * 70)
-        print(body)
-        print("=" * 70)
