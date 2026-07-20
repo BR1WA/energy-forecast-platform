@@ -28,7 +28,7 @@ const translations: Record<Language, Translations> = {
 
     // Dashboard
     'dashboard.title': 'Energy Forecast Dashboard',
-    'dashboard.subtitle': 'Real-time monitoring and advanced ML predictions.',
+    'dashboard.subtitle': 'Measured electricity, cost, freshness, and data coverage.',
     'dashboard.total_consumption': 'Total Consumption',
     'dashboard.peak_hours': 'Peak Hours',
     'dashboard.anomaly_status': 'Anomaly Status',
@@ -137,7 +137,7 @@ const translations: Record<Language, Translations> = {
 
     // Dashboard
     'dashboard.title': 'Tableau de bord énergétique',
-    'dashboard.subtitle': 'Surveillance en temps réel et prévisions ML avancées.',
+    'dashboard.subtitle': 'Électricité mesurée, coût, fraîcheur et couverture des données.',
     'dashboard.total_consumption': 'Consommation Totale',
     'dashboard.peak_hours': 'Heures de Pointe',
     'dashboard.anomaly_status': 'Statut des Anomalies',

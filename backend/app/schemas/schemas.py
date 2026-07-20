@@ -36,6 +36,57 @@ class UserLogin(BaseModel):
         return value.strip().lower()
 
 
+class ConsumptionPeriod(str, Enum):
+    live = "live"
+    today = "today"
+    seven_days = "7d"
+    month = "month"
+    year = "year"
+    all = "all"
+    custom = "custom"
+
+
+class ConsumptionPoint(BaseModel):
+    timestamp: datetime
+    average_kw: float
+    min_kw: float | None
+    max_kw: float | None
+    energy_kwh: float
+    sample_count: int
+
+
+class ConsumptionSourceCount(BaseModel):
+    source: str
+    count: int
+
+
+class ConsumptionFreshness(BaseModel):
+    status: str
+    age_seconds: int | None
+    expected_interval_seconds: int | None
+    last_seen_at: datetime | None
+    source: str | None
+    quality: str | None
+
+
+class ConsumptionPeriodSummary(BaseModel):
+    timeframe: str
+    period_start: datetime
+    period_end: datetime
+    timezone: str
+    granularity: str
+    total_kwh: float
+    estimated_cost: float
+    currency: str
+    average_kw: float
+    peak_kw: float
+    coverage_pct: float
+    sample_count: int
+    sources: List[ConsumptionSourceCount]
+    freshness: ConsumptionFreshness
+    points: List[ConsumptionPoint]
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

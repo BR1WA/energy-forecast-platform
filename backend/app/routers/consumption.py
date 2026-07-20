@@ -1,11 +1,32 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.services.auth_service import get_current_user
 from app.services.consumption_service import consumption_service
+from app.schemas import ConsumptionPeriod, ConsumptionPeriodSummary
 
 router = APIRouter(prefix="/api/v1/consumption", tags=["Consumption"])
+
+
+@router.get("/period", response_model=ConsumptionPeriodSummary)
+def get_period(
+    timeframe: ConsumptionPeriod = ConsumptionPeriod.today,
+    start: str | None = None,
+    end: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        parsed_start = datetime.fromisoformat(start) if start else None
+        parsed_end = datetime.fromisoformat(end) if end else None
+        return consumption_service.get_period_summary(
+            db, current_user.id, timeframe.value, parsed_start, parsed_end
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.get("/current")
 def get_current(

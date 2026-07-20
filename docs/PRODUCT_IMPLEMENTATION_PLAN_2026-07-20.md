@@ -229,22 +229,23 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 - [x] Add authenticated read-only live endpoint for committed push/simulator data.
 - [x] Add typed initial snapshot and reading event contracts.
-- [ ] Add cursor reconnect/resynchronization and deduplication.
+- [x] Add cursor reconnect/resynchronization and deduplication.
 - [x] Ensure CSV history is excluded from live events.
-- [ ] Implement exact Live/Today/7d/Month/Year/All/Custom semantics.
-- [ ] Add bounded period aggregation and raw-history pagination.
-- [ ] Add freshness/stale rules from expected meter interval.
+- [x] Implement exact Live/Today/7d/Month/Year/All/Custom semantics.
+- [x] Add bounded period aggregation.
+- [ ] Add raw-history pagination.
+- [x] Add freshness/stale rules from expected meter interval.
 - [x] Test that dashboard/live viewing creates no readings.
 
 #### F. Focused dashboard
 
-- [ ] Replace broad dashboard response with a typed period summary.
+- [x] Replace broad dashboard response with a typed period summary.
 - [ ] Correct today versus monthly calculations.
-- [ ] Implement source/freshness header and period selector.
-- [ ] Implement KPI row and primary consumption chart.
+- [x] Implement source/freshness header and period selector.
+- [x] Implement KPI row and primary consumption chart.
 - [ ] Add tariff/budget, forecast, alert, and recommendation summaries.
-- [ ] Implement loading/empty/stale/partial/error/live reconnect states.
-- [ ] Implement mobile drawer and responsive chart/KPI behavior.
+- [x] Implement loading/empty/stale/partial/error/live reconnect states.
+- [x] Implement mobile drawer and responsive chart/KPI behavior.
 - [ ] Add desktop/mobile dashboard tests.
 
 #### G. 24-hour Global TFT

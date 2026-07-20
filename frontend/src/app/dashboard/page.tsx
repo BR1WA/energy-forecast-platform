@@ -1,997 +1,280 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import AppLayout from '@/components/layout/app-layout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/lib/auth';
-import { dashboardApi, analyticsApi } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
-  Zap,
   Activity,
-  Cpu,
-  Thermometer,
-  PlayCircle,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  Sparkles,
-  Home,
-  Users,
-  FileText,
-  DollarSign,
-  Clock,
-  RefreshCw,
-  Sun,
-  Wind,
-  Target,
-  CheckCircle2,
-  AlertTriangle,
-  ChevronRight,
-  BarChart3,
-  Download,
-  Shield,
+  AlertCircle,
+  CalendarRange,
+  CircleDollarSign,
+  Database,
   Gauge,
-  Lightbulb,
-  CircleDot,
-  Radar,
-  Brain,
-  ArrowDown,
-  ArrowUp
+  PlugZap,
+  RefreshCw,
+  Settings,
+  TimerReset,
+  Zap,
 } from 'lucide-react';
-import {
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer
-} from 'recharts';
 
-// ── Telemetry frame interface ──────────────────────────────────────────
-// ── Animated Counter Hook ──────────────────────────────────────────────
-function useCountUp(target: number, duration: number = 600): number {
-  const [current, setCurrent] = useState(0);
-  const prevTarget = useRef(target);
+import AppLayout from '@/components/layout/app-layout';
+import { ConsumptionChart } from '@/components/consumption/consumption-chart';
+import { PeriodSelector } from '@/components/consumption/period-selector';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { API_BASE_URL, consumptionApi, getAccessToken } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import type { ConsumptionPeriodSummary, ConsumptionTimeframe } from '@/types';
 
-  useEffect(() => {
-    const from = prevTarget.current;
-    prevTarget.current = target;
-    if (from === target) { setCurrent(target); return; }
+type LiveState = 'off' | 'connecting' | 'connected' | 'reconnecting';
 
-    const start = performance.now();
-    let raf: number;
-
-    const animate = (now: number) => {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      // ease-out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCurrent(from + (target - from) * eased);
-      if (progress < 1) raf = requestAnimationFrame(animate);
-    };
-
-    raf = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-
-  return current;
+interface LiveReading {
+  reading_id: number;
+  timestamp: string;
+  active_power_kw: number;
+  source: string;
+  quality: string;
 }
 
-// ── Energy Score Gauge SVG ─────────────────────────────────────────────
-function EnergyScoreGauge({ score }: { score: number }) {
-  const radius = 40;
-  const circumference = 2 * Math.PI * radius;
-  const animatedScore = useCountUp(score);
-  const offset = circumference - (animatedScore / 100) * circumference;
-
-  const color = animatedScore >= 80 ? '#10B981' : animatedScore >= 60 ? '#F59E0B' : '#EF4444';
-
-  return (
-    <div className="relative w-28 h-28 flex-shrink-0">
-      <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
-        <circle
-          cx="50" cy="50" r={radius} fill="none"
-          stroke={color} strokeWidth="6" strokeLinecap="round"
-          strokeDasharray={circumference} strokeDashoffset={offset}
-          className="transition-all duration-700 ease-out"
-          style={{ filter: `drop-shadow(0 0 8px ${color}40)` }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-black text-white font-mono">{Math.round(animatedScore)}</span>
-        <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Score</span>
-      </div>
-    </div>
-  );
+function ageLabel(seconds: number | null) {
+  if (seconds === null) return 'No readings yet';
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-// ── Main Dashboard Component ───────────────────────────────────────────
+function localInputValue(date: Date) {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function periodLabel(timeframe: ConsumptionTimeframe) {
+  return {
+    live: 'the last 15 minutes',
+    today: 'today',
+    '7d': 'the last 7 calendar days',
+    month: 'this month',
+    year: 'this year',
+    all: 'all recorded history',
+    custom: 'the custom period',
+  }[timeframe];
+}
+
 export default function DashboardPage() {
-  const router = useRouter();
-  const { user } = useAuth();
-  const [mounted, setMounted] = useState(false);
+  const [timeframe, setTimeframe] = useState<ConsumptionTimeframe>('today');
+  const [summary, setSummary] = useState<ConsumptionPeriodSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [liveState, setLiveState] = useState<LiveState>('off');
+  const [liveReading, setLiveReading] = useState<LiveReading | null>(null);
+  const now = useMemo(() => new Date(), []);
+  const [customStart, setCustomStart] = useState(localInputValue(new Date(now.getTime() - 7 * 86400_000)));
+  const [customEnd, setCustomEnd] = useState(localInputValue(now));
+  const cursorRef = useRef(0);
 
-  // Geolocation and resolved states
-  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [locationResolved, setLocationResolved] = useState(false);
-
-  // Dashboard summary state
-  const [summary, setSummary] = useState<any>(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-
-  // Chart mode
-  const [dashboardTimeframe, setDashboardTimeframe] = useState<'live' | '24'>('live');
-
-  // Request user geolocation once on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCoords({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude,
-          });
-          setLocationResolved(true);
-        },
-        (error) => {
-          console.warn('Geolocation error or permission denied:', error);
-          setLocationResolved(true);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 300000
-        }
-      );
-    } else {
-      setLocationResolved(true);
+  const loadSummary = useCallback(async (
+    selected: ConsumptionTimeframe,
+    background = false,
+    custom?: { start: string; end: string },
+  ) => {
+    if (background) setRefreshing(true);
+    else {
+      setSummary(null);
+      setLoading(true);
+    }
+    try {
+      const data = await consumptionApi.getPeriod(selected, custom);
+      setSummary(data);
+      setError(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Consumption data is unavailable.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  // Fetch dashboard summary
-  const fetchSummary = useCallback(async () => {
-    try {
-      const data = coords 
-        ? await dashboardApi.getSummary(coords.lat, coords.lon)
-        : await dashboardApi.getSummary();
-      setSummary(data);
-      setSummaryError(null);
-    } catch (err: any) {
-      setSummaryError(err.message || 'Failed to load');
-    } finally {
-      setSummaryLoading(false);
+  useEffect(() => {
+    setLiveReading(null);
+    if (timeframe === 'custom') {
+      setSummary(null);
+      setLoading(false);
+      return;
     }
-  }, [coords]);
+    void loadSummary(timeframe);
+    if (timeframe !== 'live') return;
+    const timer = window.setInterval(() => void loadSummary('live', true), 30_000);
+    return () => window.clearInterval(timer);
+  }, [loadSummary, timeframe]);
 
   useEffect(() => {
-    setMounted(true);
-    // Only query backend after geolocation resolution completes to avoid Casablanca flickers
-    if (locationResolved) {
-      fetchSummary();
-      const interval = setInterval(fetchSummary, 5000);
-      return () => clearInterval(interval);
+    if (timeframe !== 'live') {
+      setLiveState('off');
+      return;
     }
-  }, [locationResolved, fetchSummary]);
 
-  if (!mounted) return null;
+    let socket: WebSocket | null = null;
+    let retryTimer: number | null = null;
+    let stopped = false;
 
-  // ── Extracted data ─────────────────────────────────────────────────
-  const exec = summary?.executive;
-  const assistant = summary?.assistant;
-  const liveStatus = summary?.live_status;
-  const liveCons = summary?.live_consumption;
-  const activePower = liveCons?.current_power || 0.0;
-  const chartData: Array<{ time: string; consumption: number; predicted: number | null }> = [];
-  const energyFlow = summary?.energy_flow;
-  const forecast = summary?.forecast;
-  const recs = summary?.recommendations;
-  const budget = summary?.budget;
-  const weather = summary?.weather;
-  const radar = summary?.intelligence_radar;
-  const todayVsYesterday = summary?.today_vs_yesterday;
-  const aiDecisions = summary?.ai_decisions;
-  const firstName = user?.full_name?.trim().split(/\s+/)[0] || 'there';
+    const connect = () => {
+      const token = getAccessToken();
+      if (!token || stopped) return;
+      setLiveState(cursorRef.current ? 'reconnecting' : 'connecting');
+      const protocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws';
+      const host = API_BASE_URL.replace(/^https?:\/\//, '');
+      socket = new WebSocket(`${protocol}://${host}/api/v1/monitoring/live`);
+      socket.onopen = () => {
+        socket?.send(JSON.stringify({ access_token: token, last_reading_id: cursorRef.current || undefined }));
+        setLiveState('connected');
+      };
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as { type: 'snapshot' | 'reading'; reading: LiveReading | null };
+          const reading = message.reading;
+          if (!reading || reading.reading_id <= cursorRef.current) return;
+          cursorRef.current = reading.reading_id;
+          setLiveReading(reading);
+          void loadSummary('live', true);
+        } catch {
+          socket?.close();
+        }
+      };
+      socket.onclose = () => {
+        if (stopped) return;
+        setLiveState('reconnecting');
+        retryTimer = window.setTimeout(connect, 3000);
+      };
+      socket.onerror = () => socket?.close();
+    };
 
-  // ── Skeleton Loader ────────────────────────────────────────────────
-  if (summaryLoading) {
-    return (
-      <AppLayout>
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
-          {/* Hero skeleton */}
-          <div className="h-52 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-          {/* AI Command Center skeleton */}
-          <div className="h-40 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-          {/* Grid skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="h-72 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-            <div className="lg:col-span-2 h-72 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-          </div>
-          {/* Bottom row skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 h-52 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-            <div className="h-52 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="h-44 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-            <div className="h-44 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-            <div className="h-44 bg-[#111827]/60 rounded-2xl border border-white/5 animate-pulse" />
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
+    connect();
+    return () => {
+      stopped = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [loadSummary, timeframe]);
+
+  const applyCustomRange = () => {
+    const start = new Date(customStart);
+    const end = new Date(customEnd);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      setError('Choose a custom end time after the start time.');
+      return;
+    }
+    void loadSummary('custom', false, { start: start.toISOString(), end: end.toISOString() });
+  };
+
+  const latestPower = timeframe === 'live' && liveReading
+    ? liveReading.active_power_kw
+    : summary?.points.at(-1)?.average_kw ?? 0;
+  const sourceLabel = summary?.sources.map((source) => source.source).join(', ') || 'No source';
+  const freshness = summary?.freshness;
+  const isEmpty = !loading && summary?.sample_count === 0 && summary.total_kwh === 0;
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
+      <div className="mx-auto max-w-7xl space-y-5">
+        <header className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="mb-1 text-xs font-semibold uppercase text-cyan-400">Single-site electricity monitor</p>
+            <h1 className="text-2xl font-semibold text-white">Energy overview</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1.5"><Database className="h-3.5 w-3.5" />{sourceLabel}</span>
+              <span className="inline-flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" />{freshness?.status || 'loading'}</span>
+              <span>{ageLabel(freshness?.age_seconds ?? null)}</span>
+              {timeframe === 'live' && <span>Stream: {liveState}</span>}
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col items-stretch gap-2 sm:items-end">
+            <PeriodSelector disabled={loading} onChange={setTimeframe} value={timeframe} />
+            <p className="text-right text-xs text-slate-500">Times shown in {summary?.timezone || 'your site timezone'}</p>
+          </div>
+        </header>
 
-        {summaryError && (
-          <div role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            Dashboard data is temporarily unavailable: {summaryError}
+        {timeframe === 'custom' && (
+          <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end">
+            <label className="grid gap-1.5 text-xs text-slate-400">
+              Start
+              <input className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white" onChange={(event) => setCustomStart(event.target.value)} type="datetime-local" value={customStart} />
+            </label>
+            <label className="grid gap-1.5 text-xs text-slate-400">
+              End
+              <input className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white" onChange={(event) => setCustomEnd(event.target.value)} type="datetime-local" value={customEnd} />
+            </label>
+            <Button onClick={applyCustomRange}><CalendarRange />Apply range</Button>
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* COMPONENT A — EXECUTIVE HERO                                  */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <Card className="relative overflow-hidden border-none bg-gradient-to-br from-slate-900 via-indigo-950/80 to-slate-950 shadow-2xl">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
-          <CardContent className="relative z-10 p-6 lg:p-8">
-            {/* Greeting + KPIs Row */}
-            <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-              {/* Left: Gauge + Greeting */}
-              <div className="flex items-center gap-5 flex-shrink-0">
-                <EnergyScoreGauge score={exec?.energy_score || 0} />
-                <div className="space-y-1.5">
-                  <h1 className="text-xl font-bold text-white tracking-tight">
-                    {exec?.greeting || 'Hello'}, <span className="text-indigo-400">{firstName}</span>
-                  </h1>
-                  <p className="text-sm text-slate-300 max-w-lg leading-relaxed">
-                    {exec?.proactive_sentence || exec?.summary_sentence || 'Your household is operating efficiently.'}
-                  </p>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <Badge className="bg-indigo-600/20 text-indigo-300 border-indigo-500/20 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5">
-                      {exec?.current_tariff_tier || 'Tranche 2'}
-                    </Badge>
-                    {weather && (
-                      <Badge className="bg-amber-600/15 text-amber-300 border-amber-500/20 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5">
-                        <Thermometer className="w-2.5 h-2.5 mr-1" />{weather.temperature}°C · {weather.condition}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
+        {error && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            <span className="flex items-center gap-2"><AlertCircle className="h-4 w-4" />{error}</span>
+            <Button onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe)} size="sm" variant="outline">Retry</Button>
+          </div>
+        )}
 
-              {/* Right: KPI Cards with Trends */}
-              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4">
-                <KPICard icon={<DollarSign className="w-4 h-4" />} label="Estimated Bill" value={exec?.estimated_bill == null ? '—' : `${exec.estimated_bill.toFixed(2)}`} unit={exec?.estimated_bill == null ? '' : 'MAD'} color="text-emerald-400" bgColor="bg-emerald-600/10" delta={exec?.bill_delta} deltaUnit="MAD" />
-                <KPICard icon={<Sparkles className="w-4 h-4" />} label="Open Actions" value={`${exec?.actionable_recommendations ?? 0}`} unit="" color="text-amber-400" bgColor="bg-amber-600/10" />
-                <KPICard icon={<Shield className="w-4 h-4" />} label="Forecast" value={forecast?.points?.length ? 'Available' : '—'} unit="" color="text-indigo-400" bgColor="bg-indigo-600/10" isText subtitle={radar?.confidence?.basis || 'Not calibrated'} />
-              </div>
+        <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Period summary">
+          {[
+            { label: timeframe === 'live' ? 'Current load' : 'Latest load', value: `${latestPower.toFixed(3)} kW`, icon: Zap },
+            { label: 'Energy', value: `${(summary?.total_kwh ?? 0).toFixed(2)} kWh`, icon: Gauge },
+            { label: 'Estimated cost', value: `${summary?.currency ?? 'MAD'} ${(summary?.estimated_cost ?? 0).toFixed(2)}`, icon: CircleDollarSign },
+            { label: 'Peak load', value: `${(summary?.peak_kw ?? 0).toFixed(3)} kW`, icon: Activity },
+          ].map((metric) => (
+            <Card className="min-h-28 rounded-lg border-white/10 bg-[#111827]" key={metric.label}>
+              <CardContent className="flex h-full flex-col justify-between pt-1">
+                <div className="flex items-center justify-between gap-2 text-xs text-slate-400"><span>{metric.label}</span><metric.icon className="h-4 w-4 text-cyan-400" /></div>
+                <p className="mt-4 text-xl font-semibold text-white sm:text-2xl">{loading ? '...' : metric.value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </section>
+
+        <Card className="rounded-lg border-white/10 bg-[#111827]">
+          <CardHeader className="flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm text-white">Measured power</CardTitle>
+              <p className="mt-1 text-xs text-slate-400">Average load grouped by {summary?.granularity?.replace('_', ' ') || 'period'} for {periodLabel(timeframe)}.</p>
             </div>
-
-            {/* Today's Story */}
-            {exec?.today_story && exec.today_story.length > 0 && (
-              <div className="mt-5 pt-5 border-t border-white/[0.06]">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Today&apos;s Story</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {exec.today_story.map((item: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2.5 text-sm">
-                      {item.icon === 'check' ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                      )}
-                      <span className="text-slate-300 text-xs font-medium leading-snug">{item.text}</span>
-                    </div>
-                  ))}
-                </div>
+            <Button aria-label="Refresh consumption" disabled={refreshing || loading} onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe, true)} size="icon" title="Refresh" variant="ghost">
+              <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {loading && !summary ? (
+              <div className="flex h-80 items-center justify-center text-sm text-slate-400"><RefreshCw className="mr-2 h-4 w-4 animate-spin" />Loading measured data</div>
+            ) : isEmpty ? (
+              <div className="flex h-80 flex-col items-center justify-center gap-3 px-4 text-center">
+                <PlugZap className="h-8 w-8 text-slate-500" />
+                <div><p className="font-medium text-white">No readings in this period</p><p className="mt-1 text-sm text-slate-400">Connect a meter, import a CSV, or explicitly start the demo simulator.</p></div>
+                <div className="flex gap-2"><Link className={buttonVariants({ size: 'sm' })} href="/settings">Set up data</Link><Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/simulation">Open simulator</Link></div>
               </div>
-            )}
+            ) : summary ? <ConsumptionChart summary={summary} /> : null}
           </CardContent>
         </Card>
 
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* HOUSE INTELLIGENCE RADAR — Flagship Centerpiece                */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {radar && (
-          <Card className="relative overflow-hidden glass-card border-white/[0.06] bg-gradient-to-r from-slate-900/80 via-indigo-950/20 to-slate-900/80">
-            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-5">
-                <div className="p-2 bg-emerald-600/15 rounded-lg text-emerald-400">
-                  <Radar className="w-5 h-5" />
-                </div>
-                <h2 className="text-sm font-bold text-white tracking-wide">Current Household Status</h2>
-              </div>
-
-              {/* Radar Dimensions */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
-                {radar.dimensions?.map((dim: any, i: number) => {
-                  const dotColor = dim.status === 'green' ? 'bg-emerald-400' : dim.status === 'amber' ? 'bg-amber-400' : dim.status === 'red' ? 'bg-rose-400' : 'bg-blue-400';
-                  const textColor = dim.status === 'green' ? 'text-emerald-400' : dim.status === 'amber' ? 'text-amber-400' : dim.status === 'red' ? 'text-rose-400' : 'text-blue-400';
-                  return (
-                    <div key={i} className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center hover:bg-white/[0.04] transition-all">
-                      <div className="flex items-center justify-center gap-1.5 mb-2">
-                        <span className={cn("w-2 h-2 rounded-full", dotColor)} />
-                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{dim.label}</span>
-                      </div>
-                      <span className={cn("text-xl font-black font-mono", textColor)}>
-                        {typeof dim.value === 'number' ? dim.value : dim.value}
-                      </span>
-                      {dim.unit && <span className="text-[9px] text-slate-500 ml-0.5">{dim.unit}</span>}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Overall Condition */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-[#0A0F1C]/60 border border-white/[0.04]">
-                <div className="flex items-center gap-2">
-                  <Badge className={cn(
-                    "text-[10px] font-bold uppercase tracking-wider px-3 py-1",
-                    radar.condition === 'Excellent' ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/20'
-                      : radar.condition === 'Good' ? 'bg-blue-600/20 text-blue-300 border-blue-500/20'
-                      : radar.condition === 'Fair' ? 'bg-amber-600/20 text-amber-300 border-amber-500/20'
-                      : 'bg-rose-600/20 text-rose-300 border-rose-500/20'
-                  )}>
-                    {radar.condition}
-                  </Badge>
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Overall Condition</span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">{radar.message}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* COMPONENT B — AI COMMAND CENTER                                */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <Card className="glass-card border-white/[0.06] bg-gradient-to-r from-indigo-950/30 to-slate-900/50 overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-indigo-500/40 to-transparent" />
-          <CardContent className="p-6 space-y-4 relative">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-indigo-600/20 rounded-xl text-indigo-400 shrink-0 relative">
-                <Cpu className="w-6 h-6" />
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-              </div>
-              <div className="space-y-3 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-white tracking-wide">EnergyAI Assistant</h3>
-                  <Badge className="bg-indigo-600 text-white text-[8px] uppercase font-mono px-2 py-0.5">Live</Badge>
-                </div>
-
-                {/* Structured Narrative */}
-                <div className="space-y-2.5">
-                  <p className="text-base font-bold text-white">{assistant?.headline || 'Analyzing...'}</p>
-                  <p className="text-sm text-slate-300 leading-relaxed">{assistant?.body}</p>
-
-                  {assistant?.warning && (
-                    <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-amber-200 leading-relaxed font-medium">{assistant.warning}</p>
-                    </div>
-                  )}
-
-                  {assistant?.recommended_action && (
-                    <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-emerald-200 leading-relaxed font-medium">
-                        <span className="text-emerald-400 font-bold">Recommended: </span>{assistant.recommended_action}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className="border-t border-white/10 pt-4 lg:col-span-2">
+            <h2 className="text-sm font-medium text-white">Data quality</h2>
+            <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+              <div><p className="text-xs text-slate-500">Coverage</p><p className="mt-1 text-base text-white">{(summary?.coverage_pct ?? 0).toFixed(1)}%</p></div>
+              <div><p className="text-xs text-slate-500">Samples</p><p className="mt-1 text-base text-white">{summary?.sample_count.toLocaleString() ?? 0}</p></div>
+              <div><p className="text-xs text-slate-500">Quality</p><p className="mt-1 text-base capitalize text-white">{freshness?.quality || 'Unavailable'}</p></div>
+              <div><p className="text-xs text-slate-500">Expected interval</p><p className="mt-1 text-base text-white">{freshness?.expected_interval_seconds ? `${freshness.expected_interval_seconds}s` : 'Unknown'}</p></div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2.5 pt-2">
-              <Button onClick={() => router.push('/forecast')} size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold h-9 rounded-lg px-4">
-                <TrendingUp className="w-3.5 h-3.5 mr-2" /> View Forecast
-              </Button>
-              <Button onClick={() => router.push('/simulation')} size="sm" variant="outline" className="border-white/10 text-white hover:bg-white/5 text-xs font-semibold h-9 rounded-lg">
-                <PlayCircle className="w-3.5 h-3.5 mr-2" /> Run Simulation
-              </Button>
-              <Button onClick={() => router.push('/recommendations')} size="sm" variant="outline" className="border-white/10 text-white hover:bg-white/5 text-xs font-semibold h-9 rounded-lg">
-                <Lightbulb className="w-3.5 h-3.5 mr-2" /> Recommendations
-              </Button>
-              <Button onClick={() => router.push('/reports')} size="sm" variant="outline" className="border-white/10 text-white hover:bg-white/5 text-xs font-semibold h-9 rounded-lg">
-                <FileText className="w-3.5 h-3.5 mr-2" /> View Report
-              </Button>
+            {(summary?.coverage_pct ?? 0) < 95 && (summary?.sample_count ?? 0) > 0 && <p className="mt-4 text-xs text-amber-300">Some intervals are missing or too far apart. Totals exclude unsupported gaps.</p>}
+          </div>
+          <div className="border-t border-white/10 pt-4">
+            <h2 className="text-sm font-medium text-white">Data controls</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/settings"><Settings />Meter settings</Link>
+              <Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/consumption"><Database />Import history</Link>
+              <Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/simulation"><TimerReset />Demo simulator</Link>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* COMPONENT C + D — LIVE HOUSE + ENERGY FLOW & CHART            */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* ── Component C: Live House Digital Twin ─────────────────── */}
-          <Card className="glass-card border-white/[0.06]">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                <Home className="w-4 h-4 text-indigo-400" />
-                Home Status
-                <span className="ml-auto flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[9px] text-emerald-400 font-bold uppercase">Live</span>
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 pb-4">
-              {/* Room-based appliance status */}
-              {liveStatus?.appliances?.map((item: any, i: number) => {
-                const isActive = item.status === 'Running' || item.status === 'Generating' || item.status === 'Normal';
-                const room = item.name === 'Air Conditioner' ? 'Living Room'
-                  : item.name === 'Washing Machine' ? 'Kitchen'
-                  : item.name === 'Solar Panels' ? 'Roof'
-                  : item.name === 'Occupancy' ? 'Home'
-                  : 'General';
-                const icon = item.name === 'Air Conditioner' ? <Wind className="w-3.5 h-3.5" />
-                  : item.name === 'Washing Machine' ? <RefreshCw className="w-3.5 h-3.5" />
-                  : item.name === 'Solar Panels' ? <Sun className="w-3.5 h-3.5" />
-                  : item.name === 'Occupancy' ? <Users className="w-3.5 h-3.5" />
-                  : <Lightbulb className="w-3.5 h-3.5" />;
-
-                return (
-                  <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors group">
-                    <div className={cn(
-                      "p-1.5 rounded-lg",
-                      isActive ? "bg-emerald-600/15 text-emerald-400" : "bg-slate-800/50 text-slate-500"
-                    )}>
-                      {icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{room}</p>
-                      <p className="text-xs text-white font-medium truncate">{item.name}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className={cn(
-                        "w-1.5 h-1.5 rounded-full",
-                        isActive ? "bg-emerald-400 animate-pulse" : "bg-slate-600"
-                      )} />
-                      <Badge variant="outline" className={cn(
-                        "text-[8px] font-mono px-1.5 border-white/10",
-                        isActive ? "text-emerald-300" : "text-slate-500"
-                      )}>
-                        {item.status === 'Generating' ? `${item.level}` : item.level}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Load metrics */}
-              <div className="mt-3 p-3 rounded-xl bg-[#0A0F1C]/80 border border-white/[0.04] grid grid-cols-2 gap-2.5">
-                <LoadMetric label="Power" value={`${liveStatus?.load?.active_power || 0}`} unit="kW" />
-                <LoadMetric label="Voltage" value={`${liveStatus?.load?.voltage ?? 'N/A'}`} unit="V" />
-                <LoadMetric label="Current" value={`${liveStatus?.load?.current || 0}`} unit="A" />
-                <LoadMetric label="Frequency" value={`${liveStatus?.load?.frequency ?? 'N/A'}`} unit="Hz" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ── Component D: Energy Flow + Live Chart ────────────────── */}
-          <Card className="glass-card border-white/[0.06] lg:col-span-2 flex flex-col">
-            <CardHeader className="pb-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
-                    Live Energy Flow
-                  </CardTitle>
-                  <CardDescription className="text-[10px] text-slate-500 mt-0.5">Real-time energy production, consumption, and grid exchange.</CardDescription>
-                </div>
-                <div className="flex bg-[#111827] border border-white/10 rounded-lg p-0.5 select-none">
-                  {[
-                    { value: 'live', label: 'Live Stream' },
-                    { value: '24', label: '24h Forecast' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setDashboardTimeframe(opt.value as any)}
-                      className={cn(
-                        "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
-                        dashboardTimeframe === opt.value
-                          ? "bg-indigo-600 text-white shadow-md"
-                          : "text-slate-400 hover:text-white hover:bg-white/5"
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4 flex-1 flex flex-col pb-4">
-              {/* Energy Flow Diagram */}
-              <div className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-[#0A0F1C]/60 border border-white/[0.04]">
-                <FlowNode icon={<Sun className="w-5 h-5" />} label="Solar" value={`${energyFlow?.solar_generation || 0} kW`} color="text-amber-400" bgColor="bg-amber-600/15" active={energyFlow?.solar_generation > 0} />
-                <FlowArrow active={energyFlow?.solar_generation > 0} color="amber" />
-                <FlowNode icon={<Home className="w-5 h-5" />} label="House" value={`${energyFlow?.house_consumption || activePower} kW`} color="text-indigo-400" bgColor="bg-indigo-600/15" active />
-                <FlowArrow active color="rose" reverse />
-                <FlowNode icon={<Zap className="w-5 h-5" />} label="Grid" value={`${energyFlow?.grid_import || activePower} kW`} color="text-rose-400" bgColor="bg-rose-600/15" active />
-                {energyFlow?.solar_offset_pct > 0 && (
-                  <div className="ml-3 px-3 py-1.5 rounded-lg bg-emerald-600/10 border border-emerald-500/20">
-                    <p className="text-[10px] text-emerald-400 font-bold">{energyFlow.solar_offset_pct}% Solar Offset</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Chart */}
-              <div className="flex-1 min-h-[200px]">
-                {dashboardTimeframe === 'live' ? (
-                  chartData.length === 0 ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-[#0A0F1C]/40 border border-white/5 rounded-xl min-h-[200px]">
-                      <RefreshCw className="w-8 h-8 animate-spin text-slate-600 mb-2" />
-                      <p className="text-xs font-semibold">Waiting for telemetry connection...</p>
-                      <p className="text-[10px] text-slate-600 mt-0.5">Start the Virtual House simulator to see live data.</p>
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(16,185,129,0.06)" vertical={false} />
-                        <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10 }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 11 }} domain={[0, 'auto']} />
-                        <Tooltip contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(16,185,129,0.15)', borderRadius: '12px', color: '#E2E8F0', fontSize: '11px' }} />
-                        <Line type="monotone" dataKey="consumption" stroke="#10B981" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#10B981', stroke: '#111827', strokeWidth: 2 }} isAnimationActive animationDuration={300} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={forecast?.points || []}>
-                      <defs>
-                        <linearGradient id="cmdGradPred" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10B981" stopOpacity={0.15} />
-                          <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(59,130,246,0.06)" vertical={false} />
-                      <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 11 }} domain={[0, 'auto']} />
-                      <Tooltip contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '12px', color: '#E2E8F0', fontSize: '11px' }} />
-                      <Area type="monotone" dataKey="predicted" stroke="#10B981" strokeWidth={2} strokeDasharray="5 3" fill="url(#cmdGradPred)" name="Predicted (kW)" isAnimationActive animationDuration={300} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              {/* Stats bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <MiniStat label="Current Power" value={`${liveCons?.current_power || activePower}`} unit="kW" />
-                <MiniStat label="Today's Energy" value={`${liveCons?.today_energy || 0}`} unit="kWh" />
-                <MiniStat label="Today's Peak" value={`${liveCons?.today_peak || 0}`} unit="kW" />
-                <MiniStat label="Avg Load" value={`${liveCons?.average_load || 0}`} unit="kW" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* COMPONENT E + F — FORECAST TIMELINE + BUDGET MISSION          */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* ── Component E: Forecast Timeline ──────────────────────── */}
-          <Card className="glass-card border-white/[0.06] lg:col-span-2">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                <Clock className="w-4 h-4 text-indigo-400" />
-                Forecast Timeline
-              </CardTitle>
-              <CardDescription className="text-[10px] text-slate-500">Upcoming energy events and tomorrow&apos;s outlook.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pb-5">
-              {/* Timeline */}
-              <div className="relative">
-                <div className="absolute left-3 top-0 bottom-0 w-[1px] bg-gradient-to-b from-indigo-500/40 via-indigo-500/20 to-transparent" />
-                <div className="space-y-3 pl-8">
-                  <TimelineEvent time="Now" label="Current consumption" detail={`${liveCons?.current_power || 0} kW`} severity="live" />
-                  {forecast?.peak_hour && <TimelineEvent time={forecast.peak_hour} label="Forecast peak" detail="From the persisted forecast" severity="warning" />}
-                  {weather?.temperature !== undefined && weather?.temperature !== null && (
-                    <TimelineEvent time="Now" label="Observed temperature" detail={`${weather.temperature}°C`} severity="info" />
-                  )}
-                </div>
-              </div>
-
-              {/* Tomorrow's Outlook */}
-              <div className="p-4 rounded-xl bg-[#0A0F1C]/60 border border-white/[0.04] grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Expected Peak</p>
-                  <p className="text-sm font-bold text-white mt-0.5">{forecast?.peak_hour || 'Not available'}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Est. Cost</p>
-                  <p className="text-sm font-bold text-white mt-0.5">{forecast?.estimated_cost || 0} <span className="text-[10px] text-slate-500">MAD</span></p>
-                </div>
-                <div>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Confidence</p>
-                  <p className="text-sm font-bold text-emerald-400 mt-0.5">{forecast?.forecast_reliability || 'Not available'}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Reason</p>
-                  <p className="text-xs text-slate-400 mt-0.5 leading-snug">{forecast?.explainability || 'No forecast available'}</p>
-                </div>
-              </div>
-
-              {/* Forecast Validation */}
-              {forecast?.validation?.available && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-indigo-950/30 border border-indigo-500/10">
-                  <Gauge className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                  <div className="flex-1 text-xs">
-                    <span className="text-slate-400">Yesterday&apos;s forecast accuracy: </span>
-                    <span className="text-white font-bold">Predicted {forecast.validation.predicted} kW</span>
-                    <span className="text-slate-500"> vs </span>
-                    <span className="text-white font-bold">Actual {forecast.validation.actual} kW</span>
-                    <span className={cn(
-                      "ml-2 font-bold",
-                      forecast.validation.error_pct < 10 ? "text-emerald-400" : "text-amber-400"
-                    )}>
-                      ({forecast.validation.error_pct}% error)
-                    </span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* ── Component F: Budget Mission ──────────────────────────── */}
-          <Card className="glass-card border-white/[0.06]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                <Target className="w-4 h-4 text-emerald-400" />
-                Budget Mission
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center space-y-4 pb-5">
-              {/* Circular Progress Ring */}
-              <BudgetRing
-                progress={budget?.progress_pct || 0}
-                current={budget?.current_cost || 0}
-                target={budget?.target ?? 0}
-              />
-
-              {/* Mission Status */}
-              <Badge className={cn(
-                "text-[10px] font-bold uppercase tracking-wider px-3 py-1",
-                budget?.mission_status === 'On Track' ? "bg-emerald-600/20 text-emerald-300 border-emerald-500/20"
-                  : budget?.mission_status === 'At Risk' ? "bg-amber-600/20 text-amber-300 border-amber-500/20"
-                  : "bg-rose-600/20 text-rose-300 border-rose-500/20"
-              )}>
-                {budget?.mission_status || 'On Track'}
-              </Badge>
-
-              <div className="text-center space-y-0.5">
-                <p className="text-xs text-slate-400">Remaining: <span className="text-white font-bold">{budget?.remaining || 0} MAD</span></p>
-                <p className="text-[10px] text-slate-500">Tariff: {budget?.tariff_tier || 'Tranche 2'}</p>
-              </div>
-
-              {/* Scenario Comparison */}
-              <div className="w-full space-y-2 pt-2 border-t border-white/[0.06]">
-                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest text-center">Scenario Analysis</p>
-                <div className="flex justify-between items-center p-2.5 rounded-lg bg-rose-500/5 border border-rose-500/10">
-                  <span className="text-[10px] text-slate-400">Without recommendations</span>
-                  <span className="text-xs font-bold text-rose-400">{budget?.projected_without_recs || budget?.projected_cost || 0} MAD</span>
-                </div>
-                <div className="flex justify-between items-center p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
-                  <span className="text-[10px] text-slate-400">With recommendations</span>
-                  <span className="text-xs font-bold text-emerald-400">{budget?.projected_with_recs || 0} MAD</span>
-                </div>
-                {(budget?.savings_if_applied || 0) > 0 && (
-                  <div className="text-center">
-                    <span className="text-[10px] text-emerald-400 font-bold">↓ Save {budget.savings_if_applied} MAD</span>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* COMPONENT G + H + I — SAVINGS + ACTIVITY + QUICK ACTIONS      */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* ── Component G: Savings Radar ──────────────────────────── */}
-          <Card className="glass-card border-white/[0.06]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                Top Opportunities
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2.5 pb-4">
-              {(recs?.priority_list || []).slice(0, 3).map((rec: any, i: number) => (
-                <div key={rec.id || i} className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all hover:translate-y-[-1px] group">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Badge className="bg-blue-600/15 text-blue-300 border-blue-500/20 text-[8px] font-bold uppercase px-1.5">{rec.category?.replace('_', ' ') || 'action'}</Badge>
-                    <Button variant="ghost" size="sm" onClick={() => router.push('/recommendations')} className="h-auto p-0 text-[10px] text-blue-300 hover:text-blue-200">Review</Button>
-                  </div>
-                  <p className="text-xs text-white font-semibold">{rec.title}</p>
-                  <p className="mt-1.5 text-[10px] leading-4 text-slate-400">{rec.message}</p>
-                  {rec.estimated_excess_cost_per_hour_mad != null && <p className="mt-2 text-[10px] font-medium text-amber-300">Excess-load cost: {rec.estimated_excess_cost_per_hour_mad} MAD/hour</p>}
-                </div>
-              ))}
-
-              {recs?.excess_cost_per_hour_mad != null && (
-                <div className="text-center pt-2 border-t border-white/[0.06]">
-                  <p className="text-[10px] text-slate-500">Open excess-load cost</p>
-                  <p className="text-lg font-black text-amber-400">{recs.excess_cost_per_hour_mad} <span className="text-xs font-medium text-slate-500">MAD/hour</span></p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* ── Component H: AI Decisions Today ────────────────────── */}
-          <Card className="glass-card border-white/[0.06]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                <Brain className="w-4 h-4 text-indigo-400" />
-                AI Decisions Today
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="space-y-1.5">
-                {(aiDecisions || []).map((decision: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/[0.02] transition-colors">
-                    {decision.done ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    ) : (
-                      <CircleDot className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    )}
-                    <span className={cn(
-                      "text-xs font-medium leading-snug",
-                      decision.done ? 'text-slate-300' : 'text-amber-300'
-                    )}>{decision.text}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ── Component I: Quick Actions Dock ─────────────────────── */}
-          <Card className="glass-card border-white/[0.06]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400" />
-                Quick Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="grid grid-cols-2 gap-2">
-                <QuickAction icon={<PlayCircle className="w-4 h-4" />} label="Simulation" onClick={() => router.push('/simulation')} color="text-indigo-400" />
-                <QuickAction icon={<TrendingUp className="w-4 h-4" />} label="Forecast" onClick={() => router.push('/forecast')} color="text-emerald-400" />
-                <QuickAction icon={<FileText className="w-4 h-4" />} label="Reports" onClick={() => router.push('/reports')} color="text-blue-400" />
-                <QuickAction icon={<BarChart3 className="w-4 h-4" />} label="Analytics" onClick={() => router.push('/analytics')} color="text-purple-400" />
-                <QuickAction icon={<Lightbulb className="w-4 h-4" />} label="Recommend" onClick={() => router.push('/recommendations')} color="text-amber-400" />
-                <QuickAction icon={<DollarSign className="w-4 h-4" />} label="Budget" onClick={() => router.push('/budget')} color="text-rose-400" />
-              </div>
-              <Button
-                onClick={async () => {
-                  try { await analyticsApi.downloadReportPDF(); } catch { /* silent */ }
-                }}
-                variant="outline"
-                className="w-full mt-3 border-white/10 text-white hover:bg-white/5 text-xs font-semibold h-9 rounded-lg"
-              >
-                <Download className="w-3.5 h-3.5 mr-2" /> Export PDF Report
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* TODAY VS YESTERDAY — Comparison Strip                          */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {todayVsYesterday?.metrics && (
-          <Card className="glass-card border-white/[0.06]">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <BarChart3 className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Today vs Yesterday</h3>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {todayVsYesterday.metrics.map((m: any, i: number) => {
-                  const diff = m.today - m.yesterday;
-                  const improved = m.label === 'Carbon' ? diff < 0 : diff < 0;
-                  return (
-                    <div key={i} className="p-3 rounded-lg bg-[#0A0F1C]/60 border border-white/[0.04] text-center">
-                      <p className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1">{m.label}</p>
-                      <div className="flex items-center justify-center gap-2">
-                        <div>
-                          <p className="text-sm font-bold text-white font-mono">{m.today}</p>
-                          <p className="text-[9px] text-slate-600">Today</p>
-                        </div>
-                        <div className="text-slate-600">→</div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-500 font-mono">{m.yesterday}</p>
-                          <p className="text-[9px] text-slate-600">Yesterday</p>
-                        </div>
-                      </div>
-                      <div className={cn(
-                        "flex items-center justify-center gap-0.5 mt-1.5 text-[10px] font-bold",
-                        improved ? 'text-emerald-400' : 'text-rose-400'
-                      )}>
-                        {improved ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />}
-                        {Math.abs(diff).toFixed(1)} {m.unit}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
+          </div>
+        </section>
       </div>
     </AppLayout>
-  );
-}
-
-// ── Sub-Components ─────────────────────────────────────────────────────
-
-function KPICard({ icon, label, value, unit, color, bgColor, isText, delta, deltaUnit, subtitle }: {
-  icon: React.ReactNode; label: string; value: string; unit: string; color: string; bgColor: string; isText?: boolean;
-  delta?: number; deltaUnit?: string; subtitle?: string;
-}) {
-  const numValue = isText ? 0 : parseFloat(value) || 0;
-  const animated = useCountUp(numValue);
-
-  return (
-    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-all hover:translate-y-[-1px]">
-      <div className="flex items-center gap-2 mb-2">
-        <div className={cn("p-1.5 rounded-lg", bgColor, color)}>{icon}</div>
-        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{label}</span>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-xl font-black text-white font-mono">
-          {isText ? value : Math.round(animated)}
-        </span>
-        {unit && <span className="text-[10px] text-slate-500 font-semibold">{unit}</span>}
-      </div>
-      {delta !== undefined && delta !== null && delta !== 0 && (
-        <div className={cn(
-          "flex items-center gap-0.5 mt-1 text-[10px] font-bold",
-          delta < 0 ? 'text-emerald-400' : 'text-rose-400'
-        )}>
-          {delta < 0 ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
-          {Math.abs(delta)} {deltaUnit || unit}
-          <span className="text-slate-600 font-normal ml-1">vs yesterday</span>
-        </div>
-      )}
-      {subtitle && (
-        <p className="text-[9px] text-slate-600 mt-1 leading-snug">{subtitle}</p>
-      )}
-    </div>
-  );
-}
-
-function LoadMetric({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
-    <div className="text-center">
-      <p className="text-[8px] text-slate-600 font-bold uppercase tracking-wider">{label}</p>
-      <p className="text-xs font-bold text-white font-mono">{value} <span className="text-[9px] text-slate-500">{unit}</span></p>
-    </div>
-  );
-}
-
-function MiniStat({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
-    <div className="p-2.5 rounded-lg bg-[#0A0F1C]/60 border border-white/[0.04] text-center">
-      <p className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-bold text-white font-mono mt-0.5">{value} <span className="text-[9px] text-slate-500">{unit}</span></p>
-    </div>
-  );
-}
-
-function FlowNode({ icon, label, value, color, bgColor, active }: {
-  icon: React.ReactNode; label: string; value: string; color: string; bgColor: string; active?: boolean;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className={cn("p-3 rounded-xl", bgColor, color, active && "ring-1 ring-white/10")}>
-        {icon}
-      </div>
-      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{label}</span>
-      <span className="text-xs font-bold text-white font-mono">{value}</span>
-    </div>
-  );
-}
-
-function FlowArrow({ active, color, reverse }: { active?: boolean; color: string; reverse?: boolean }) {
-  const arrowColor = color === 'amber' ? 'text-amber-500/50' : 'text-rose-500/50';
-  return (
-    <div className={cn("flex items-center gap-0.5", !active && "opacity-20")}>
-      {reverse ? (
-        <>
-          <ChevronRight className={cn("w-3 h-3", arrowColor)} />
-          <div className={cn("w-6 h-[1px]", color === 'amber' ? 'bg-amber-500/30' : 'bg-rose-500/30')} />
-        </>
-      ) : (
-        <>
-          <div className={cn("w-6 h-[1px]", color === 'amber' ? 'bg-amber-500/30' : 'bg-rose-500/30')} />
-          <ChevronRight className={cn("w-3 h-3", arrowColor)} />
-        </>
-      )}
-    </div>
-  );
-}
-
-function TimelineEvent({ time, label, detail, severity }: {
-  time: string; label: string; detail: string; severity: 'live' | 'warning' | 'info' | 'success';
-}) {
-  const dotColor = severity === 'live' ? 'bg-emerald-400 animate-pulse'
-    : severity === 'warning' ? 'bg-amber-400'
-    : severity === 'success' ? 'bg-emerald-400'
-    : 'bg-indigo-400';
-
-  return (
-    <div className="relative flex items-start gap-3">
-      <span className={cn("absolute -left-5 top-1.5 w-2 h-2 rounded-full", dotColor)} />
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-500 font-mono font-bold">{time}</span>
-          <span className="text-xs text-white font-semibold">{label}</span>
-        </div>
-        <p className="text-[10px] text-slate-500 mt-0.5">{detail}</p>
-      </div>
-    </div>
-  );
-}
-
-function BudgetRing({ progress, current, target }: { progress: number; current: number; target: number }) {
-  const radius = 50;
-  const circumference = 2 * Math.PI * radius;
-  const animatedProgress = useCountUp(Math.min(progress, 100));
-  const offset = circumference - (animatedProgress / 100) * circumference;
-
-  const color = animatedProgress > 90 ? '#EF4444' : animatedProgress > 70 ? '#F59E0B' : '#10B981';
-
-  return (
-    <div className="relative w-32 h-32">
-      <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-        <circle
-          cx="60" cy="60" r={radius} fill="none"
-          stroke={color} strokeWidth="8" strokeLinecap="round"
-          strokeDasharray={circumference} strokeDashoffset={offset}
-          className="transition-all duration-700 ease-out"
-          style={{ filter: `drop-shadow(0 0 10px ${color}30)` }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-black text-white font-mono">{Math.round(animatedProgress)}%</span>
-        <span className="text-[9px] text-slate-500 font-bold mt-0.5">{current} / {target} MAD</span>
-      </div>
-    </div>
-  );
-}
-
-function QuickAction({ icon, label, onClick, color }: {
-  icon: React.ReactNode; label: string; onClick: () => void; color: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.06] hover:border-white/[0.08] hover:translate-y-[-1px] transition-all group"
-    >
-      <div className={cn("p-2 rounded-lg bg-white/[0.04] group-hover:bg-white/[0.08] transition-colors", color)}>
-        {icon}
-      </div>
-      <span className="text-[10px] text-slate-400 font-bold group-hover:text-white transition-colors">{label}</span>
-    </button>
   );
 }

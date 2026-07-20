@@ -39,6 +39,42 @@ export interface LoginPayload {
   password: string;
 }
 
+export type ConsumptionTimeframe = 'live' | 'today' | '7d' | 'month' | 'year' | 'all' | 'custom';
+
+export interface ConsumptionPoint {
+  timestamp: string;
+  average_kw: number;
+  min_kw: number | null;
+  max_kw: number | null;
+  energy_kwh: number;
+  sample_count: number;
+}
+
+export interface ConsumptionPeriodSummary {
+  timeframe: ConsumptionTimeframe;
+  period_start: string;
+  period_end: string;
+  timezone: string;
+  granularity: string;
+  total_kwh: number;
+  estimated_cost: number;
+  currency: string;
+  average_kw: number;
+  peak_kw: number;
+  coverage_pct: number;
+  sample_count: number;
+  sources: Array<{ source: string; count: number }>;
+  freshness: {
+    status: 'fresh' | 'stale' | 'historical' | 'empty';
+    age_seconds: number | null;
+    expected_interval_seconds: number | null;
+    last_seen_at: string | null;
+    source: string | null;
+    quality: string | null;
+  };
+  points: ConsumptionPoint[];
+}
+
 // ============================================================
 // Forecast Types
 // ============================================================

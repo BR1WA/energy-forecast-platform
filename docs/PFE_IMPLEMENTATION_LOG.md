@@ -113,5 +113,37 @@
 
 ### Remaining in this area
 
-- Add reconnect/cursor ordering coverage and client-side deduplication.
-- Implement exact timezone-aware historical periods and bounded aggregation.
+- Continue into reconnect coverage, historical periods, and the focused Dashboard.
+
+## 2026-07-20 - Period Tracking and Focused Dashboard
+
+### Completed
+
+- Replaced the former 365-day "All" approximation with real Live, Today, 7 days,
+  This month, This year, All, and Custom periods.
+- Added site-timezone boundaries, streaming bounded queries, adaptive chart
+  granularity, interval-derived energy, tariff-consistent cost, source counts,
+  coverage, and freshness metadata.
+- Restricted all consumption calculations to the user's primary meter.
+- Rebuilt Dashboard around measured power, energy, cost, peak, freshness, source,
+  coverage, and data controls; removed geolocation, weather, solar, energy score,
+  and unsupported AI command-center claims.
+- Connected Live mode to the authenticated read-only monitoring stream with cursor
+  resume, client deduplication, reconnect state, and REST resynchronization.
+- Added a responsive mobile navigation drawer and stable chart/KPI layouts.
+
+### Verification
+
+- Backend product suite: 42 tests passed before the final cursor regression.
+- Frontend lint: passed.
+- Frontend typecheck: passed.
+- Browser login against the isolated current-source pair was blocked by the local
+  browser URL policy after the port correction; final browser screenshots remain
+  pending rather than being claimed as complete.
+
+### Remaining in this area
+
+- Add raw-reading pagination for detailed drill-down.
+- Add tariff/budget, forecast, alert, and recommendation summaries once their
+  focused backend contracts are complete.
+- Add automated desktop/mobile browser journeys.

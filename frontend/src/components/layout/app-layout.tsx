@@ -12,6 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { isRTL } = useI18n();
 
   useEffect(() => {
@@ -39,16 +40,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const marginClass = isRTL
-    ? (sidebarCollapsed ? 'mr-[72px]' : 'mr-[260px]')
-    : (sidebarCollapsed ? 'ml-[72px]' : 'ml-[260px]');
+    ? (sidebarCollapsed ? 'md:mr-[72px]' : 'md:mr-[260px]')
+    : (sidebarCollapsed ? 'md:ml-[72px]' : 'md:ml-[260px]');
 
   return (
     <DataModeProvider>
       <div className="flex h-screen bg-[#0A0F1C] overflow-hidden" suppressHydrationWarning>
-        <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          mobileOpen={mobileSidebarOpen}
+          setCollapsed={setSidebarCollapsed}
+          setMobileOpen={setMobileSidebarOpen}
+        />
         <div className={`flex flex-col flex-1 transition-all duration-300 ${marginClass}`}>
-          <Navbar />
-          <main className="flex-1 overflow-y-auto p-6">
+          <Navbar onMenuClick={() => { setSidebarCollapsed(false); setMobileSidebarOpen(true); }} />
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               {children}
             </div>

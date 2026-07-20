@@ -19,6 +19,8 @@ import type {
   AlertConfigResponse,
   UserPreferences,
   Recommendation,
+  ConsumptionPeriodSummary,
+  ConsumptionTimeframe,
 } from '@/types';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -444,6 +446,18 @@ export const consumptionApi = {
 
   getHistory: (timeframe?: 'live' | 'day' | 'week' | 'month' | 'all'): Promise<Array<{ kw: number; timestamp: string }>> =>
     apiFetch(`/api/v1/consumption/history${timeframe ? `?timeframe=${timeframe}` : ''}`),
+
+  getPeriod: (
+    timeframe: ConsumptionTimeframe,
+    custom?: { start: string; end: string },
+  ): Promise<ConsumptionPeriodSummary> => {
+    const params = new URLSearchParams({ timeframe });
+    if (timeframe === 'custom' && custom) {
+      params.set('start', custom.start);
+      params.set('end', custom.end);
+    }
+    return apiFetch(`/api/v1/consumption/period?${params.toString()}`);
+  },
 
   getStatistics: (): Promise<{
     month: string;

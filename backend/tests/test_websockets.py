@@ -149,3 +149,28 @@ class TestWebSocketAuth(unittest.TestCase):
             snapshot = websocket.receive_json()
             self.assertEqual(snapshot["reading"]["active_power_kw"], 1.75)
             self.assertEqual(snapshot["reading"]["source"], "simulation")
+
+    def test_live_monitoring_resumes_after_cursor_without_replaying_older_rows(self):
+        ensure_user_site(self.db, self.user1.id)
+        meter = get_primary_meter(self.db, self.user1.id)
+        first = SmartMeterReading(
+            meter_id=meter.id, timestamp=datetime(2026, 7, 20, 12, tzinfo=timezone.utc),
+            gap=1.0, grp=0.1, voltage=230, intensity=4.3, sub_metering_1=0,
+            sub_metering_2=0, sub_metering_3=0, source="push", quality="validated",
+        )
+        second = SmartMeterReading(
+            meter_id=meter.id, timestamp=datetime(2026, 7, 20, 12, 1, tzinfo=timezone.utc),
+            gap=2.0, grp=0.1, voltage=230, intensity=8.7, sub_metering_1=0,
+            sub_metering_2=0, sub_metering_3=0, source="push", quality="validated",
+        )
+        self.db.add_all([first, second])
+        self.db.commit()
+
+        with client.websocket_connect("/api/v1/monitoring/live") as websocket:
+            websocket.send_json({"access_token": self.token1, "last_reading_id": first.id})
+            snapshot = websocket.receive_json()
+            event = websocket.receive_json()
+
+            self.assertEqual(snapshot["reading"]["reading_id"], second.id)
+            self.assertEqual(event["type"], "reading")
+            self.assertEqual(event["reading"]["reading_id"], second.id)

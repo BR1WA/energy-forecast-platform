@@ -7,7 +7,7 @@ import { alertsApi, getAccessToken, API_BASE_URL } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useDataMode } from '@/contexts/DataModeContext';
-import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Activity, PlayCircle, History, Database } from 'lucide-react';
+import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Activity, PlayCircle, History, Database, Menu } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -23,7 +23,7 @@ import { LogOut, Settings, User } from 'lucide-react';
 
 const globalLastToastTimes: Record<string, number> = {};
 
-export default function Navbar() {
+export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -240,23 +240,26 @@ export default function Navbar() {
   return (
     <header
       id="navbar"
-      className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 border-b border-white/[0.06] bg-[#0A0F1C]/60 backdrop-blur-xl"
+      className="sticky top-0 z-30 h-16 flex items-center justify-between gap-3 px-4 sm:px-6 border-b border-white/[0.06] bg-[#0A0F1C]/60 backdrop-blur-xl"
     >
-      <div>
-        <h2 className="text-lg font-semibold text-white">{getPageTitle()}</h2>
+      <div className="flex min-w-0 items-center gap-3">
+        <button aria-label="Open navigation" className="rounded-md p-1.5 text-slate-400 hover:bg-white/5 hover:text-white md:hidden" onClick={onMenuClick} type="button"><Menu className="h-5 w-5" /></button>
+        <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold text-white sm:text-lg">{getPageTitle()}</h2>
         {getPageDescription() && (
-          <p className="text-xs text-slate-400 -mt-0.5">{getPageDescription()}</p>
+          <p className="hidden truncate text-xs text-slate-400 sm:block">{getPageDescription()}</p>
         )}
+        </div>
       </div>
 
-      <div className="flex-1 flex justify-center">
+      <div className="hidden flex-1 justify-center lg:flex">
         <div className={cn('flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold tracking-wider uppercase', badgeProps.bg, badgeProps.color)}>
           <badgeProps.icon className="w-3 h-3" />
           {badgeProps.label}
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className="relative" ref={searchRef}>
           <button
             id="navbar-search"
