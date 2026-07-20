@@ -94,3 +94,24 @@
 
 - Remove meter/site choices from normal-user contracts where they are not needed.
 - Complete frontend truth cleanup and consolidate duplicate routes.
+
+## 2026-07-20 - Truthful Live Monitoring
+
+### Completed
+
+- Added an authenticated read-only WebSocket that streams only committed push and
+  explicitly simulated readings from the authenticated user's primary meter.
+- Added typed snapshot/reading events and optional reading cursor support without
+  putting access tokens in URLs.
+- Excluded imported CSV history from live events.
+- Added regressions proving invalid clients are rejected, CSV is excluded, owned
+  simulation data is visible, and opening Live creates no database rows.
+
+### Verification
+
+- Backend product suite: 40 tests passed.
+
+### Remaining in this area
+
+- Add reconnect/cursor ordering coverage and client-side deduplication.
+- Implement exact timezone-aware historical periods and bounded aggregation.

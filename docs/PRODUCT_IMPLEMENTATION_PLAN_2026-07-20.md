@@ -227,14 +227,14 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 #### E. Live and historical monitoring
 
-- [ ] Add authenticated read-only live endpoint for committed push/simulator data.
-- [ ] Add typed initial snapshot and reading event contracts.
+- [x] Add authenticated read-only live endpoint for committed push/simulator data.
+- [x] Add typed initial snapshot and reading event contracts.
 - [ ] Add cursor reconnect/resynchronization and deduplication.
-- [ ] Ensure CSV history is excluded from live events.
+- [x] Ensure CSV history is excluded from live events.
 - [ ] Implement exact Live/Today/7d/Month/Year/All/Custom semantics.
 - [ ] Add bounded period aggregation and raw-history pagination.
 - [ ] Add freshness/stale rules from expected meter interval.
-- [ ] Test that dashboard/live viewing creates no readings.
+- [x] Test that dashboard/live viewing creates no readings.
 
 #### F. Focused dashboard
 
