@@ -1,7 +1,7 @@
 """Evidence-only dashboard aggregates for the authenticated user's energy data."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -67,28 +67,10 @@ class DashboardService:
         values = [float(row[0]) for row in forecast.predictions if row]
         points = [{"time": f"H+{index + 1}", "predicted": round(value, 3)} for index, value in enumerate(values)]
         peak_index = values.index(max(values)) if values else None
-        validation = {"available": False, "message": "No matching future reading is available yet."}
-        if forecast.input_end and values:
-            first_expected_at = _as_utc(forecast.input_end) + timedelta(hours=1)
-            actual = (
-                db.query(SmartMeterReading)
-                .join(Meter, SmartMeterReading.meter_id == Meter.id)
-                .join(Site, Meter.site_id == Site.id)
-                .filter(
-                    Site.user_id == user_id,
-                    SmartMeterReading.timestamp >= first_expected_at,
-                )
-                .order_by(SmartMeterReading.timestamp.asc())
-                .first()
-            )
-            if actual:
-                error_pct = abs(values[0] - actual.gap) / max(0.1, actual.gap) * 100.0
-                validation = {
-                    "available": True,
-                    "predicted": round(values[0], 2),
-                    "actual": round(actual.gap, 2),
-                    "error_pct": round(error_pct, 1),
-                }
+        validation = {
+            "available": False,
+            "message": "Outcome validation is unavailable until exact forecast target timestamps are matched.",
+        }
 
         return {
             "points": points,

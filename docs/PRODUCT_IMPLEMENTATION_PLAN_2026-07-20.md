@@ -191,11 +191,11 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 #### B. Truth cleanup
 
-- [ ] Remove the synthetic dashboard smart-meter WebSocket and automatic data
+- [x] Remove the synthetic dashboard smart-meter WebSocket and automatic data
   generation on view.
 - [ ] Remove fabricated forecast peak/cost/weather/AI insight content.
-- [ ] Remove missing email dispatch calls from forecast execution.
-- [ ] Disable unsafe forecast outcome matching until exact timestamps are used.
+- [x] Remove missing email dispatch calls from forecast execution.
+- [x] Disable unsafe forecast outcome matching until exact timestamps are used.
 - [ ] Remove client model comparison/training performance and client Models page.
 - [ ] Remove Admin retraining and fake healthy fallback behavior.
 - [ ] Remove multi-site frontend/API/navigation.

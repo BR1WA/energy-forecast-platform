@@ -69,11 +69,9 @@ class TestUserOwnedEnergyData(unittest.TestCase):
         self.assertEqual(response_a.json()["kw"], 1.25)
         self.assertEqual(response_b.json()["kw"], 9.75)
 
-    def test_multi_site_returns_only_owned_sites(self):
+    def test_multi_site_endpoint_is_removed(self):
         response = client.get("/api/v1/multi-site", headers=self.headers_a)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["data"]), 1)
-        self.assertEqual(response.json()["data"][0]["load"], 1.25)
+        self.assertEqual(response.status_code, 404)
 
     def test_simulator_configuration_is_not_shared_between_users(self):
         response = client.post(

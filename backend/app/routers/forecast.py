@@ -1,7 +1,7 @@
 """
 Forecast router — model inference, history, samples.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import numpy as np
@@ -14,7 +14,7 @@ from app.schemas import (
     ModelInfo, SampleDataset
 )
 from app.services.auth_service import get_current_user
-from app.services.site_service import ensure_default_site, get_default_meter
+from app.services.site_service import ensure_default_site
 from app.services.forecast_service import get_forecast_service, REQUEST_FEATURE_SCHEMA, TARGET_COLS
 from app.limiter import limiter
 from app.config import get_settings
@@ -63,7 +63,6 @@ def list_samples(current_user: User = Depends(get_current_user)):
 def predict(
     request: Request,
     payload: ForecastRequest,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -165,9 +164,7 @@ def predict(
     db.add(forecast)
     db.flush()
 
-    # Save alerts and dispatch email notifications if enabled
-    email_enabled = alert_config.email_enabled if alert_config else True
-
+    # Email delivery is deferred until the Product V1 outbox is implemented.
     for alert_data in alerts_data:
         alert = Alert(
             user_id=current_user.id,
@@ -179,16 +176,6 @@ def predict(
             peak_kw=alert_data.get('peak_kw'),
         )
         db.add(alert)
-
-        if email_enabled and current_user.email:
-            from app.services.alert_service import send_alert_email
-            background_tasks.add_task(
-                send_alert_email,
-                email_to=current_user.email,
-                alert_type=alert_data['alert_type'],
-                severity=alert_data['severity'],
-                message=alert_data['message'],
-            )
 
     db.commit()
     db.refresh(forecast)
@@ -266,7 +253,6 @@ def compare_models(
 @limiter.limit(settings.RATE_LIMIT)
 def predict_upload(
     request: Request,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     requested_model_name: str = Form(..., alias="model_name"),
     horizon: int = Form(24),
@@ -385,7 +371,6 @@ def predict_upload(
     db.flush()
 
     # Save alerts
-    email_enabled = alert_config.email_enabled if alert_config else True
     for alert_data in alerts_data:
         alert = Alert(
             user_id=current_user.id,
@@ -397,16 +382,6 @@ def predict_upload(
             peak_kw=alert_data.get('peak_kw'),
         )
         db.add(alert)
-        if email_enabled and current_user.email:
-            from app.services.alert_service import send_alert_email
-            background_tasks.add_task(
-                send_alert_email,
-                email_to=current_user.email,
-                alert_type=alert_data['alert_type'],
-                severity=alert_data['severity'],
-                message=alert_data['message'],
-            )
-
     db.commit()
     db.refresh(forecast)
 
@@ -499,7 +474,6 @@ def compare_upload(
 @router.post("/smart-meter/sync", response_model=ForecastResponse)
 def sync_smart_meter_forecast(
     payload: ForecastRequest,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -590,7 +564,6 @@ def sync_smart_meter_forecast(
     db.flush()
 
     # Save alerts
-    email_enabled = alert_config.email_enabled if alert_config else True
     for alert_data in alerts_data:
         alert = Alert(
             user_id=current_user.id,
@@ -603,16 +576,6 @@ def sync_smart_meter_forecast(
         )
         db.add(alert)
         
-        if email_enabled and current_user.email:
-            from app.services.alert_service import send_alert_email
-            background_tasks.add_task(
-                send_alert_email,
-                email_to=current_user.email,
-                alert_type=alert_data['alert_type'],
-                severity=alert_data['severity'],
-                message=alert_data['message'],
-            )
-
     db.commit()
     db.refresh(forecast)
 
@@ -723,97 +686,3 @@ def get_history(
 
     return result
 
-
-@router.websocket("/smart-meter/live-ws")
-async def live_smart_meter_websocket(websocket: WebSocket, token: str = None, db: Session = Depends(get_db)):
-    import asyncio
-    from app.services.smart_meter_service import get_smart_meter_service
-    from app.services.forecast_service import get_forecast_service
-    from app.database import SessionLocal
-    from app.models import User
-    from app.schemas import MeterSample
-    from app.services.ingestion_service import ingestion_service
-    from app.services.auth_service import decode_token
-
-    if not token:
-        await websocket.accept()
-        await websocket.close(code=1008, reason="Token is missing")
-        return
-        
-    try:
-        payload = decode_token(token)
-        if payload.get("type") != "access":
-            await websocket.accept()
-            await websocket.close(code=1008, reason="Invalid token type")
-            return
-            
-        user_id = payload.get("sub")
-        if not user_id:
-            await websocket.accept()
-            await websocket.close(code=1008, reason="Invalid token payload")
-            return
-            
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        if not user or not user.is_active:
-            await websocket.accept()
-            await websocket.close(code=1008, reason="User unauthorized or inactive")
-            return
-        ensure_default_site(db, user.id)
-        meter = get_default_meter(db, user.id)
-        if meter is None:
-            await websocket.accept()
-            await websocket.close(code=1008, reason="No meter is configured for this user")
-            return
-    except Exception as e:
-        await websocket.accept()
-        await websocket.close(code=1008, reason=f"Authentication failed: {str(e)}")
-        return
-
-    await websocket.accept()
-    print("[WS-LIVE] Client connected to live smart meter telemetry.")
-    
-    meter_service = get_smart_meter_service()
-    forecast_service = get_forecast_service()
-    
-    db_session = SessionLocal()
-    try:
-        while True:
-            # 1. Fetch live reading
-            reading = meter_service.fetch_single_live_reading()
-            
-            # 2. Save reading to database using the active db_session
-            try:
-                sample = MeterSample.model_validate({
-                    "timestamp": reading["timestamp"],
-                    "active_power_kw": reading["gap"],
-                    "reactive_power_kvar": reading["grp"],
-                    "voltage_v": reading["voltage"],
-                    "current_a": reading["intensity"],
-                    "sub_metering_1_wh": reading["sub_metering_1"],
-                    "sub_metering_2_wh": reading["sub_metering_2"],
-                    "sub_metering_3_wh": reading["sub_metering_3"],
-                })
-                ingestion_service.ingest(db_session, meter, [sample], source="simulation")
-                db_session.commit()
-            except Exception as db_err:
-                db_session.rollback()
-                print(f"[WS-LIVE] Error saving reading to database: {db_err}")
-            
-            # 3. Generate 96h lookback and run model prediction
-            try:
-                targets = meter_service.fetch_live_readings() # returns [96, 7]
-                preds, _ = forecast_service.predict('sota', targets)
-                gap_predictions = [round(float(p), 3) for p in preds[:, 0]]
-            except Exception as pred_err:
-                print(f"[WS-LIVE] Forecast prediction error: {pred_err}")
-                gap_predictions = []
-                
-            # 4. Attach predictions to payload and send
-            reading["predictions"] = gap_predictions
-            await websocket.send_json(reading)
-            
-            await asyncio.sleep(2.0)
-    except Exception as e:
-        print(f"[WS-LIVE] Telemetry stream ended: {e}")
-    finally:
-        db_session.close()

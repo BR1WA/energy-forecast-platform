@@ -85,15 +85,3 @@ class TestWebSocketAuth(unittest.TestCase):
         # Correct token and matching client_id
         with client.websocket_connect(f"/api/v1/alerts/ws/{self.user1.id}?token={self.token1}") as websocket:
             pass
-
-    def test_smart_meter_ws_no_token(self):
-        with client.websocket_connect("/api/v1/forecast/smart-meter/live-ws") as websocket:
-            with self.assertRaises(WebSocketDisconnect) as context:
-                websocket.receive_json()
-            self.assertEqual(context.exception.code, 1008)
-
-    def test_smart_meter_ws_success(self):
-        with client.websocket_connect(f"/api/v1/forecast/smart-meter/live-ws?token={self.token1}") as websocket:
-            data = websocket.receive_json()
-            self.assertIn("voltage", data)
-            self.assertIn("predictions", data)

@@ -3,7 +3,7 @@ Admin router — user management, model registry, system health.
 Restricted to admin role only.
 """
 import time
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -172,15 +172,3 @@ def list_models(
     from app.services.forecast_service import get_forecast_service
     service = get_forecast_service()
     return service.get_available_models()
-
-
-@router.post("/models/{model_name}/retrain")
-def retrain_model_endpoint(
-    model_name: str,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_role(["admin"])),
-):
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Model retraining is not implemented in the production API."
-    )

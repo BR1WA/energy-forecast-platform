@@ -35,3 +35,30 @@
 ### Release blockers
 
 - To be updated after each workstream and final audit.
+
+## 2026-07-20 - Truth Cleanup Slice 1
+
+### Completed
+
+- Removed the forecast smart-meter WebSocket that generated random readings and
+  forecasts merely because Dashboard was open.
+- Removed the frontend connection to that synthetic endpoint.
+- Removed forecast calls to the nonexistent email sender. Email remains deferred
+  to Product V1 and cannot crash PFE forecasts.
+- Disabled forecast outcome validation that matched the first arbitrary later
+  reading instead of an exact target timestamp.
+- Unregistered and deleted the multi-site API.
+- Removed the backend retraining endpoint that always returned 501.
+- Updated obsolete ownership/WebSocket tests to enforce the reduced product scope.
+
+### Verification
+
+- Backend: 33 tests passed after removal of two obsolete synthetic-WebSocket tests.
+- Frontend lint: passed.
+- Frontend typecheck: passed.
+
+### Remaining in truth cleanup
+
+- Remove fabricated dashboard/forecast sections, client model comparison, fake
+  admin health/retraining UI, multi-site/client model pages, duplicate routes, and
+  misleading copy.

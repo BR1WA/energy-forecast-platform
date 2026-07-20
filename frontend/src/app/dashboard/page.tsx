@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth';
-import { getAccessToken, dashboardApi, analyticsApi } from '@/lib/api';
-import { useWebSocket } from '@/hooks/useWebSocket';
+import { dashboardApi, analyticsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
   Zap,
@@ -56,18 +55,6 @@ import {
 } from 'recharts';
 
 // ── Telemetry frame interface ──────────────────────────────────────────
-interface TelemetryFrame {
-  timestamp: string;
-  gap: number;
-  grp: number;
-  voltage: number;
-  intensity: number;
-  sub_metering_1: number;
-  sub_metering_2: number;
-  sub_metering_3: number;
-  predictions?: number[];
-}
-
 // ── Animated Counter Hook ──────────────────────────────────────────────
 function useCountUp(target: number, duration: number = 600): number {
   const [current, setCurrent] = useState(0);
@@ -141,10 +128,6 @@ export default function DashboardPage() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
-  // WebSocket live telemetry
-  const [liveData, setLiveData] = useState<TelemetryFrame | null>(null);
-  const [history, setHistory] = useState<TelemetryFrame[]>([]);
-
   // Chart mode
   const [dashboardTimeframe, setDashboardTimeframe] = useState<'live' | '24'>('live');
 
@@ -199,38 +182,6 @@ export default function DashboardPage() {
     }
   }, [locationResolved, fetchSummary]);
 
-  // WebSocket URL
-  const [wsUrl, setWsUrl] = useState<string | null>(null);
-  useEffect(() => {
-    const token = getAccessToken();
-    if (token && typeof window !== 'undefined') {
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const host = window.location.hostname;
-      setWsUrl(`${protocol}://${host}:8000/api/v1/forecast/smart-meter/live-ws?token=${token}`);
-    }
-  }, []);
-
-  useWebSocket(wsUrl, {
-    onMessage: (event: MessageEvent) => {
-      try {
-        const frame: TelemetryFrame = JSON.parse(event.data);
-        setLiveData(frame);
-        setHistory((prev) => [...prev, frame].slice(-50));
-      } catch (err) {
-        console.error('[DASHBOARD-WS] Parse error:', err);
-      }
-    },
-  });
-
-  // Chart data
-  const chartData = history.map((item) => ({
-    time: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    consumption: item.gap,
-    predicted: item.predictions ? item.predictions[0] : null
-  }));
-
-  const activePower = liveData?.gap || 0.0;
-
   if (!mounted) return null;
 
   // ── Extracted data ─────────────────────────────────────────────────
@@ -238,6 +189,8 @@ export default function DashboardPage() {
   const assistant = summary?.assistant;
   const liveStatus = summary?.live_status;
   const liveCons = summary?.live_consumption;
+  const activePower = liveCons?.current_power || 0.0;
+  const chartData: Array<{ time: string; consumption: number; predicted: number | null }> = [];
   const energyFlow = summary?.energy_flow;
   const forecast = summary?.forecast;
   const recs = summary?.recommendations;
