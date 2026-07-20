@@ -345,7 +345,17 @@
 - PostgreSQL custom-format backup/restore into an isolated database: passed with both
   verification rows intact; temporary databases and dump were removed.
 
-### Open Release Check
+### Browser Validation
 
-- Browser automation remained unavailable after reconnect attempts. The desktop and
-  360px journeys in the release notes must be completed manually before presentation.
+- Chrome extension control connected successfully after the initial unavailable state.
+- Registration, setup, simulator data, Live/Today/7d/Month/Year/All/Custom controls,
+  raw readings, forecast readiness, reports, alerts, recommendations, logout/sign-in,
+  admin readiness, and settings persistence were exercised with disposable data.
+- The journey exposed and fixed structured API errors rendering as `[object Object]`,
+  settings posting read-only response fields, admins being redirected into client
+  setup, admin sign-in routing to Dashboard, and a 433px mobile content minimum width.
+- At 360px the final dashboard content measured exactly 360px, the sidebar stayed
+  off-canvas when closed, and the open drawer measured 260px without page overflow.
+- The disposable SQLite database, backend, frontend, and browser tab were removed
+  after validation. The user's existing Docker deployment and research files were not
+  touched.

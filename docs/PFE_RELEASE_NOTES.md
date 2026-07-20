@@ -33,14 +33,16 @@
   artifact SHA-256 `60fedcdee375dc0b2973e55b9f4ec752da69c2a7e390e1f951ed5cbb7bc5a04d`.
 - PostgreSQL custom-format backup restored into a separate database and both
   verification rows matched.
+- Chrome journey passed registration validation, one-site simulator setup, all
+  timeframe selectors, settings persistence, logout/sign-in, admin readiness,
+  360px dashboard/drawer layout, insufficient-history forecast disclosure, raw
+  readings, reports, alerts, and recommendations.
 - Final source audit found no P0 or P1 issue after removing dormant connector,
   fabricated appliance simulation, stale model-selection, retraining, multi-site,
   and notification preference paths.
 
 ## Known Limitations
 
-- The final desktop/mobile browser journey is a manual release check because browser
-  automation was unavailable. This is the only open PFE release validation item.
 - The production forecast horizon is 24 hours. Week and month forecasting remain
   Product V1 work and must use independently validated artifacts.
 - Simulator readings are synthetic and always carry the simulator source label.
@@ -51,12 +53,11 @@
 - The packaged TFT is a global model. Its uncertainty interval is native model output
   and has not been recalibrated for each client's site.
 
-## Final Manual Check
+## Presentation Rehearsal
 
-At 360px and desktop width, verify registration, setup, CSV import or simulator start,
-Dashboard period switching, Live reconnect, raw-history pagination, forecast states,
-alert/recommendation actions, report downloads, Settings persistence, admin access,
-logout, and sign-in return navigation. Record screenshots for the PFE report.
+Repeat the core walkthrough with the presentation dataset and record screenshots for
+the PFE report. The release browser pass used disposable simulator data; rehearse CSV
+import and the intended jury account once deployment credentials are configured.
 
 ## PFE Report Notes
 

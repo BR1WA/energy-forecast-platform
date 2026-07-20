@@ -246,8 +246,8 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Add tariff/budget, forecast, alert, and recommendation summaries.
 - [x] Implement loading/empty/stale/partial/error/live reconnect states.
 - [x] Implement mobile drawer and responsive chart/KPI behavior.
-- [!] Complete the final desktop/mobile dashboard journey manually; automated
-  browser control was unavailable during release validation.
+- [x] Complete the desktop/mobile dashboard journey in Chrome at desktop and
+  360px widths.
 
 #### G. 24-hour Global TFT
 
@@ -277,7 +277,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Backend product suite passes.
 - [x] Frontend lint, typecheck, build, and focused tests pass.
 - [x] Fresh PostgreSQL migration reaches head.
-- [!] Critical browser journeys require the final manual desktop/mobile pass.
+- [x] Critical browser journeys pass on desktop and mobile.
 - [x] Clean Docker deployment reaches liveness and model readiness.
 - [x] Restore procedure is demonstrated.
 - [x] Complete final code review and P0/P1 audit.
