@@ -52,7 +52,8 @@ export default function SettingsPage() {
         setMeterInterval(String(primary?.expected_interval_seconds ?? 60));
       })
       .catch(() => toast.error('Unable to load site settings.'));
-    if (window.location.search.includes('tab=data')) setActiveTab('data');
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    if (requestedTab && ['site', 'data', 'budget', 'security'].includes(requestedTab)) setActiveTab(requestedTab);
   }, []);
 
   const refreshMeter = async () => {

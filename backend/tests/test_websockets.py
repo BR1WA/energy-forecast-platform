@@ -63,31 +63,6 @@ class TestWebSocketAuth(unittest.TestCase):
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
 
-    def test_alerts_ws_no_token(self):
-        # Connecting with no token should fail
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user1.id}") as websocket:
-            with self.assertRaises(WebSocketDisconnect) as context:
-                websocket.receive_text()
-            self.assertEqual(context.exception.code, 1008)
-
-    def test_alerts_ws_invalid_token(self):
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user1.id}?token=invalid") as websocket:
-            with self.assertRaises(WebSocketDisconnect) as context:
-                websocket.receive_text()
-            self.assertEqual(context.exception.code, 1008)
-
-    def test_alerts_ws_mismatched_client_id(self):
-        # User 1 tries to connect with User 2's client_id
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user2.id}?token={self.token1}") as websocket:
-            with self.assertRaises(WebSocketDisconnect) as context:
-                websocket.receive_text()
-            self.assertEqual(context.exception.code, 1008)
-
-    def test_alerts_ws_success(self):
-        # Correct token and matching client_id
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user1.id}?token={self.token1}") as websocket:
-            pass
-
     def test_live_monitoring_rejects_missing_token(self):
         with client.websocket_connect("/api/v1/monitoring/live") as websocket:
             websocket.send_json({})

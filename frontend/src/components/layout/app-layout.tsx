@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from './sidebar';
 import Navbar from './navbar';
 import { useI18n } from '@/lib/i18n';
-import { DataModeProvider } from '@/contexts/DataModeContext';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -44,8 +43,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     : (sidebarCollapsed ? 'md:ml-[72px]' : 'md:ml-[260px]');
 
   return (
-    <DataModeProvider>
-      <div className="flex h-screen bg-[#0A0F1C] overflow-hidden" suppressHydrationWarning>
+    <div className="flex h-screen bg-[#0A0F1C] overflow-hidden" suppressHydrationWarning>
         <Sidebar
           collapsed={sidebarCollapsed}
           mobileOpen={mobileSidebarOpen}
@@ -60,7 +58,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </main>
         </div>
-      </div>
-    </DataModeProvider>
+    </div>
   );
 }

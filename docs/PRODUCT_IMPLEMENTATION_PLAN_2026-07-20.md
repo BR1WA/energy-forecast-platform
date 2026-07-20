@@ -199,7 +199,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [ ] Remove client model comparison/training performance and client Models page.
 - [x] Remove Admin retraining and fake healthy fallback behavior.
 - [x] Remove multi-site frontend/API/navigation.
-- [ ] Merge or redirect duplicate Profile, Analytics, Budget, Smart Meter, and
+- [x] Merge or redirect duplicate Profile, Analytics, Budget, Smart Meter, and
   Simulator pages into the focused navigation without losing required functions.
 - [ ] Remove unsupported AI/solar/grid/appliance/energy-score language and widgets.
 - [ ] Fix duplicate/dead report download controls and misleading auth/landing copy.
@@ -266,7 +266,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 - [ ] Unify high-load/missing-data alert paths with evidence/cooldown.
 - [ ] Add resolved lifecycle and worker exception resilience.
-- [ ] Remove unused notification WebSocket; use truthful refresh behavior.
+- [x] Remove unused notification WebSocket; use truthful refresh behavior.
 - [ ] Verify deterministic recommendation actions and evidence.
 - [ ] Repair all CSV/PDF downloads and product-truth metadata.
 - [ ] Add alert, recommendation, export, and ownership tests.

@@ -268,9 +268,9 @@ export default function Sidebar({ collapsed, mobileOpen, setCollapsed, setMobile
               id="menu-profile"
               className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
             >
-              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings?tab=security')}>
                 <User className="w-4 h-4 mr-2" />
-                {t('nav.profile')}
+                Account security
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/[0.06]" />

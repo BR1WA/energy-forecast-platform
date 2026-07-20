@@ -16,7 +16,7 @@ from app.config import get_settings
 from app.database import engine, Base, SessionLocal
 from app.routers import (
     auth, forecast, alerts, analytics, admin, settings as settings_router,
-    system, dashboard, data_mode, consumption,
+    system, dashboard, consumption,
     simulation, models_registry, ingestion, monitoring, recommendations
 )
 from app.services.forecast_service import get_forecast_service
@@ -158,7 +158,6 @@ app.include_router(admin.router)
 app.include_router(settings_router.router)
 app.include_router(system.router)
 app.include_router(dashboard.router)
-app.include_router(data_mode.router)
 app.include_router(consumption.router)
 app.include_router(simulation.router)
 app.include_router(ingestion.router)

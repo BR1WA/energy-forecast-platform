@@ -177,3 +177,25 @@
 
 - Add raw-reading pagination for large detailed drill-downs.
 - Cover CSV/push/simulator onboarding in browser journey tests.
+
+## 2026-07-20 - Route and Notification Truth Cleanup
+
+### Completed
+
+- Removed duplicate Analytics, Budget, Profile, and Smart-meter routes after
+  preserving their required functions in Consumption, Reports, and Settings.
+- Redirected account-security actions to the Security settings tab and push setup
+  to the Data sources tab.
+- Removed the unvalidated user data-mode API/context and its misleading global
+  mode badge; source and freshness now come from actual meter readings.
+- Removed the unused alert WebSocket, URL-token authentication, client hook, and
+  obsolete tests. The navbar now refreshes owned alerts over the authenticated
+  REST API every 30 seconds.
+- Replaced dead Analytics search results with Consumption, Recommendations, and
+  Reports destinations.
+
+### Verification
+
+- Backend product suite: 42 tests passed; four deleted tests belonged exclusively
+  to the removed no-op alert WebSocket.
+- Frontend lint and typecheck: passed.

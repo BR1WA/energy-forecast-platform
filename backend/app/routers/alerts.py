@@ -3,7 +3,7 @@ Alerts router — alert management and configuration.
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -14,7 +14,6 @@ from app.services.auth_service import get_current_user
 from app.services.alert_service import alert_service
 from app.services.audit_service import record_audit_event
 from app.services.site_service import ensure_default_site
-from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
 
@@ -119,51 +118,3 @@ def update_alert_config(
     db.refresh(config)
     return AlertConfigResponse.model_validate(config)
 
-
-@router.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = None, db: Session = Depends(get_db)):
-    from app.services.auth_service import decode_token
-
-    if not token:
-        await websocket.accept()
-        await websocket.close(code=1008, reason="Token is missing")
-        return
-        
-    try:
-        payload = decode_token(token)
-        if payload.get("type") != "access":
-            await websocket.accept()
-            await websocket.close(code=1008, reason="Invalid token type")
-            return
-            
-        user_id = payload.get("sub")
-        if not user_id:
-            await websocket.accept()
-            await websocket.close(code=1008, reason="Invalid token payload")
-            return
-            
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        if not user or not user.is_active:
-            await websocket.accept()
-            await websocket.close(code=1008, reason="User unauthorized or inactive")
-            return
-            
-        if client_id != str(user.id):
-            await websocket.accept()
-            await websocket.close(code=1008, reason="Client ID does not match user ID")
-            return
-    except Exception as e:
-        await websocket.accept()
-        await websocket.close(code=1008, reason=f"Authentication failed: {str(e)}")
-        return
-
-    await manager.connect(client_id, websocket)
-    try:
-        while True:
-            # Keep connection open, ignore any incoming client messages
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(client_id, websocket)
-    except Exception as e:
-        print(f"[WS] Exception for client {client_id}: {e}")
-        manager.disconnect(client_id, websocket)
