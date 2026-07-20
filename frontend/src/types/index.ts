@@ -77,6 +77,24 @@ export interface ConsumptionPeriodSummary {
   points: ConsumptionPoint[];
 }
 
+export interface ConsumptionReading {
+  id: number;
+  timestamp: string;
+  active_power_kw: number;
+  reactive_power_kvar: number;
+  voltage_v: number;
+  current_a: number;
+  energy_kwh: number | null;
+  source: string;
+  quality: string;
+}
+
+export interface ConsumptionReadingPage {
+  items: ConsumptionReading[];
+  next_cursor: string | null;
+  limit: number;
+}
+
 export interface PrimaryMeter {
   id: number;
   name: string;

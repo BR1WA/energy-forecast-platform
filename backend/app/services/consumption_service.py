@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import csv
+import base64
+import binascii
 import io
+import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from itertools import chain
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models import EnergyBudget, Meter, Site, SiteSettings, SmartMeterReading
@@ -267,6 +270,81 @@ class ConsumptionService:
             "sources": [{"source": source, "count": count} for source, count in sorted(source_counts.items())],
             "freshness": freshness,
             "points": points,
+        }
+
+    @staticmethod
+    def _encode_cursor(reading: SmartMeterReading) -> str:
+        payload = json.dumps(
+            {"timestamp": _as_utc(reading.timestamp).isoformat(), "id": reading.id},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+    @staticmethod
+    def _decode_cursor(cursor: str) -> tuple[datetime, int]:
+        try:
+            padded = cursor + "=" * (-len(cursor) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+            return _as_utc(datetime.fromisoformat(payload["timestamp"])), int(payload["id"])
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError, binascii.Error, UnicodeDecodeError) as exc:
+            raise ValueError("Invalid reading cursor") from exc
+
+    def get_readings_page(
+        self,
+        db: Session,
+        user_id: int,
+        timeframe: str,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> dict:
+        timeframe, _site, _zone, period_start, period_end = self._period_bounds(
+            db,
+            user_id,
+            timeframe,
+            start,
+            end,
+            datetime.now(timezone.utc),
+        )
+        query = self._primary_readings_query(db, user_id).filter(
+            SmartMeterReading.timestamp >= period_start,
+            SmartMeterReading.timestamp <= period_end,
+        )
+        if cursor:
+            cursor_timestamp, cursor_id = self._decode_cursor(cursor)
+            query = query.filter(
+                or_(
+                    SmartMeterReading.timestamp < cursor_timestamp,
+                    and_(
+                        SmartMeterReading.timestamp == cursor_timestamp,
+                        SmartMeterReading.id < cursor_id,
+                    ),
+                )
+            )
+        rows = query.order_by(
+            SmartMeterReading.timestamp.desc(), SmartMeterReading.id.desc()
+        ).limit(limit + 1).all()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        return {
+            "items": [
+                {
+                    "id": reading.id,
+                    "timestamp": _as_utc(reading.timestamp).isoformat(),
+                    "active_power_kw": reading.gap,
+                    "reactive_power_kvar": reading.grp,
+                    "voltage_v": reading.voltage,
+                    "current_a": reading.intensity,
+                    "energy_kwh": reading.energy_kwh,
+                    "source": reading.source,
+                    "quality": reading.quality,
+                }
+                for reading in rows
+            ],
+            "next_cursor": self._encode_cursor(rows[-1]) if has_more and rows else None,
+            "limit": limit,
+            "timeframe": timeframe,
         }
 
     @staticmethod

@@ -89,6 +89,24 @@ class ConsumptionPeriodSummary(BaseModel):
     points: List[ConsumptionPoint]
 
 
+class ConsumptionReadingItem(BaseModel):
+    id: int
+    timestamp: datetime
+    active_power_kw: float
+    reactive_power_kvar: float
+    voltage_v: float
+    current_a: float
+    energy_kwh: float | None
+    source: str
+    quality: str
+
+
+class ConsumptionReadingPage(BaseModel):
+    items: List[ConsumptionReadingItem]
+    next_cursor: str | None
+    limit: int
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

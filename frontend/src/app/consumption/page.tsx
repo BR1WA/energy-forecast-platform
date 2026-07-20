@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarRange, Download, FileCheck2, RefreshCw, Upload } from 'lucide-react';
+import { CalendarRange, Download, FileCheck2, RefreshCw, Rows3, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import AppLayout from '@/components/layout/app-layout';
@@ -10,7 +10,7 @@ import { PeriodSelector } from '@/components/consumption/period-selector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { consumptionApi, ingestionApi } from '@/lib/api';
-import type { ConsumptionPeriodSummary, ConsumptionTimeframe, PrimaryMeter } from '@/types';
+import type { ConsumptionPeriodSummary, ConsumptionReading, ConsumptionTimeframe, PrimaryMeter } from '@/types';
 
 function localInputValue(date: Date) {
   const offset = date.getTimezoneOffset() * 60_000;
@@ -28,9 +28,13 @@ export default function ConsumptionPage() {
   const [importing, setImporting] = useState(false);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [readings, setReadings] = useState<ConsumptionReading[]>([]);
+  const [readingCursor, setReadingCursor] = useState<string | null>(null);
+  const [readingsLoading, setReadingsLoading] = useState(false);
 
   const loadSummary = useCallback(async (selected: ConsumptionTimeframe, custom?: { start: string; end: string }) => {
     setLoading(true);
+    setSummary(null);
     setError(null);
     try {
       setSummary(await consumptionApi.getPeriod(selected, custom));
@@ -41,6 +45,25 @@ export default function ConsumptionPage() {
       setLoading(false);
     }
   }, []);
+
+  const loadReadings = useCallback(async (append = false) => {
+    if (!summary) return;
+    setReadingsLoading(true);
+    try {
+      const page = await consumptionApi.getReadings(timeframe, {
+        start: timeframe === 'custom' ? summary.period_start : undefined,
+        end: timeframe === 'custom' ? summary.period_end : undefined,
+        cursor: append ? readingCursor || undefined : undefined,
+        limit: 50,
+      });
+      setReadings((current) => append ? [...current, ...page.items] : page.items);
+      setReadingCursor(page.next_cursor);
+    } catch (requestError) {
+      toast.error(requestError instanceof Error ? requestError.message : 'Unable to load raw readings.');
+    } finally {
+      setReadingsLoading(false);
+    }
+  }, [readingCursor, summary, timeframe]);
 
   useEffect(() => {
     ingestionApi.getMeters().then((meters) => setMeter(meters[0] ?? null)).catch(() => setMeter(null));
@@ -57,6 +80,14 @@ export default function ConsumptionPage() {
     }
     void loadSummary(timeframe);
   }, [loadSummary, timeframe]);
+
+  useEffect(() => {
+    setReadings([]);
+    setReadingCursor(null);
+    if (summary) void loadReadings(false);
+    // A new period summary resets the keyset cursor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary?.period_start, summary?.period_end]);
 
   const applyCustomRange = () => {
     const start = new Date(customStart);
@@ -135,6 +166,13 @@ export default function ConsumptionPage() {
         <Card className="rounded-lg border-white/10 bg-[#111827]">
           <CardHeader className="flex-row items-start justify-between"><div><CardTitle className="text-sm">Consumption curve</CardTitle><p className="mt-1 text-xs text-slate-400">{summary ? `${summary.sample_count.toLocaleString()} samples from ${summary.sources.map((source) => source.source).join(', ') || 'no source'}, grouped by ${summary.granularity.replace('_', ' ')}.` : 'Choose a period to inspect its readings.'}</p></div><Button aria-label="Refresh history" disabled={loading} onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe)} size="icon" title="Refresh" variant="ghost"><RefreshCw className={loading ? 'animate-spin' : ''} /></Button></CardHeader>
           <CardContent>{summary?.points.length ? <ConsumptionChart summary={summary} /> : <div className="flex h-80 items-center justify-center text-sm text-slate-400">No readings are available in this period.</div>}</CardContent>
+        </Card>
+
+        <Card className="rounded-lg border-white/10 bg-[#111827]">
+          <CardHeader className="flex-row items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2 text-sm"><Rows3 className="h-4 w-4 text-indigo-400" />Raw primary-meter readings</CardTitle><p className="mt-1 text-xs text-slate-400">Newest first, bounded to the selected timeframe.</p></div><Button aria-label="Refresh raw readings" title="Refresh raw readings" size="icon" variant="ghost" disabled={readingsLoading || !summary} onClick={() => void loadReadings(false)}><RefreshCw className={readingsLoading ? 'animate-spin' : ''} /></Button></CardHeader>
+          <CardContent>
+            {readings.length ? <><div className="overflow-x-auto border border-white/10"><div className="grid min-w-[720px] grid-cols-[210px_110px_100px_100px_100px_1fr] bg-white/[0.03] px-3 py-2 text-xs text-slate-500"><span>Timestamp</span><span>Active power</span><span>Voltage</span><span>Current</span><span>Source</span><span>Quality</span></div>{readings.map((reading) => <div key={reading.id} className="grid min-w-[720px] grid-cols-[210px_110px_100px_100px_100px_1fr] border-t border-white/[0.07] px-3 py-2.5 text-xs text-slate-300"><span>{new Date(reading.timestamp).toLocaleString()}</span><span>{reading.active_power_kw.toFixed(3)} kW</span><span>{reading.voltage_v.toFixed(1)} V</span><span>{reading.current_a.toFixed(2)} A</span><span className="capitalize">{reading.source}</span><span className="capitalize">{reading.quality}</span></div>)}</div>{readingCursor ? <div className="mt-4 text-center"><Button variant="outline" disabled={readingsLoading} onClick={() => void loadReadings(true)}>{readingsLoading ? <RefreshCw className="animate-spin" /> : null}Load more</Button></div> : <p className="mt-3 text-center text-xs text-slate-500">End of the selected period.</p>}</> : <div className="py-10 text-center text-sm text-slate-500">{readingsLoading ? 'Loading raw readings...' : 'No raw readings in this period.'}</div>}
+          </CardContent>
         </Card>
 
         <Card className="rounded-lg border-white/10 bg-[#111827]">

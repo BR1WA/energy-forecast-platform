@@ -233,7 +233,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Ensure CSV history is excluded from live events.
 - [x] Implement exact Live/Today/7d/Month/Year/All/Custom semantics.
 - [x] Add bounded period aggregation.
-- [ ] Add raw-history pagination.
+- [x] Add raw-history pagination.
 - [x] Add freshness/stale rules from expected meter interval.
 - [x] Test that dashboard/live viewing creates no readings.
 

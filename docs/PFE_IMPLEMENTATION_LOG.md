@@ -297,3 +297,20 @@
 - The first local Docker test-image build exceeded the 120-second command window;
   the pre-existing image timestamp confirmed that run did not complete. A longer
   release build remains required and is not recorded as passed.
+
+## 2026-07-20 - Raw Reading Drill-Down
+
+### Completed
+
+- Added bounded keyset pagination for raw primary-meter readings within every
+  supported timeframe, including custom ranges.
+- Cursors contain timestamp/id ordering state, reject malformed input, and cannot
+  cross the authenticated user's one-site ownership boundary.
+- Added the newest-first raw reading table and Load more workflow to Consumption
+  with active/reactive power, voltage, current, source, and quality.
+
+### Verification
+
+- Pagination order, page boundaries, invalid cursor/limit, and cross-user
+  isolation regression: passed.
+- Frontend lint and typecheck: passed.

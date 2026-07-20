@@ -19,6 +19,7 @@ import type {
   UserPreferences,
   Recommendation,
   ConsumptionPeriodSummary,
+  ConsumptionReadingPage,
   ConsumptionTimeframe,
   PrimaryMeter,
 } from '@/types';
@@ -413,6 +414,17 @@ export const consumptionApi = {
       params.set('end', custom.end);
     }
     return apiFetch(`/api/v1/consumption/period?${params.toString()}`);
+  },
+
+  getReadings: (
+    timeframe: ConsumptionTimeframe,
+    options?: { start?: string; end?: string; cursor?: string; limit?: number },
+  ): Promise<ConsumptionReadingPage> => {
+    const params = new URLSearchParams({ timeframe, limit: String(options?.limit ?? 50) });
+    if (options?.start) params.set('start', options.start);
+    if (options?.end) params.set('end', options.end);
+    if (options?.cursor) params.set('cursor', options.cursor);
+    return apiFetch(`/api/v1/consumption/readings?${params.toString()}`);
   },
 
   getStatistics: (): Promise<{
