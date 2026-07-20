@@ -189,6 +189,7 @@ class ConsumptionService:
         total_kwh = 0.0
         covered_seconds = 0.0
         peak_kw = 0.0
+        peak_at = None
         tariff_totals = {
             "total_kwh": 0.0, "total_cost": 0.0, "peak_kwh": 0.0,
             "off_peak_kwh": 0.0, "daily": defaultdict(lambda: {"kwh": 0.0, "cost": 0.0}),
@@ -203,7 +204,9 @@ class ConsumptionService:
                 bucket["min_kw"] = reading.gap if bucket["min_kw"] is None else min(bucket["min_kw"], reading.gap)
                 bucket["max_kw"] = reading.gap if bucket["max_kw"] is None else max(bucket["max_kw"], reading.gap)
                 source_counts[reading.source] += 1
-                peak_kw = max(peak_kw, reading.gap)
+                if reading.gap >= peak_kw:
+                    peak_kw = reading.gap
+                    peak_at = timestamp
 
             if last_reading is not None:
                 interval_start, interval_end = _as_utc(last_reading.timestamp), timestamp
@@ -250,6 +253,7 @@ class ConsumptionService:
             "timeframe": timeframe,
             "period_start": period_start.isoformat(),
             "period_end": period_end.isoformat(),
+            "site_name": site.name,
             "timezone": site.timezone,
             "granularity": granularity,
             "total_kwh": round(total_kwh, 4),
@@ -257,6 +261,7 @@ class ConsumptionService:
             "currency": settings.currency if settings else "MAD",
             "average_kw": round(total_kwh / (covered_seconds / 3600), 4) if covered_seconds else 0.0,
             "peak_kw": round(peak_kw, 4),
+            "peak_at": peak_at.isoformat() if peak_at else None,
             "coverage_pct": round(min(100.0, covered_seconds / duration_seconds * 100), 1) if duration_seconds else 0.0,
             "sample_count": sample_count,
             "sources": [{"source": source, "count": count} for source, count in sorted(source_counts.items())],
@@ -291,8 +296,8 @@ class ConsumptionService:
     def _empty_period(timeframe: str, site: Site, start: datetime, end: datetime, granularity: str) -> dict:
         return {
             "timeframe": timeframe, "period_start": start.isoformat(), "period_end": end.isoformat(),
-            "timezone": site.timezone, "granularity": granularity, "total_kwh": 0.0,
-            "estimated_cost": 0.0, "currency": "MAD", "average_kw": 0.0, "peak_kw": 0.0,
+            "site_name": site.name, "timezone": site.timezone, "granularity": granularity, "total_kwh": 0.0,
+            "estimated_cost": 0.0, "currency": "MAD", "average_kw": 0.0, "peak_kw": 0.0, "peak_at": None,
             "coverage_pct": 0.0, "sample_count": 0, "sources": [],
             "freshness": {"status": "empty", "age_seconds": None, "expected_interval_seconds": None,
                           "last_seen_at": None, "source": None, "quality": None},
@@ -460,8 +465,11 @@ class ConsumptionService:
     def get_monthly_summary(
         self, db: Session, user_id: int, month: str | None = None, site_id: int | None = None,
     ) -> dict:
+        site = db.query(Site).filter(Site.user_id == user_id).one_or_none()
         now = datetime.now(timezone.utc)
-        selected_month = month or now.strftime("%Y-%m")
+        selected_month = month or (
+            now.astimezone(self._zone_for_site(site)).strftime("%Y-%m") if site else now.strftime("%Y-%m")
+        )
         current = self._month_calculation(db, user_id, selected_month, site_id)
         year, month_number = (int(part) for part in selected_month.split("-"))
         previous_month = f"{year - 1}-12" if month_number == 1 else f"{year}-{month_number - 1:02d}"
@@ -517,15 +525,36 @@ class ConsumptionService:
 
     def export_month_csv(self, db: Session, user_id: int, month: str | None = None) -> str:
         summary = self.get_monthly_summary(db, user_id, month)
+        site = db.query(Site).filter(Site.user_id == user_id).one_or_none()
+        settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).one_or_none() if site else None
+        zone = self._zone_for_site(site) if site else ZoneInfo("UTC")
+        local_start, local_end = _month_bounds(summary["month"], zone)
+        period = self.get_period_summary(
+            db,
+            user_id,
+            "custom",
+            local_start.astimezone(timezone.utc),
+            local_end.astimezone(timezone.utc),
+        ) if site else None
         output = io.StringIO()
         writer = csv.writer(output)
+        writer.writerow(["generated_at_utc", datetime.now(timezone.utc).isoformat()])
+        writer.writerow(["site", site.name if site else "Not configured"])
+        writer.writerow(["timezone", site.timezone if site else "UTC"])
         writer.writerow(["month", summary["month"]])
+        writer.writerow(["currency", settings.currency if settings else "MAD"])
+        writer.writerow(["peak_rate_per_kwh", settings.peak_rate if settings else ""])
+        writer.writerow(["off_peak_rate_per_kwh", settings.off_peak_rate if settings else ""])
+        writer.writerow(["peak_hours", f"{settings.peak_start_hour}:00-{settings.peak_end_hour}:00" if settings else ""])
+        writer.writerow(["sources", ";".join(item["source"] for item in period["sources"]) if period else ""])
+        writer.writerow(["coverage_percent", summary["coverage_pct"]])
         writer.writerow(["total_kwh", summary["total_kwh"]])
-        writer.writerow(["total_cost", summary["total_cost"]])
+        writer.writerow(["estimated_cost", summary["total_cost"]])
+        writer.writerow(["calculation", "Interval-integrated primary-meter energy using configured site tariff"])
         writer.writerow([])
-        writer.writerow(["date", "energy_kwh", "cost"])
+        writer.writerow(["date", "energy_kwh", "estimated_cost", "currency"])
         for day in summary["daily"]:
-            writer.writerow([day["date"], day["kwh"], day["cost"]])
+            writer.writerow([day["date"], day["kwh"], day["cost"], settings.currency if settings else "MAD"])
         return output.getvalue()
 
 

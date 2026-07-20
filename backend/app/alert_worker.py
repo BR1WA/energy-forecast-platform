@@ -32,9 +32,12 @@ def main() -> None:
     interval = settings.ALERT_WORKER_INTERVAL_SECONDS
     logger.info("Alert worker started with a %ss interval", interval)
     while True:
-        created = run_once()
-        if created:
-            logger.info("Created %s missing-data alert(s)", created)
+        try:
+            created = run_once()
+            if created:
+                logger.info("Created %s missing-data alert(s)", created)
+        except Exception:
+            logger.exception("Alert worker iteration failed; retrying after the configured interval")
         time.sleep(interval)
 
 

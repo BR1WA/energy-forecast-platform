@@ -67,6 +67,19 @@ class AlertService:
         evidence: dict,
         now: datetime,
     ) -> Alert | None:
+        unresolved = (
+            db.query(Alert.id)
+            .filter(
+                Alert.user_id == site.user_id,
+                Alert.site_id == site.id,
+                Alert.rule_key == rule_key,
+                Alert.resolved_at.is_(None),
+            )
+            .first()
+        )
+        if unresolved is not None:
+            return None
+
         cutoff = now - timedelta(minutes=config.cooldown_minutes)
         recent = (
             db.query(Alert.id)
@@ -96,17 +109,36 @@ class AlertService:
         recommendation_service.create_for_alert(db, alert)
         return alert
 
+    @staticmethod
+    def _resolve_rule(db: Session, site: Site, rule_key: str, now: datetime) -> int:
+        alerts = (
+            db.query(Alert)
+            .filter(
+                Alert.user_id == site.user_id,
+                Alert.site_id == site.id,
+                Alert.rule_key == rule_key,
+                Alert.resolved_at.is_(None),
+            )
+            .all()
+        )
+        for alert in alerts:
+            alert.resolved_at = now
+        return len(alerts)
+
     def evaluate_reading(self, db: Session, meter: Meter, reading: SmartMeterReading) -> Alert | None:
         site = db.query(Site).filter(Site.id == meter.site_id).first()
         if site is None or reading.gap < 0:
             return None
 
         config = self.config_for_site(db, site)
+        observed_at = _as_utc(reading.timestamp)
+        if reading.source == "push":
+            self._resolve_rule(db, site, f"missing_data:{meter.id}", observed_at)
         if reading.gap < config.threshold_kw:
+            self._resolve_rule(db, site, f"high_load:{meter.id}", observed_at)
             return None
 
         severity = "critical" if reading.gap >= config.threshold_kw * 1.25 else "high"
-        observed_at = _as_utc(reading.timestamp)
         return self._create_if_due(
             db,
             site=site,
@@ -127,7 +159,7 @@ class AlertService:
                 "threshold_kw": config.threshold_kw,
                 "source": reading.source,
             },
-            now=datetime.now(timezone.utc),
+            now=observed_at,
         )
 
     def evaluate_missing_push_data(self, db: Session, now: datetime | None = None) -> list[Alert]:

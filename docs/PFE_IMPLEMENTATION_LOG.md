@@ -232,3 +232,41 @@
 - Exercise deterministic repeatability and measured latency in release validation.
 - Validate packaged model readiness from the clean Docker runtime.
 - Complete browser-level insufficient-data, TFT, and fallback journeys.
+
+## 2026-07-20 - Client Actions, Reports, and Release-Facing Truth
+
+### Completed
+
+- Added open, acknowledged, resolved, and reopened alert lifecycle actions with
+  ownership checks, state filters, audit events, and automatic resolution when a
+  high-load condition clears or push telemetry resumes.
+- Prevented repeated alerts while the same incident remains unresolved and made
+  the periodic missing-data worker survive and retry after an iteration failure.
+- Removed the dormant email-delivery toggle from the PFE alert contract and UI;
+  alerts are explicitly in-app only until Product V1.
+- Kept recommendations deterministic and evidence-backed with complete, dismiss,
+  and reopen actions, measured threshold details, and no projected-saving claim.
+- Rebuilt the forecast PDF around hourly kWh, target timestamps, method/version,
+  quantiles, source, coverage, tariff context, fallback reason, and limitations.
+- Expanded monthly consumption CSV metadata with site, timezone, tariff, source,
+  coverage, calculation, currency, and daily energy/cost rows.
+- Added site identity and peak timestamp to period summaries and added compact
+  monthly budget, latest forecast, open alert, and top action summaries to the
+  focused Dashboard.
+- Deleted the obsolete composite dashboard/weather backend and client, which was
+  the last source of solar/grid/energy-score and remote-weather product claims.
+- Reworked landing, sign-in, and registration copy around the actual one-site
+  product, fixed the frontend password minimum and setup redirect, corrected the
+  forecast contract, and added a product hero asset.
+
+### Verification
+
+- Backend product suite: 47 passed.
+- Alert lifecycle, auto-resolution, cooldown, ownership, recommendation, PDF,
+  CSV, and report-summary regressions passed.
+- Frontend lint, typecheck, and production build passed; 16 pages generated.
+
+### Remaining in this area
+
+- Browser-check alert/recommendation actions and downloads.
+- Finish the read-only Admin model/runtime readiness replacement.

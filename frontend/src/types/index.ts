@@ -54,6 +54,7 @@ export interface ConsumptionPeriodSummary {
   timeframe: ConsumptionTimeframe;
   period_start: string;
   period_end: string;
+  site_name: string;
   timezone: string;
   granularity: string;
   total_kwh: number;
@@ -61,6 +62,7 @@ export interface ConsumptionPeriodSummary {
   currency: string;
   average_kw: number;
   peak_kw: number;
+  peak_at: string | null;
   coverage_pct: number;
   sample_count: number;
   sources: Array<{ source: string; count: number }>;
@@ -220,16 +222,19 @@ export interface ProductForecastHistoryItem {
 export interface AnalyticsSummary {
   total_forecasts: number;
   total_alerts: number;
-  unacknowledged_alerts: number;
-  avg_peak_power: number | null;
-  models_used: Record<string, number>;
-  recent_forecasts: ForecastHistory[];
-  consumption_trend: ConsumptionPoint[];
-  weekly_consumption?: Array<Record<string, unknown>>;
-  consumption_by_hour?: Array<Record<string, unknown>>;
-  monthly_accuracy?: Array<Record<string, unknown>>;
-  model_performance?: Array<Record<string, unknown>>;
-  heatmap_data?: Array<Record<string, unknown>>;
+  open_alerts: number;
+  resolved_alerts: number;
+  open_recommendations: number;
+  avg_forecast_peak_kwh: number | null;
+  recent_forecasts: Array<{
+    id: number;
+    model_name: string;
+    method: string;
+    created_at: string;
+    forecast_start: string | null;
+    peak_hourly_kwh: number | null;
+    total_kwh: number | null;
+  }>;
 }
 
 export interface ModelUsage {
@@ -260,16 +265,17 @@ export interface Alert {
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
   message: string;
+  state: 'open' | 'acknowledged' | 'resolved';
   is_read: boolean;
+  evidence: Record<string, unknown>;
   created_at: string;
-  resolved_at?: string;
+  resolved_at?: string | null;
 }
 
 export interface AlertConfig {
   high_consumption_threshold: number;
   cooldown_minutes: number;
   missing_data_minutes: number;
-  notification_email: boolean;
 }
 
 export interface Recommendation {
@@ -366,7 +372,10 @@ export interface RawAlertResponse {
   severity: 'low' | 'medium' | 'high' | 'critical';
   message: string;
   peak_kw: number | null;
+  evidence_json: Record<string, unknown> | null;
+  state: 'open' | 'acknowledged' | 'resolved';
   is_acknowledged: boolean;
+  resolved_at: string | null;
   created_at: string;
 }
 
@@ -376,7 +385,6 @@ export interface AlertConfigResponse {
   threshold_kw: number;
   cooldown_minutes: number;
   missing_data_minutes: number;
-  email_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

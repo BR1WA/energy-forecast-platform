@@ -202,7 +202,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Merge or redirect duplicate Profile, Analytics, Budget, Smart Meter, and
   Simulator pages into the focused navigation without losing required functions.
 - [x] Remove unsupported AI/solar/grid/appliance/energy-score language and widgets.
-- [ ] Fix duplicate/dead report download controls and misleading auth/landing copy.
+- [x] Fix duplicate/dead report download controls and misleading auth/landing copy.
 
 #### C. One-site and sessions
 
@@ -243,7 +243,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Correct today versus monthly calculations.
 - [x] Implement source/freshness header and period selector.
 - [x] Implement KPI row and primary consumption chart.
-- [ ] Add tariff/budget, forecast, alert, and recommendation summaries.
+- [x] Add tariff/budget, forecast, alert, and recommendation summaries.
 - [x] Implement loading/empty/stale/partial/error/live reconnect states.
 - [x] Implement mobile drawer and responsive chart/KPI behavior.
 - [ ] Add desktop/mobile dashboard tests.
@@ -264,12 +264,12 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 #### H. Alerts, recommendations, and reports
 
-- [ ] Unify high-load/missing-data alert paths with evidence/cooldown.
-- [ ] Add resolved lifecycle and worker exception resilience.
+- [x] Unify high-load/missing-data alert paths with evidence/cooldown.
+- [x] Add resolved lifecycle and worker exception resilience.
 - [x] Remove unused notification WebSocket; use truthful refresh behavior.
-- [ ] Verify deterministic recommendation actions and evidence.
-- [ ] Repair all CSV/PDF downloads and product-truth metadata.
-- [ ] Add alert, recommendation, export, and ownership tests.
+- [x] Verify deterministic recommendation actions and evidence.
+- [x] Repair all CSV/PDF downloads and product-truth metadata.
+- [x] Add alert, recommendation, export, and ownership tests.
 
 #### I. Release validation
 

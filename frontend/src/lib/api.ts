@@ -245,16 +245,19 @@ export const analyticsApi = {
 // Alerts API
 // ============================================================
 export const alertsApi = {
-  getAlerts: async (): Promise<Alert[]> => {
-    const raw = await apiFetch<RawAlertResponse[]>('/api/v1/alerts');
+  getAlerts: async (state: 'all' | 'open' | 'acknowledged' | 'resolved' = 'all'): Promise<Alert[]> => {
+    const raw = await apiFetch<RawAlertResponse[]>(`/api/v1/alerts?state=${state}`);
     return raw.map((a) => ({
       id: String(a.id),
       type: a.alert_type as any,
       severity: a.severity,
       title: a.alert_type ? a.alert_type.replace(/_/g, ' ').toUpperCase() : 'ALERT',
       message: a.message || '',
+      state: a.state,
       is_read: a.is_acknowledged,
+      evidence: a.evidence_json || {},
       created_at: a.created_at,
+      resolved_at: a.resolved_at,
     }));
   },
 
@@ -264,7 +267,6 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
-      notification_email: raw.email_enabled,
     };
   },
 
@@ -273,7 +275,6 @@ export const alertsApi = {
       threshold_kw: config.high_consumption_threshold,
       cooldown_minutes: config.cooldown_minutes,
       missing_data_minutes: config.missing_data_minutes,
-      email_enabled: config.notification_email,
     };
     const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config', {
       method: 'POST',
@@ -283,15 +284,17 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
-      notification_email: raw.email_enabled,
     };
   },
 
-  acknowledgeAlert: (alertId: string | number): Promise<void> =>
-    apiFetch('/api/v1/alerts/acknowledge', {
-      method: 'POST',
-      body: JSON.stringify({ alert_id: Number(alertId) }),
-    }),
+  acknowledgeAlert: (alertId: string | number): Promise<RawAlertResponse> =>
+    apiFetch(`/api/v1/alerts/${Number(alertId)}/acknowledge`, { method: 'PATCH' }),
+
+  resolveAlert: (alertId: string | number): Promise<RawAlertResponse> =>
+    apiFetch(`/api/v1/alerts/${Number(alertId)}/resolve`, { method: 'PATCH' }),
+
+  reopenAlert: (alertId: string | number): Promise<RawAlertResponse> =>
+    apiFetch(`/api/v1/alerts/${Number(alertId)}/reopen`, { method: 'PATCH' }),
 };
 
 // ============================================================
@@ -426,8 +429,8 @@ export const consumptionApi = {
   }> =>
     apiFetch('/api/v1/consumption/statistics'),
 
-  exportCsv: (): Promise<Blob> =>
-    apiFetch('/api/v1/consumption/export', { isBlob: true }),
+  exportCsv: (month?: string): Promise<Blob> =>
+    apiFetch(`/api/v1/consumption/export${month ? `?month=${encodeURIComponent(month)}` : ''}`, { isBlob: true }),
 };
 
 export const ingestionApi = {
@@ -513,17 +516,6 @@ export const simulationApi = {
       method: 'POST',
       body: JSON.stringify(config)
     }),
-};
-
-export const dashboardApi = {
-  // The dashboard is a composite endpoint with independently optional sections.
-  getSummary: (lat?: number, lon?: number): Promise<any> => {
-    let url = '/api/v1/dashboard/summary';
-    if (lat !== undefined && lon !== undefined) {
-      url += `?lat=${lat}&lon=${lon}`;
-    }
-    return apiFetch(url);
-  },
 };
 
 // Export helpers for use in auth context

@@ -73,6 +73,7 @@ class ConsumptionPeriodSummary(BaseModel):
     timeframe: str
     period_start: datetime
     period_end: datetime
+    site_name: str
     timezone: str
     granularity: str
     total_kwh: float
@@ -80,6 +81,7 @@ class ConsumptionPeriodSummary(BaseModel):
     currency: str
     average_kw: float
     peak_kw: float
+    peak_at: datetime | None
     coverage_pct: float
     sample_count: int
     sources: List[ConsumptionSourceCount]
@@ -334,7 +336,6 @@ class AlertConfigCreate(BaseModel):
     threshold_kw: float = Field(ge=0.1, le=20.0, default=3.0)
     cooldown_minutes: int = Field(ge=5, le=1440, default=60)
     missing_data_minutes: int = Field(ge=5, le=10080, default=60)
-    email_enabled: bool = True
 
 
 class AlertConfigResponse(BaseModel):
@@ -344,7 +345,6 @@ class AlertConfigResponse(BaseModel):
     threshold_kw: float
     cooldown_minutes: int
     missing_data_minutes: int
-    email_enabled: bool
     created_at: datetime
 
 class AlertResponse(BaseModel):
@@ -356,14 +356,11 @@ class AlertResponse(BaseModel):
     message: Optional[str] = None
     peak_kw: Optional[float] = None
     evidence_json: Optional[Dict[str, Any]] = None
+    state: Literal["open", "acknowledged", "resolved"]
     is_acknowledged: bool
     acknowledged_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     created_at: datetime
-
-class AlertAcknowledge(BaseModel):
-    alert_id: int
-
 
 class RecommendationStatusUpdate(BaseModel):
     status: str = Field(pattern="^(open|completed|dismissed)$")
@@ -416,21 +413,26 @@ class HeatmapPoint(BaseModel):
     hour: int
     value: float
 
+class ReportForecastItem(BaseModel):
+    id: int
+    model_name: str
+    method: str
+    created_at: datetime
+    forecast_start: Optional[datetime] = None
+    peak_hourly_kwh: Optional[float] = None
+    total_kwh: Optional[float] = None
+
+
 class AnalyticsSummary(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     total_forecasts: int
     total_alerts: int
-    unacknowledged_alerts: int
-    models_used: Dict[str, int]  # {model_name: count}
-    avg_peak_power: Optional[float] = None
-    recent_forecasts: List[ForecastHistoryItem]
-    consumption_trend: List[ConsumptionTrendPoint] = []
-    weekly_consumption: List[WeeklyConsumptionPoint] = []
-    consumption_by_hour: List[HourlyPatternPoint] = []
-    monthly_accuracy: List[MonthlyAccuracyPoint] = []
-    model_performance: List[ModelPerformancePoint] = []
-    heatmap_data: List[HeatmapPoint] = []
+    open_alerts: int
+    resolved_alerts: int
+    open_recommendations: int
+    avg_forecast_peak_kwh: Optional[float] = None
+    recent_forecasts: List[ReportForecastItem]
 
 
 # ======================== ADMIN ========================

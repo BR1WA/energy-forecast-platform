@@ -5,6 +5,8 @@ import Link from 'next/link';
 import {
   Activity,
   AlertCircle,
+  Bell,
+  BrainCircuit,
   CalendarRange,
   CircleDollarSign,
   Database,
@@ -12,6 +14,7 @@ import {
   PlugZap,
   RefreshCw,
   Settings,
+  ListChecks,
   TimerReset,
   Zap,
 } from 'lucide-react';
@@ -21,9 +24,9 @@ import { ConsumptionChart } from '@/components/consumption/consumption-chart';
 import { PeriodSelector } from '@/components/consumption/period-selector';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { API_BASE_URL, consumptionApi, getAccessToken } from '@/lib/api';
+import { API_BASE_URL, alertsApi, consumptionApi, forecastApi, getAccessToken, recommendationsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { ConsumptionPeriodSummary, ConsumptionTimeframe } from '@/types';
+import type { Alert, ConsumptionPeriodSummary, ConsumptionTimeframe, ProductForecast, Recommendation } from '@/types';
 
 type LiveState = 'off' | 'connecting' | 'connected' | 'reconnecting';
 
@@ -68,10 +71,27 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<LiveState>('off');
   const [liveReading, setLiveReading] = useState<LiveReading | null>(null);
+  const [monthly, setMonthly] = useState<Awaited<ReturnType<typeof consumptionApi.getStatistics>> | null>(null);
+  const [latestForecast, setLatestForecast] = useState<ProductForecast | null>(null);
+  const [openAlerts, setOpenAlerts] = useState<Alert[]>([]);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const now = useMemo(() => new Date(), []);
   const [customStart, setCustomStart] = useState(localInputValue(new Date(now.getTime() - 7 * 86400_000)));
   const [customEnd, setCustomEnd] = useState(localInputValue(now));
   const cursorRef = useRef(0);
+
+  const loadContext = useCallback(async () => {
+    const results = await Promise.allSettled([
+      consumptionApi.getStatistics(),
+      forecastApi.getLatest(),
+      alertsApi.getAlerts('open'),
+      recommendationsApi.getAll(false),
+    ]);
+    if (results[0].status === 'fulfilled') setMonthly(results[0].value);
+    if (results[1].status === 'fulfilled') setLatestForecast(results[1].value);
+    if (results[2].status === 'fulfilled') setOpenAlerts(results[2].value);
+    if (results[3].status === 'fulfilled') setRecommendations(results[3].value);
+  }, []);
 
   const loadSummary = useCallback(async (
     selected: ConsumptionTimeframe,
@@ -107,6 +127,10 @@ export default function DashboardPage() {
     const timer = window.setInterval(() => void loadSummary('live', true), 30_000);
     return () => window.clearInterval(timer);
   }, [loadSummary, timeframe]);
+
+  useEffect(() => {
+    void loadContext();
+  }, [loadContext]);
 
   useEffect(() => {
     if (timeframe !== 'live') {
@@ -179,7 +203,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-7xl space-y-5">
         <header className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <p className="mb-1 text-xs font-semibold uppercase text-cyan-400">Single-site electricity monitor</p>
+            <p className="mb-1 text-xs font-semibold text-cyan-400">{summary?.site_name || 'Your electricity site'}</p>
             <h1 className="text-2xl font-semibold text-white">Energy overview</h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
               <span className="inline-flex items-center gap-1.5"><Database className="h-3.5 w-3.5" />{sourceLabel}</span>
@@ -220,12 +244,12 @@ export default function DashboardPage() {
             { label: timeframe === 'live' ? 'Current load' : 'Latest load', value: `${latestPower.toFixed(3)} kW`, icon: Zap },
             { label: 'Energy', value: `${(summary?.total_kwh ?? 0).toFixed(2)} kWh`, icon: Gauge },
             { label: 'Estimated cost', value: `${summary?.currency ?? 'MAD'} ${(summary?.estimated_cost ?? 0).toFixed(2)}`, icon: CircleDollarSign },
-            { label: 'Peak load', value: `${(summary?.peak_kw ?? 0).toFixed(3)} kW`, icon: Activity },
+            { label: 'Peak load', value: `${(summary?.peak_kw ?? 0).toFixed(3)} kW`, detail: summary?.peak_at ? new Date(summary.peak_at).toLocaleString() : 'No peak timestamp', icon: Activity },
           ].map((metric) => (
             <Card className="min-h-28 rounded-lg border-white/10 bg-[#111827]" key={metric.label}>
               <CardContent className="flex h-full flex-col justify-between pt-1">
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-400"><span>{metric.label}</span><metric.icon className="h-4 w-4 text-cyan-400" /></div>
-                <p className="mt-4 text-xl font-semibold text-white sm:text-2xl">{loading ? '...' : metric.value}</p>
+                <div><p className="mt-4 text-xl font-semibold text-white sm:text-2xl">{loading ? '...' : metric.value}</p>{'detail' in metric && metric.detail ? <p className="mt-1 truncate text-xs text-slate-500" title={metric.detail}>{metric.detail}</p> : null}</div>
               </CardContent>
             </Card>
           ))}
@@ -253,6 +277,31 @@ export default function DashboardPage() {
             ) : summary ? <ConsumptionChart summary={summary} /> : null}
           </CardContent>
         </Card>
+
+        <section className="grid gap-5 border-y border-white/10 py-5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Operational summary">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><CircleDollarSign className="h-4 w-4 text-emerald-400" />Monthly budget</h2>
+            {monthly?.budget.target_mad == null ? <p className="mt-3 text-sm text-slate-500">No monthly budget configured.</p> : <><p className="mt-3 text-lg font-semibold text-white">{monthly.tariff.currency} {monthly.budget.spent_mad.toFixed(2)} / {monthly.budget.target_mad.toFixed(2)}</p><p className="mt-1 text-xs text-slate-500">Projected {monthly.tariff.currency} {monthly.budget.projected_mad.toFixed(2)} at {monthly.coverage_pct.toFixed(1)}% coverage</p></>}
+            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/settings?tab=budget">Tariff and budget settings</Link>
+          </div>
+          <div className="min-w-0 border-t border-white/10 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><BrainCircuit className="h-4 w-4 text-cyan-400" />Latest forecast</h2>
+            {latestForecast ? <><p className="mt-3 text-lg font-semibold text-white">{latestForecast.points.reduce((sum, point) => sum + point.p50_kwh, 0).toFixed(2)} kWh</p><p className="mt-1 text-xs text-slate-500">{latestForecast.method === 'global_tft' ? 'Global TFT median' : 'Seasonal fallback'}, next 24 hours</p></> : <p className="mt-3 text-sm text-slate-500">No persisted forecast.</p>}
+            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/forecast">Open forecast</Link>
+          </div>
+          <div className="min-w-0 border-t border-white/10 pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><Bell className="h-4 w-4 text-amber-400" />Open alerts</h2>
+            <p className="mt-3 text-lg font-semibold text-white">{openAlerts.length}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{openAlerts[0]?.message || 'No active meter-rule incident.'}</p>
+            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/alerts">Review alerts</Link>
+          </div>
+          <div className="min-w-0 border-t border-white/10 pt-4 sm:border-l sm:pl-5 xl:border-t-0 xl:pt-0">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><ListChecks className="h-4 w-4 text-indigo-400" />Open actions</h2>
+            <p className="mt-3 text-lg font-semibold text-white">{recommendations.length}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{recommendations[0]?.title || 'No evidence-backed action is open.'}</p>
+            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/recommendations">Review actions</Link>
+          </div>
+        </section>
 
         <section className="grid gap-4 lg:grid-cols-3">
           <div className="border-t border-white/10 pt-4 lg:col-span-2">
