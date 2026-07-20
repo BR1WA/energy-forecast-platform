@@ -15,20 +15,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) router.replace('/dashboard');
-  }, [isAuthenticated, isLoading, router]);
+    if (!isLoading && isAuthenticated) router.replace(user?.role === 'admin' ? '/admin' : '/dashboard');
+  }, [user?.role, isAuthenticated, isLoading, router]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
     setSubmitting(true);
     try {
-      await login({ email, password });
-      router.replace('/dashboard');
+      const signedInUser = await login({ email, password });
+      router.replace(signedInUser.role === 'admin' ? '/admin' : '/dashboard');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Sign in failed.');
     } finally {

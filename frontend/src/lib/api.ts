@@ -57,6 +57,31 @@ interface FetchOptions extends RequestInit {
   isBlob?: boolean;
 }
 
+function getApiErrorMessage(payload: unknown, status: number): string {
+  if (!payload || typeof payload !== 'object' || !('detail' in payload)) {
+    return `API error: ${status}`;
+  }
+
+  const detail = payload.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.flatMap((item) => {
+      if (!item || typeof item !== 'object' || !('msg' in item) || typeof item.msg !== 'string') {
+        return [];
+      }
+      const location = 'loc' in item && Array.isArray(item.loc)
+        ? item.loc.filter((part: unknown): part is string => typeof part === 'string' && part !== 'body').join('.')
+        : '';
+      return [location ? `${location}: ${item.msg}` : item.msg];
+    });
+    if (messages.length) return messages.join(' ');
+  }
+  if (detail && typeof detail === 'object' && 'msg' in detail && typeof detail.msg === 'string') {
+    return detail.msg;
+  }
+  return `API error: ${status}`;
+}
+
 let refreshPromise: Promise<string | null> | null = null;
 
 async function performTokenRefresh(): Promise<string | null> {
@@ -146,12 +171,13 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    const message = getApiErrorMessage(errorData, res.status);
     if (res.status === 403 && typeof window !== 'undefined') {
       import('sonner').then(({ toast }) => {
-        toast.error(errorData.detail || 'Access denied.');
+        toast.error(message || 'Access denied.');
       }).catch(err => console.error('Failed to load sonner toast', err));
     }
-    throw new Error(errorData.detail || `API error: ${res.status}`);
+    throw new Error(message);
   }
 
   if (isBlob) {

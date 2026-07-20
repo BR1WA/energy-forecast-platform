@@ -93,7 +93,7 @@ const translations: Record<Language, Translations> = {
 
     // Admin
     'admin.title': 'Admin Control Panel',
-    'admin.subtitle': 'Manage models, users, and global system parameters.',
+    'admin.subtitle': 'Manage user access and inspect release readiness.',
     'admin.users': 'User Management',
     'admin.email': 'Email',
     'admin.role': 'Role',
@@ -185,7 +185,7 @@ const translations: Record<Language, Translations> = {
 
     // Admin
     'admin.title': 'Panel de Contrôle Admin',
-    'admin.subtitle': 'Gérer les modèles, les utilisateurs et les paramètres globaux.',
+    'admin.subtitle': 'Gérer les accès utilisateurs et vérifier l’état de la version.',
     'admin.users': 'Gestion des Utilisateurs',
     'admin.email': 'Email',
     'admin.role': 'Rôle',
@@ -277,7 +277,7 @@ const translations: Record<Language, Translations> = {
 
     // Admin
     'admin.title': 'لوحة تحكم المسؤول',
-    'admin.subtitle': 'إدارة النماذج والمستخدمين والمعايير العامة للنظام.',
+    'admin.subtitle': 'إدارة وصول المستخدمين والتحقق من جاهزية الإصدار.',
     'admin.users': 'إدارة المستخدمين',
     'admin.email': 'البريد الإلكتروني',
     'admin.role': 'الدور',

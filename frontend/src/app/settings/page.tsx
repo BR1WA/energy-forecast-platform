@@ -44,7 +44,17 @@ export default function SettingsPage() {
   useEffect(() => {
     Promise.all([settingsApi.getSettings(), settingsApi.getBudget(), ingestionApi.getMeters()])
       .then(([settings, savedBudget, meters]) => {
-        setSiteSettings({ ...initialSettings, ...settings });
+        setSiteSettings({
+          country: settings.country,
+          region: settings.region,
+          electricity_provider: settings.electricity_provider,
+          currency: settings.currency,
+          peak_rate: settings.peak_rate,
+          off_peak_rate: settings.off_peak_rate,
+          peak_start_hour: settings.peak_start_hour,
+          peak_end_hour: settings.peak_end_hour,
+          sensor_type: settings.sensor_type,
+        });
         if (savedBudget?.monthly_budget_mad) setBudget(String(savedBudget.monthly_budget_mad));
         const primary = meters[0] ?? null;
         setMeter(primary);
@@ -168,10 +178,10 @@ export default function SettingsPage() {
                 {([
                   ['country', 'Country'], ['region', 'Region'], ['electricity_provider', 'Provider'], ['currency', 'Currency'],
                 ] as const).map(([field, label]) => (
-                  <div key={field} className="space-y-2"><Label>{label}</Label><Input value={siteSettings[field]} onChange={(event) => setSiteSettings({ ...siteSettings, [field]: event.target.value })} /></div>
+                  <div key={field} className="space-y-2"><Label htmlFor={`site-${field}`}>{label}</Label><Input id={`site-${field}`} value={siteSettings[field]} onChange={(event) => setSiteSettings({ ...siteSettings, [field]: event.target.value })} /></div>
                 ))}
-                <div className="space-y-2"><Label>Peak rate (MAD/kWh)</Label><Input type="number" value={siteSettings.peak_rate} onChange={(event) => setSiteSettings({ ...siteSettings, peak_rate: Number(event.target.value) })} /></div>
-                <div className="space-y-2"><Label>Off-peak rate (MAD/kWh)</Label><Input type="number" value={siteSettings.off_peak_rate} onChange={(event) => setSiteSettings({ ...siteSettings, off_peak_rate: Number(event.target.value) })} /></div>
+                <div className="space-y-2"><Label htmlFor="site-peak-rate">Peak rate (MAD/kWh)</Label><Input id="site-peak-rate" type="number" value={siteSettings.peak_rate} onChange={(event) => setSiteSettings({ ...siteSettings, peak_rate: Number(event.target.value) })} /></div>
+                <div className="space-y-2"><Label htmlFor="site-off-peak-rate">Off-peak rate (MAD/kWh)</Label><Input id="site-off-peak-rate" type="number" value={siteSettings.off_peak_rate} onChange={(event) => setSiteSettings({ ...siteSettings, off_peak_rate: Number(event.target.value) })} /></div>
                 <div className="md:col-span-2 flex justify-end"><Button onClick={saveSiteSettings} disabled={saving}>{saving ? 'Saving...' : 'Save site settings'}</Button></div>
               </CardContent>
             </Card>
