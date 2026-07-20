@@ -137,3 +137,53 @@ class TestMeterIngestion(unittest.TestCase):
         self.assertEqual(older.json()["accepted_rows"], 0)
         self.assertEqual(older.json()["rejected_rows"], 1)
         self.assertEqual(self.db.query(SmartMeterReading).count(), 1)
+
+    def test_primary_meter_metadata_and_interval_configuration(self):
+        listed = client.get("/api/v1/ingestion/meters", headers=self.headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(len(listed.json()), 1)
+        self.assertTrue(listed.json()[0]["is_primary"])
+        self.assertFalse(listed.json()[0]["push_key_configured"])
+
+        configured = client.patch(
+            f"/api/v1/ingestion/meters/{self.meter.id}",
+            headers=self.headers,
+            json={"expected_interval_seconds": 30},
+        )
+        self.assertEqual(configured.status_code, 200)
+        listed = client.get("/api/v1/ingestion/meters", headers=self.headers)
+        self.assertEqual(listed.json()[0]["expected_interval_seconds"], 30)
+
+    def test_push_and_explicit_simulator_cannot_write_concurrently(self):
+        key = self._push_key()
+        started = client.post("/api/v1/simulation/start", headers=self.headers)
+        self.assertEqual(started.status_code, 200)
+
+        blocked = client.post(
+            f"/api/v1/ingestion/meters/{self.meter.id}/samples",
+            headers={"X-Meter-Key": key},
+            json={"samples": [{"timestamp": "2026-07-20T18:00:00Z", "active_power_kw": 1.2}]},
+        )
+        self.assertEqual(blocked.status_code, 409)
+
+        rotated = client.post(
+            f"/api/v1/ingestion/meters/{self.meter.id}/push-key",
+            headers=self.headers,
+        )
+        self.assertEqual(rotated.status_code, 200)
+        status_response = client.get("/api/v1/simulation/status", headers=self.headers)
+        self.assertFalse(status_response.json()["is_running"])
+
+    def test_simulator_configuration_is_strict_and_bounded(self):
+        too_many_occupants = client.post(
+            "/api/v1/simulation/configure",
+            headers=self.headers,
+            json={"occupants": 99},
+        )
+        unknown_field = client.post(
+            "/api/v1/simulation/configure",
+            headers=self.headers,
+            json={"unsupported": True},
+        )
+        self.assertEqual(too_many_occupants.status_code, 422)
+        self.assertEqual(unknown_field.status_code, 422)

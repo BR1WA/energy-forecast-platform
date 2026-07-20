@@ -62,7 +62,7 @@ export default function SetupWizard() {
       if (dataPath === 'simulator') await simulationApi.start();
       await refreshUser();
       toast.success('Your energy workspace is ready.');
-      router.push(dataPath === 'push' ? '/smart-meter' : '/dashboard');
+      router.push(dataPath === 'push' ? '/settings?tab=data' : '/dashboard');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to complete setup.');
     } finally {

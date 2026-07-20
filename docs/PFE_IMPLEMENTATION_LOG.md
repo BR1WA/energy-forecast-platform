@@ -147,3 +147,33 @@
 - Add tariff/budget, forecast, alert, and recommendation summaries once their
   focused backend contracts are complete.
 - Add automated desktop/mobile browser journeys.
+
+## 2026-07-20 - Client-Usable Data Sources
+
+### Completed
+
+- Made CSV preview and import share the same 5 MB/10,000-row limits and exposed
+  mapped columns plus row-level validation errors in Consumption.
+- Added primary-meter metadata, expected-cadence configuration, one-time push-key
+  generation/rotation, last-seen status, a request example, and an intentional
+  test-reading action to Settings.
+- Made push-key rotation explicitly invalidate the previous key and stop an active
+  simulator session.
+- Prevented push and simulator writers from committing concurrently to one meter.
+- Replaced arbitrary simulator JSON with a strict bounded schema.
+- Rebuilt the simulator as a clearly labelled demo source without claims of real
+  appliances, anomaly generation, or recommendation intelligence.
+- Rebuilt Consumption as the seven-period historical drill-down and CSV workspace.
+- Added strict site/tariff/timezone/budget input constraints and aligned the
+  password UI with the backend's eight-character minimum.
+
+### Verification
+
+- Backend product suite: 46 tests passed.
+- Frontend lint: passed.
+- Frontend typecheck: passed.
+
+### Remaining in this area
+
+- Add raw-reading pagination for large detailed drill-downs.
+- Cover CSV/push/simulator onboarding in browser journey tests.

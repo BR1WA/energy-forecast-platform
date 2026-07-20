@@ -209,7 +209,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Add reversible one-site data migration and unique `sites.user_id` constraint.
 - [x] Add exactly-one primary meter constraint/repair strategy.
 - [x] Replace default-site ambiguity with a strict authenticated user-site resolver.
-- [ ] Remove normal-user site/meter selection from request contracts.
+- [x] Remove normal-user site/meter selection from request contracts.
 - [x] Store rotated refresh token returned by backend.
 - [x] Add single-flight refresh handling.
 - [x] Revoke refresh session on logout.
@@ -219,11 +219,11 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 #### D. Data-source workflows
 
-- [ ] Make CSV preview/import limits and UI messaging consistent.
-- [ ] Complete push key generate/rotate/test/last-seen UI.
-- [ ] Add bounded simulator configuration schemas.
-- [ ] Ensure explicit simulator execution has one durable owner.
-- [ ] Add source/quality visibility and relevant ingestion regression tests.
+- [x] Make CSV preview/import limits and UI messaging consistent.
+- [x] Complete push key generate/rotate/test/last-seen UI.
+- [x] Add bounded simulator configuration schemas.
+- [x] Ensure explicit simulator execution has one durable owner.
+- [x] Add source/quality visibility and relevant ingestion regression tests.
 
 #### E. Live and historical monitoring
 
@@ -240,7 +240,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 #### F. Focused dashboard
 
 - [x] Replace broad dashboard response with a typed period summary.
-- [ ] Correct today versus monthly calculations.
+- [x] Correct today versus monthly calculations.
 - [x] Implement source/freshness header and period selector.
 - [x] Implement KPI row and primary consumption chart.
 - [ ] Add tariff/budget, forecast, alert, and recommendation summaries.

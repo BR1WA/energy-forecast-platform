@@ -77,7 +77,10 @@ async def lifespan(app: FastAPI):
                 try:
                     sessions = db.query(SimulationSession).filter(SimulationSession.is_running.is_(True)).all()
                     for session in sessions:
-                        meter = db.query(Meter).filter(Meter.site_id == session.site_id).order_by(Meter.id).first()
+                        meter = db.query(Meter).filter(
+                            Meter.site_id == session.site_id,
+                            Meter.is_primary.is_(True),
+                        ).one_or_none()
                         if meter is None:
                             continue
                         ingestion_service.ingest(

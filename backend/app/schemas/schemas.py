@@ -2,7 +2,7 @@
 Pydantic schemas for request/response validation.
 """
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from enum import Enum
 import math
@@ -161,6 +161,22 @@ class MeterSampleBatch(BaseModel):
 class IngestionKeyResponse(BaseModel):
     meter_id: int
     api_key: str
+
+
+class MeterConfiguration(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    expected_interval_seconds: int = Field(ge=5, le=86_400)
+
+
+class SimulationConfiguration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day_part: Literal["morning", "afternoon", "evening", "night"] = "evening"
+    occupants: int = Field(default=2, ge=1, le=12)
+    temperature: float = Field(default=25.0, ge=5, le=50)
+    ac_level: Literal["off", "low", "medium", "high"] = "medium"
+    washing_machine: bool = False
+    solar: Literal["off", "low", "high"] = "off"
 
 
 class IngestionResult(BaseModel):

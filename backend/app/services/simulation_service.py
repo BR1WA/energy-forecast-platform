@@ -1,11 +1,10 @@
 """Persisted, site-owned simulator state."""
 from datetime import datetime, timezone
-import math
 
 from sqlalchemy.orm import Session
 
 from app.models import SimulationSession
-from app.services.site_service import ensure_default_site
+from app.services.site_service import ensure_user_site, get_primary_meter
 
 DEFAULT_CONFIGURATION = {
     "day_part": "evening",
@@ -19,7 +18,7 @@ DEFAULT_CONFIGURATION = {
 
 class SimulationService:
     def _session(self, db: Session, user_id: int) -> SimulationSession:
-        site = ensure_default_site(db, user_id)
+        site = ensure_user_site(db, user_id)
         session = (
             db.query(SimulationSession)
             .filter(SimulationSession.site_id == site.id)
@@ -63,6 +62,10 @@ class SimulationService:
 
     def start_simulation(self, db: Session, user_id: int) -> dict:
         session = self._session(db, user_id)
+        meter = get_primary_meter(db, user_id)
+        if meter is not None:
+            meter.source_type = "simulation"
+            meter.expected_interval_seconds = 5
         session.is_running = True
         session.started_at = datetime.now(timezone.utc)
         db.commit()
@@ -114,12 +117,6 @@ class SimulationService:
             "timestamp": datetime.now(timezone.utc),
         }
 
-    @staticmethod
-    def get_simulated_consumption(steps: int = 24):
-        return [
-            {"timestamp": datetime.now(timezone.utc).isoformat(), "kw": 2.0 + math.sin(i / 3.0)}
-            for i in range(steps)
-        ]
 
 
 simulation_service = SimulationService()

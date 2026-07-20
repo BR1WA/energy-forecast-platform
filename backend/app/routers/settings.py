@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+from zoneinfo import ZoneInfo
 from app.database import get_db
 from app.models import EnergyBudget, Site, SiteSettings, User
 from app.services.auth_service import get_current_user
@@ -10,18 +12,28 @@ from app.services.audit_service import record_audit_event
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 class SetupPayload(BaseModel):
-    site_name: str | None = None
+    site_name: str | None = Field(default=None, min_length=1, max_length=120)
     timezone: str | None = None
-    country: str
-    region: str
-    electricity_provider: str
-    currency: str
-    peak_rate: float
-    off_peak_rate: float
-    peak_start_hour: int
-    peak_end_hour: int
-    sensor_type: str
+    country: str = Field(min_length=2, max_length=100)
+    region: str = Field(min_length=1, max_length=100)
+    electricity_provider: str = Field(min_length=1, max_length=100)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    peak_rate: float = Field(ge=0, le=100)
+    off_peak_rate: float = Field(ge=0, le=100)
+    peak_start_hour: int = Field(ge=0, le=23)
+    peak_end_hour: int = Field(ge=0, le=23)
+    sensor_type: Literal["csv", "push", "simulator"]
     sensor_api_url: str | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def timezone_must_exist(cls, value: str | None) -> str | None:
+        if value is not None:
+            try:
+                ZoneInfo(value)
+            except (KeyError, ValueError) as exc:
+                raise ValueError("timezone must be a valid IANA timezone") from exc
+        return value
 
 class PreferencesPayload(BaseModel):
     theme: str | None = None
@@ -33,8 +45,8 @@ class PreferencesPayload(BaseModel):
     default_model_720: str | None = None
 
 class BudgetPayload(BaseModel):
-    monthly_budget_mad: float
-    monthly_budget_kwh: float | None = None
+    monthly_budget_mad: float = Field(ge=0, le=10_000_000)
+    monthly_budget_kwh: float | None = Field(default=None, ge=0, le=10_000_000)
 
 @router.get("/setup-status")
 def get_setup_status(

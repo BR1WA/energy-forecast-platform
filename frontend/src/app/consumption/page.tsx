@@ -1,395 +1,149 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import AppLayout from '@/components/layout/app-layout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Zap, TrendingUp, Activity, Download, RefreshCw, Sparkles, AlertTriangle, CheckCircle, Upload } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-} from 'recharts';
-import { consumptionApi, ingestionApi } from '@/lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { CalendarRange, Download, FileCheck2, RefreshCw, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
+import AppLayout from '@/components/layout/app-layout';
+import { ConsumptionChart } from '@/components/consumption/consumption-chart';
+import { PeriodSelector } from '@/components/consumption/period-selector';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { consumptionApi, ingestionApi } from '@/lib/api';
+import type { ConsumptionPeriodSummary, ConsumptionTimeframe, PrimaryMeter } from '@/types';
+
+function localInputValue(date: Date) {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 export default function ConsumptionPage() {
+  const [timeframe, setTimeframe] = useState<ConsumptionTimeframe>('month');
+  const [summary, setSummary] = useState<ConsumptionPeriodSummary | null>(null);
+  const [meter, setMeter] = useState<PrimaryMeter | null>(null);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    month: '', total_kwh: 0, total_cost: 0, peak_kw: 0, average_daily_kwh: 0, coverage_pct: 0,
-    tariff: { currency: 'MAD', peak_rate: 0, off_peak_rate: 0, peak_start_hour: 0, peak_end_hour: 0 },
-    budget: { target_mad: null as number | null, spent_mad: 0, remaining_mad: null as number | null, progress_pct: null as number | null, projected_mad: 0 },
-    previous_month: { month: '', total_kwh: 0, total_cost: 0 }, comparison_pct: null as number | null,
-  });
-  const [current, setCurrent] = useState<{ kw: number; status: string; voltage?: number; intensity?: number; source?: string | null; age_seconds?: number | null; sub_metering_1?: number; sub_metering_2?: number; sub_metering_3?: number }>({
-    kw: 0,
-    status: 'normal',
-    intensity: 0,
-  });
-  const [history, setHistory] = useState<Array<{ kw: number; timestamp: string; timeLabel: string }>>([]);
-  const [meters, setMeters] = useState<Array<{ id: number; name: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<{ valid_rows: number; rejected_rows: number } | null>(null);
+  const [preview, setPreview] = useState<{ mapped_columns: string[]; valid_rows: number; rejected_rows: number; errors: Array<{ row: number; message: string }> } | null>(null);
   const [importing, setImporting] = useState(false);
-  const [timeframe, setTimeframe] = useState<'live' | 'day' | 'week' | 'month' | 'all'>('day');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
-  const fetchData = useCallback(async (selectedTimeframe = timeframe) => {
+  const loadSummary = useCallback(async (selected: ConsumptionTimeframe, custom?: { start: string; end: string }) => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      const [statsData, currentData, historyData] = await Promise.all([
-        consumptionApi.getStatistics(),
-        consumptionApi.getCurrent(),
-        consumptionApi.getHistory(selectedTimeframe),
-      ]);
-
-      setStats(statsData);
-      setCurrent(currentData);
-      
-      const formattedHistory = (historyData || []).map((item: any) => {
-        const date = new Date(item.timestamp);
-        const timeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return {
-          ...item,
-          timeLabel,
-        };
-      });
-      setHistory(formattedHistory);
-    } catch (err) {
-      console.error('Failed to load energy analytics:', err);
+      setSummary(await consumptionApi.getPeriod(selected, custom));
+    } catch (requestError) {
+      setSummary(null);
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load consumption history.');
     } finally {
       setLoading(false);
     }
-  }, [timeframe]);
+  }, []);
 
   useEffect(() => {
-    fetchData(timeframe);
-    ingestionApi.getMeters().then(setMeters).catch(() => toast.error('Unable to load your meter for CSV import.'));
-    const interval = setInterval(() => fetchData(timeframe), timeframe === 'live' ? 5000 : 30000);
-    return () => clearInterval(interval);
-  }, [fetchData, timeframe]);
+    ingestionApi.getMeters().then((meters) => setMeter(meters[0] ?? null)).catch(() => setMeter(null));
+    const now = new Date();
+    setCustomStart(localInputValue(new Date(now.getTime() - 7 * 86400_000)));
+    setCustomEnd(localInputValue(now));
+  }, []);
+
+  useEffect(() => {
+    if (timeframe === 'custom') {
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
+    void loadSummary(timeframe);
+  }, [loadSummary, timeframe]);
+
+  const applyCustomRange = () => {
+    const start = new Date(customStart);
+    const end = new Date(customEnd);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      setError('Choose a custom end time after the start time.');
+      return;
+    }
+    void loadSummary('custom', { start: start.toISOString(), end: end.toISOString() });
+  };
 
   const previewCsv = async (file: File) => {
-    if (!meters[0]) return;
+    if (!meter) {
+      toast.error('Your primary meter is unavailable.');
+      return;
+    }
     setCsvFile(file);
-    setCsvPreview(null);
+    setPreview(null);
     try {
-      const preview = await ingestionApi.previewCsv(meters[0].id, file);
-      setCsvPreview(preview);
-      if (preview.rejected_rows) toast.warning(`${preview.rejected_rows} row(s) need attention.`);
-    } catch (error) {
+      const result = await ingestionApi.previewCsv(meter.id, file);
+      setPreview(result);
+      if (result.valid_rows === 0) toast.error('This CSV has no valid readings.');
+    } catch (requestError) {
       setCsvFile(null);
-      toast.error(error instanceof Error ? error.message : 'Unable to validate this CSV file.');
+      toast.error(requestError instanceof Error ? requestError.message : 'Unable to preview this CSV.');
     }
   };
 
   const importCsv = async () => {
-    if (!meters[0] || !csvFile) return;
+    if (!meter || !csvFile || !preview?.valid_rows) return;
     setImporting(true);
     try {
-      const result = await ingestionApi.importCsv(meters[0].id, csvFile);
-      toast.success(`Imported ${result.accepted_rows} reading(s).`);
+      const result = await ingestionApi.importCsv(meter.id, csvFile);
+      toast.success(`Imported ${result.accepted_rows} reading(s); ${result.duplicate_rows} duplicate(s) skipped.`);
       if (result.rejected_rows) toast.warning(`${result.rejected_rows} row(s) were rejected.`);
       setCsvFile(null);
-      setCsvPreview(null);
-      fetchData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'CSV import failed.');
+      setPreview(null);
+      await loadSummary(timeframe === 'custom' ? 'all' : timeframe);
+    } catch (requestError) {
+      toast.error(requestError instanceof Error ? requestError.message : 'CSV import failed.');
     } finally {
       setImporting(false);
     }
   };
 
-  const handleExport = async () => {
+  const exportCurrentMonth = async () => {
     try {
       const blob = await consumptionApi.exportCsv();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `energy-${stats.month || 'current-month'}.csv`;
+      link.download = 'energy-current-month.csv';
       link.click();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Failed to export consumption data', err);
+    } catch (requestError) {
+      toast.error(requestError instanceof Error ? requestError.message : 'Export failed.');
     }
   };
 
-  const tariff = stats.tariff;
-
   return (
     <AppLayout>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-2">
-              <Sparkles className="text-indigo-400 w-8 h-8" /> Energy Consumption & Insights
-            </h1>
-            <p className="text-slate-400">Review measured consumption, tariff costs, and data coverage for this site.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => fetchData()}
-              variant="outline"
-              className="border-white/10 text-white hover:bg-white/5"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" /> Refresh
-            </Button>
-            <Button
-              onClick={handleExport}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white"
-            >
-              <Download className="mr-2 h-4 w-4" /> Export CSV
-            </Button>
-          </div>
-        </div>
+      <div className="mx-auto max-w-7xl space-y-5">
+        <header className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div><p className="mb-1 text-xs font-semibold uppercase text-cyan-400">Primary meter history</p><h1 className="text-2xl font-semibold text-white">Consumption</h1><p className="mt-1 text-sm text-slate-400">Inspect measured load, energy, cost, coverage, and imported history.</p></div>
+          <div className="flex min-w-0 flex-col gap-2 sm:items-end"><PeriodSelector disabled={loading} onChange={setTimeframe} value={timeframe} /><Button onClick={exportCurrentMonth} size="sm" variant="outline"><Download />Export current month</Button></div>
+        </header>
 
-        <Card className="border-white/10 bg-[#111827]/80">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base text-white"><Upload className="h-4 w-4 text-cyan-400" />Import meter readings</CardTitle>
-            <CardDescription className="text-xs text-slate-400">Upload a UTF-8 CSV with `timestamp` and `active_power_kw` columns. Legacy `GAP` and `Datetime` headers are accepted too.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 md:flex-row md:items-center">
-            <input type="file" accept=".csv,text/csv" onChange={(event) => event.target.files?.[0] && previewCsv(event.target.files[0])} className="block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-600 md:max-w-md" />
-            {csvPreview && <span className="text-sm text-slate-400">{csvPreview.valid_rows} valid, {csvPreview.rejected_rows} rejected</span>}
-            <Button onClick={importCsv} disabled={!csvFile || !csvPreview || importing} className="md:ml-auto">{importing ? 'Importing...' : 'Import CSV'}</Button>
-          </CardContent>
+        {timeframe === 'custom' && <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end"><label className="grid gap-1.5 text-xs text-slate-400">Start<input className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white" onChange={(event) => setCustomStart(event.target.value)} type="datetime-local" value={customStart} /></label><label className="grid gap-1.5 text-xs text-slate-400">End<input className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white" onChange={(event) => setCustomEnd(event.target.value)} type="datetime-local" value={customEnd} /></label><Button onClick={applyCustomRange}><CalendarRange />Apply range</Button></div>}
+
+        {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
+
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[['Energy', `${(summary?.total_kwh ?? 0).toFixed(2)} kWh`], ['Estimated cost', `${summary?.currency ?? 'MAD'} ${(summary?.estimated_cost ?? 0).toFixed(2)}`], ['Peak load', `${(summary?.peak_kw ?? 0).toFixed(3)} kW`], ['Coverage', `${(summary?.coverage_pct ?? 0).toFixed(1)}%`]].map(([label, value]) => <div className="min-h-24 rounded-lg border border-white/10 bg-[#111827] p-4" key={label}><p className="text-xs text-slate-500">{label}</p><p className="mt-4 text-xl font-semibold text-white">{loading ? '...' : value}</p></div>)}
+        </section>
+
+        <Card className="rounded-lg border-white/10 bg-[#111827]">
+          <CardHeader className="flex-row items-start justify-between"><div><CardTitle className="text-sm">Consumption curve</CardTitle><p className="mt-1 text-xs text-slate-400">{summary ? `${summary.sample_count.toLocaleString()} samples from ${summary.sources.map((source) => source.source).join(', ') || 'no source'}, grouped by ${summary.granularity.replace('_', ' ')}.` : 'Choose a period to inspect its readings.'}</p></div><Button aria-label="Refresh history" disabled={loading} onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe)} size="icon" title="Refresh" variant="ghost"><RefreshCw className={loading ? 'animate-spin' : ''} /></Button></CardHeader>
+          <CardContent>{summary?.points.length ? <ConsumptionChart summary={summary} /> : <div className="flex h-80 items-center justify-center text-sm text-slate-400">No readings are available in this period.</div>}</CardContent>
         </Card>
 
-        {/* Stats Cards grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Current Power Usage</CardTitle>
-              <Zap className="h-4 w-4 text-emerald-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-white">
-                {loading ? '...' : `${(current?.kw ?? 0).toFixed(3)} kW`}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Active feed: {current.voltage == null ? 'Voltage unavailable' : `${current.voltage.toFixed(1)}V`} / {current.intensity == null ? 'Current unavailable' : `${current.intensity.toFixed(2)}A`}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Source: {current.source || 'none'}{current.age_seconds !== undefined && current.age_seconds !== null ? `, ${current.age_seconds}s ago` : ''}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-amber-500 to-orange-400" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Peak Demand</CardTitle>
-              <TrendingUp className="h-4 w-4 text-amber-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-white">
-                {loading ? '...' : `${(stats.peak_kw ?? 0).toFixed(3)} kW`}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Highest recorded load this month
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-indigo-500 to-blue-400" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Estimated Monthly Cost</CardTitle>
-              <Activity className="h-4 w-4 text-indigo-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-white">
-                {loading ? '...' : `${tariff.currency} ${(stats.total_cost ?? 0).toFixed(2)}`}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Accumulated: {(stats?.total_kwh ?? 0).toFixed(2)} kWh
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-400" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Month Comparison</CardTitle>
-              <TrendingUp className="h-4 w-4 text-cyan-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-white">{stats.comparison_pct === null ? 'N/A' : `${stats.comparison_pct > 0 ? '+' : ''}${stats.comparison_pct}%`}</div>
-              <p className="text-xs text-slate-500 mt-1">Previous month: {stats.previous_month.total_kwh.toFixed(2)} kWh</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recharts Historical Curve */}
-        <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
-          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-            <div><CardTitle className="text-white text-base">Energy History</CardTitle><CardDescription className="text-slate-400 text-xs">Actual readings grouped for the selected period.</CardDescription></div>
-            <div className="flex shrink-0 rounded-md border border-white/10 p-1">
-              {(['live', 'day', 'week', 'month', 'all'] as const).map((range) => <button key={range} onClick={() => setTimeframe(range)} className={`rounded px-2 py-1 text-xs capitalize ${timeframe === range ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>{range}</button>)}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading && history.length === 0 ? (
-              <div className="h-72 flex items-center justify-center text-slate-400">
-                <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> Loading historical charts...
-              </div>
-            ) : history.length === 0 ? (
-              <div className="h-72 flex items-center justify-center text-slate-400">
-                No active smart meter reading data available. Start the simulation to feed power values.
-              </div>
-            ) : (
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorKw" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="timeLabel" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} unit=" kW" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1f2937',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '0.375rem',
-                      }}
-                      labelStyle={{ color: '#fff' }}
-                      itemStyle={{ color: '#818cf8' }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="kw"
-                      stroke="#6366f1"
-                      fillOpacity={1}
-                      fill="url(#colorKw)"
-                      name="Load (kW)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+        <Card className="rounded-lg border-white/10 bg-[#111827]">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Upload className="h-4 w-4 text-cyan-400" />Import CSV history</CardTitle><p className="text-xs text-slate-400">UTF-8 CSV, maximum 5 MB and 10,000 rows. Required columns: timestamp with timezone and active_power_kw. GAP and Datetime aliases are accepted.</p></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center"><input accept=".csv,text/csv" className="block min-w-0 flex-1 text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-white" onChange={(event) => event.target.files?.[0] && previewCsv(event.target.files[0])} type="file" /><Button disabled={!csvFile || !preview?.valid_rows || importing} onClick={importCsv}>{importing ? 'Importing...' : 'Import validated rows'}</Button></div>
+            {preview && <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-300"><p className="flex items-center gap-1.5 text-emerald-300"><FileCheck2 className="h-4 w-4" />{preview.valid_rows} valid, {preview.rejected_rows} rejected</p><p className="mt-2 text-slate-400">Mapped columns: {preview.mapped_columns.join(', ')}</p>{preview.errors.length > 0 && <div className="mt-3 max-h-28 overflow-y-auto text-amber-200">{preview.errors.map((item) => <p key={`${item.row}-${item.message}`}>Row {item.row}: {item.message}</p>)}</div>}</div>}
           </CardContent>
         </Card>
-
-        {/* SaaS Sections Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* AI Insights & Timeline (Col 1) */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* AI Insights Card */}
-            <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
-              <CardHeader>
-                <CardTitle className="text-white text-base flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-400" /> AI Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-slate-300">
-                    The monthly projection is <strong>{tariff.currency} {stats.budget.projected_mad.toFixed(2)}</strong>, calculated from recorded intervals.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-slate-300">
-                    Data coverage for this month is <strong>{stats.coverage_pct.toFixed(1)}%</strong>. Long gaps are excluded from interval estimates.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                  <Sparkles className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-slate-300">
-                    Appliance recommendations are unavailable until supported by device or sub-meter evidence.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Top Energy Events Card */}
-            <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
-              <CardHeader>
-                <CardTitle className="text-white text-base flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-indigo-400" /> Top Energy Events
-                </CardTitle>
-                <CardDescription className="text-slate-400 text-xs">Real-time load spikes and status markers detected today.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 relative before:absolute before:inset-y-0 before:left-[17px] before:w-0.5 before:bg-white/5">
-                <div className="flex gap-4 relative z-10">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                  <div>
-                    <span className="text-[10px] font-mono text-slate-500">Latest reading</span>
-                    <p className="text-xs font-semibold text-white">{current.source || 'No meter data'}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{current.age_seconds === null || current.age_seconds === undefined ? 'No reading timestamp is available.' : `Received ${current.age_seconds} seconds ago.`}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Appliance & Tariff breakdown (Col 2 & 3) */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Appliance breakdown */}
-            <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
-              <CardHeader>
-                <CardTitle className="text-white text-base">Sub-meter channels</CardTitle>
-                <CardDescription className="text-slate-400 text-xs">Raw channel values are shown without inferring appliance identities.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { label: 'Sub-meter channel 1', value: current.sub_metering_1 },
-                  { label: 'Sub-meter channel 2', value: current.sub_metering_2 },
-                  { label: 'Sub-meter channel 3', value: current.sub_metering_3 },
-                ].map((channel) => (
-                  <div key={channel.label} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-                    <p className="text-xs text-slate-400">{channel.label}</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{channel.value == null ? 'Unavailable' : channel.value.toFixed(1)}</p>
-                    <p className="text-xs text-slate-500">Raw meter value</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* site tariff card */}
-            <Card className="bg-[#111827]/80 border-white/10 backdrop-blur-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div>
-                  <CardTitle className="text-white text-base">Site Tariff Status</CardTitle>
-                  <CardDescription className="text-slate-400 text-xs">Costs are calculated from the peak and off-peak rates saved in site settings.</CardDescription>
-                </div>
-                <Badge className="bg-indigo-600 text-white text-[10px] uppercase font-semibold">{stats.month || 'Current month'}</Badge>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10">
-                    <div className="font-semibold text-white">Peak</div>
-                    <div className="text-[10px] text-slate-400 mt-1">{tariff.peak_start_hour}:00-{tariff.peak_end_hour}:00</div>
-                    <div className="text-[10px] text-amber-400 mt-0.5">{tariff.peak_rate.toFixed(4)} {tariff.currency}/kWh</div>
-                  </div>
-                  <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10"><div className="font-semibold text-white">Off-peak</div><div className="text-[10px] text-slate-400 mt-1">All remaining hours</div><div className="text-[10px] text-emerald-400 mt-0.5">{tariff.off_peak_rate.toFixed(4)} {tariff.currency}/kWh</div></div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-slate-400">
-                    <span>Data coverage for this month</span>
-                    <span>{(stats.total_kwh ?? 0).toFixed(1)} kWh</span>
-                  </div>
-                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-cyan-500" style={{ width: `${stats.coverage_pct}%` }} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
       </div>
     </AppLayout>
   );

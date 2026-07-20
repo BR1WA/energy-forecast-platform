@@ -21,6 +21,7 @@ import type {
   Recommendation,
   ConsumptionPeriodSummary,
   ConsumptionTimeframe,
+  PrimaryMeter,
 } from '@/types';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -478,8 +479,27 @@ export const consumptionApi = {
 };
 
 export const ingestionApi = {
-  getMeters: (): Promise<Array<{ id: number; name: string; source_type: string }>> =>
+  getMeters: (): Promise<PrimaryMeter[]> =>
     apiFetch('/api/v1/ingestion/meters'),
+
+  updateMeter: (meterId: number, data: { name?: string; expected_interval_seconds: number }): Promise<{ message: string }> =>
+    apiFetch(`/api/v1/ingestion/meters/${meterId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  rotatePushKey: (meterId: number): Promise<{ meter_id: number; api_key: string }> =>
+    apiFetch(`/api/v1/ingestion/meters/${meterId}/push-key`, { method: 'POST' }),
+
+  sendTestReading: (meterId: number, apiKey: string): Promise<{
+    accepted_rows: number;
+    duplicate_rows: number;
+    rejected_rows: number;
+  }> => apiFetch(`/api/v1/ingestion/meters/${meterId}/samples`, {
+    method: 'POST',
+    headers: { 'X-Meter-Key': apiKey },
+    body: JSON.stringify({
+      idempotency_key: `browser-test-${Date.now()}`,
+      samples: [{ timestamp: new Date().toISOString(), active_power_kw: 0.5, voltage_v: 230 }],
+    }),
+  }),
 
   previewCsv: (meterId: number, file: File): Promise<{
     mapped_columns: string[];

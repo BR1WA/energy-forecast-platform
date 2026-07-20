@@ -75,6 +75,16 @@ export interface ConsumptionPeriodSummary {
   points: ConsumptionPoint[];
 }
 
+export interface PrimaryMeter {
+  id: number;
+  name: string;
+  source_type: 'csv' | 'push' | 'simulation' | string;
+  is_primary: boolean;
+  expected_interval_seconds: number | null;
+  last_seen_at: string | null;
+  push_key_configured: boolean;
+}
+
 // ============================================================
 // Forecast Types
 // ============================================================
