@@ -14,7 +14,9 @@ COPY backend/requirements.txt backend/requirements-ml.txt ./
 RUN pip install --no-cache-dir -r requirements.txt && \
     if [ "$INSTALL_TORCH" = "1" ]; then \
       pip install --no-cache-dir -r requirements-ml.txt; \
-    fi
+    fi && \
+    pip check && \
+    python -c "import fastapi, sqlalchemy, uvicorn; from uvicorn.main import main"
 
 FROM dependencies AS test-dependencies
 
@@ -36,4 +38,4 @@ FROM application AS runtime
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

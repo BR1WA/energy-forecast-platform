@@ -191,12 +191,8 @@ class MeterConfiguration(BaseModel):
 class SimulationConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    day_part: Literal["morning", "afternoon", "evening", "night"] = "evening"
-    occupants: int = Field(default=2, ge=1, le=12)
-    temperature: float = Field(default=25.0, ge=5, le=50)
-    ac_level: Literal["off", "low", "medium", "high"] = "medium"
-    washing_machine: bool = False
-    solar: Literal["off", "low", "high"] = "off"
+    base_load_kw: float = Field(default=1.2, ge=0.05, le=20)
+    variation_percent: int = Field(default=10, ge=0, le=50)
 
 
 class IngestionResult(BaseModel):
@@ -262,6 +258,8 @@ class ProductForecastPoint(BaseModel):
 
 
 class ProductForecastResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     id: int
     model_name: str
     model_version: str
@@ -285,6 +283,8 @@ class ProductForecastResponse(BaseModel):
 
 
 class ProductForecastHistoryItem(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     id: int
     model_name: str
     method: str
@@ -375,6 +375,8 @@ class HeatmapPoint(BaseModel):
     value: float
 
 class ReportForecastItem(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     id: int
     model_name: str
     method: str
@@ -399,6 +401,8 @@ class AnalyticsSummary(BaseModel):
 # ======================== ADMIN ========================
 
 class SystemHealth(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     status: str
     total_users: int
     total_forecasts: int
