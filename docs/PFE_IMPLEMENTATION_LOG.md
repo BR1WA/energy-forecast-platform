@@ -62,3 +62,35 @@
 - Remove fabricated dashboard/forecast sections, client model comparison, fake
   admin health/retraining UI, multi-site/client model pages, duplicate routes, and
   misleading copy.
+
+## 2026-07-20 - One-Site and Session Integrity
+
+### Completed
+
+- Added a migration that creates missing site/meter/settings records, refuses
+  ambiguous duplicate-site ownership, enforces one site per user, and marks one
+  primary meter per site with a partial unique index.
+- Added strict single-site/primary-meter resolution while retaining temporary
+  caller aliases during the release refactor.
+- Made registration create user ownership records in one transaction.
+- Normalized registration/login emails and raised password minimum to 8 characters.
+- Protected the final active administrator from demotion or deactivation.
+- Fixed the client to retain rotated refresh tokens and share one in-flight refresh
+  across concurrent 401 responses.
+- Made logout revoke all backend refresh sessions before clearing local state.
+- Removed Admin's fake health fallback and Retrain UI/API.
+- Removed Multi-site and client Models pages plus their navigation/API clients.
+- Added root `pytest.ini` so the default suite is the backend product suite;
+  research tests remain explicitly runnable in their own environment.
+
+### Verification
+
+- Backend product suite: 36 tests passed before the final uniqueness regression.
+- Frontend lint and typecheck: passed.
+- Fresh SQLite Alembic upgrade to head: passed.
+- Downgrade of the one-site migration: passed.
+
+### Remaining in this area
+
+- Remove meter/site choices from normal-user contracts where they are not needed.
+- Complete frontend truth cleanup and consolidate duplicate routes.

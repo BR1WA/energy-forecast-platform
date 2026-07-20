@@ -4,10 +4,11 @@ import hashlib
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import User, RefreshToken
+from app.models import Meter, RefreshToken, Site, User
 from app.services.auth_service import hash_password, create_access_token
 
 from sqlalchemy.pool import StaticPool
@@ -42,7 +43,7 @@ class TestAuthAndTokens(unittest.TestCase):
 
     def test_register_flow_persists_refresh_token(self):
         payload = {
-            "email": "newuser@example.com",
+            "email": " NewUser@Example.COM ",
             "password": "testpassword123",
             "full_name": "New User"
         }
@@ -58,6 +59,40 @@ class TestAuthAndTokens(unittest.TestCase):
         db_token = self.db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
         self.assertIsNotNone(db_token)
         self.assertEqual(db_token.is_revoked, False)
+        user = self.db.query(User).filter(User.email == "newuser@example.com").one()
+        site = self.db.query(Site).filter(Site.user_id == user.id).one()
+        meter = self.db.query(Meter).filter(
+            Meter.site_id == site.id, Meter.is_primary.is_(True)
+        ).one()
+        self.assertEqual(meter.name, "Primary meter")
+
+    def test_registration_rejects_short_password(self):
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "weak@example.com",
+                "password": "short",
+                "full_name": "Weak Password",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_database_rejects_a_second_site_for_one_user(self):
+        user = User(
+            email="one-site@example.com",
+            password_hash=hash_password("password123"),
+            full_name="One Site",
+            role="user",
+            is_active=True,
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.add(Site(user_id=user.id, name="First"))
+        self.db.commit()
+        self.db.add(Site(user_id=user.id, name="Second"))
+        with self.assertRaises(IntegrityError):
+            self.db.flush()
+        self.db.rollback()
 
     def test_login_flow_persists_refresh_token(self):
         # Create a user first
@@ -169,6 +204,58 @@ class TestAuthAndTokens(unittest.TestCase):
         # Try to refresh -> should fail
         refresh_res = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         self.assertEqual(refresh_res.status_code, 401)
+
+    def test_logout_without_body_revokes_all_user_sessions(self):
+        user = User(
+            email="logoutall@example.com",
+            password_hash=hash_password("logoutpassword123"),
+            full_name="Logout All",
+            role="user",
+            is_active=True,
+        )
+        self.db.add(user)
+        self.db.commit()
+        first = client.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": "logoutpassword123"},
+        ).json()
+        second = client.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": "logoutpassword123"},
+        ).json()
+
+        response = client.post(
+            "/api/v1/auth/logout",
+            headers={"Authorization": f"Bearer {first['access_token']}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            client.post(
+                "/api/v1/auth/refresh",
+                json={"refresh_token": second["refresh_token"]},
+            ).status_code,
+            401,
+        )
+
+    def test_final_active_admin_cannot_be_disabled_or_demoted(self):
+        admin = User(
+            email="only-admin@example.com",
+            password_hash=hash_password("adminpassword123"),
+            full_name="Only Admin",
+            role="admin",
+            is_active=True,
+        )
+        self.db.add(admin)
+        self.db.commit()
+        access = create_access_token({"sub": str(admin.id), "role": "admin"})
+
+        for payload in ({"is_active": False}, {"role": "user"}):
+            response = client.put(
+                f"/api/v1/admin/users/{admin.id}",
+                json=payload,
+                headers={"Authorization": f"Bearer {access}"},
+            )
+            self.assertEqual(response.status_code, 409)
 
     def test_password_change_revokes_existing_refresh_tokens(self):
         user = User(

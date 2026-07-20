@@ -3,7 +3,7 @@ SQLAlchemy ORM models for the Energy Forecast platform.
 """
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, JSON, func, UniqueConstraint
+    ForeignKey, JSON, func, UniqueConstraint, Index, text
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -52,6 +52,7 @@ class RefreshToken(Base):
 
 class Site(Base):
     __tablename__ = "sites"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_sites_user_id"),)
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -71,6 +72,15 @@ class Site(Base):
 
 class Meter(Base):
     __tablename__ = "meters"
+    __table_args__ = (
+        Index(
+            "uq_meters_primary_site",
+            "site_id",
+            unique=True,
+            postgresql_where=text("is_primary IS TRUE"),
+            sqlite_where=text("is_primary = 1"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
@@ -79,6 +89,7 @@ class Meter(Base):
     meter_type = Column(String(50), nullable=False, default="electricity")
     status = Column(String(20), nullable=False, default="active")
     source_type = Column(String(20), nullable=False, default="simulation")
+    is_primary = Column(Boolean, nullable=False, default=False)
     expected_interval_seconds = Column(Integer, nullable=True)
     ingestion_key_hash = Column(String(64), nullable=True)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)

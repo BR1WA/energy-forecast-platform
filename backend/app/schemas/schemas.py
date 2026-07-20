@@ -17,13 +17,23 @@ class UserRole(str, Enum):
 
 class UserRegister(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=100)
+    password: str = Field(min_length=8, max_length=100)
     full_name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class UserResponse(BaseModel):
@@ -123,7 +133,7 @@ class UserUpdateMe(BaseModel):
 
 class PasswordUpdate(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=6, max_length=100)
+    new_password: str = Field(min_length=8, max_length=100)
 
 
 # ======================== FORECAST ========================

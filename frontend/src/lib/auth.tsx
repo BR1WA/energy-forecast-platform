@@ -20,7 +20,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -62,10 +62,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   }, []);
 
-  const logout = useCallback(() => {
-    clearTokens();
-    setUser(null);
-    window.location.href = '/';
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } catch (err) {
+      console.error('Failed to revoke the server session', err);
+    } finally {
+      clearTokens();
+      setUser(null);
+      window.location.href = '/login';
+    }
   }, []);
 
   const refreshUser = useCallback(async () => {

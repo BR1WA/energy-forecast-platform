@@ -9,7 +9,6 @@ import { useI18n } from '@/lib/i18n';
 import {
   LayoutDashboard,
   LineChart,
-  BarChart3,
   Bell,
   ChevronLeft,
   ChevronRight,
@@ -17,9 +16,7 @@ import {
   LogOut,
   Settings,
   User,
-  Cpu,
   Sparkles,
-  Target,
   FileText,
   Shield,
 } from 'lucide-react';
@@ -51,28 +48,22 @@ const navItems: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    label: 'Energy Analytics',
+    label: 'Consumption',
     translationKey: 'nav.consumption',
     href: '/consumption',
     icon: Zap,
   },
   {
-    label: 'Forecast Center',
+    label: 'Forecast',
     translationKey: 'nav.forecasts',
     href: '/forecast',
     icon: LineChart,
   },
   {
-    label: 'AI Recommendations',
+    label: 'Recommendations',
     translationKey: 'nav.recommendations',
     href: '/recommendations',
     icon: Sparkles,
-  },
-  {
-    label: 'Budget & Goals',
-    translationKey: 'nav.budget',
-    href: '/budget',
-    icon: Target,
   },
   {
     label: 'Reports',
@@ -81,22 +72,10 @@ const navItems: NavItem[] = [
     icon: FileText,
   },
   {
-    label: 'Virtual House',
-    translationKey: 'nav.simulation',
-    href: '/simulation',
-    icon: BarChart3,
-  },
-  {
     label: 'Notifications',
     translationKey: 'nav.alerts',
     href: '/alerts',
     icon: Bell,
-  },
-  {
-    label: 'Models',
-    translationKey: 'nav.models',
-    href: '/models',
-    icon: Cpu,
   },
   {
     label: 'Admin Panel',

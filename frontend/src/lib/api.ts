@@ -18,7 +18,6 @@ import type {
   RawAlertResponse,
   AlertConfigResponse,
   UserPreferences,
-  Site,
   Recommendation,
 } from '@/types';
 
@@ -55,7 +54,9 @@ interface FetchOptions extends RequestInit {
   isBlob?: boolean;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+let refreshPromise: Promise<string | null> | null = null;
+
+async function performTokenRefresh(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
 
@@ -72,12 +73,25 @@ async function refreshAccessToken(): Promise<string | null> {
     }
 
     const data = await res.json();
-    setTokens(data.access_token, refresh);
+    if (!data.refresh_token) {
+      clearTokens();
+      return null;
+    }
+    setTokens(data.access_token, data.refresh_token);
     return data.access_token;
   } catch {
     clearTokens();
     return null;
   }
+}
+
+function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = performTokenRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 async function apiFetch<T>(
@@ -120,7 +134,7 @@ async function apiFetch<T>(
       if (typeof window !== 'undefined') {
         const currentPath = window.location.pathname;
         if (currentPath !== '/' && currentPath !== '/login' && currentPath !== '/register') {
-          window.location.href = '/';
+          window.location.href = '/login';
         }
       }
       throw new Error('Session expired');
@@ -163,6 +177,9 @@ export const authApi = {
     }),
 
   getMe: (): Promise<User> => apiFetch('/api/v1/auth/me'),
+
+  logout: (): Promise<{ message: string }> =>
+    apiFetch('/api/v1/auth/logout', { method: 'POST' }),
 
   updateProfile: (data: { full_name?: string }): Promise<User> =>
     apiFetch('/api/v1/auth/me', {
@@ -269,11 +286,6 @@ export const analyticsApi = {
 // ============================================================
 // Multi-Site API
 // ============================================================
-export const multiSiteApi = {
-  getSites: (): Promise<{ data: Site[] }> =>
-    apiFetch('/api/v1/multi-site'),
-};
-
 // ============================================================
 // Alerts API
 // ============================================================
@@ -365,10 +377,6 @@ export const adminApi = {
   getStats: (): Promise<Record<string, unknown>> =>
     apiFetch('/api/v1/admin/stats'),
 
-  retrainModel: (modelName: string): Promise<{ message: string }> =>
-    apiFetch(`/api/v1/admin/models/${modelName}/retrain`, {
-      method: 'POST',
-    }),
 };
 
 // ============================================================

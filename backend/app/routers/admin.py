@@ -41,6 +41,23 @@ def update_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    removing_admin_access = (
+        user.role == "admin"
+        and (
+            (data.role is not None and data.role.value != "admin")
+            or data.is_active is False
+        )
+    )
+    if removing_admin_access:
+        active_admins = db.query(User).filter(
+            User.role == "admin", User.is_active.is_(True)
+        ).count()
+        if active_admins <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The final active administrator cannot be disabled or demoted.",
+            )
+
     if data.full_name is not None:
         user.full_name = data.full_name
     if data.role is not None:

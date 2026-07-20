@@ -148,7 +148,7 @@ def require_role(allowed_roles: list[str]):
 
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     """Authenticate a user by email and password."""
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == email.strip().lower()).first()
     if not user:
         return None
     if not verify_password(password, user.password_hash):

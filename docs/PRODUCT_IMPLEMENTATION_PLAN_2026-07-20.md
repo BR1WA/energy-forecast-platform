@@ -197,8 +197,8 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Remove missing email dispatch calls from forecast execution.
 - [x] Disable unsafe forecast outcome matching until exact timestamps are used.
 - [ ] Remove client model comparison/training performance and client Models page.
-- [ ] Remove Admin retraining and fake healthy fallback behavior.
-- [ ] Remove multi-site frontend/API/navigation.
+- [x] Remove Admin retraining and fake healthy fallback behavior.
+- [x] Remove multi-site frontend/API/navigation.
 - [ ] Merge or redirect duplicate Profile, Analytics, Budget, Smart Meter, and
   Simulator pages into the focused navigation without losing required functions.
 - [ ] Remove unsupported AI/solar/grid/appliance/energy-score language and widgets.
@@ -206,16 +206,16 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 #### C. One-site and sessions
 
-- [ ] Add reversible one-site data migration and unique `sites.user_id` constraint.
-- [ ] Add exactly-one primary meter constraint/repair strategy.
-- [ ] Replace default-site ambiguity with a strict authenticated user-site resolver.
+- [x] Add reversible one-site data migration and unique `sites.user_id` constraint.
+- [x] Add exactly-one primary meter constraint/repair strategy.
+- [x] Replace default-site ambiguity with a strict authenticated user-site resolver.
 - [ ] Remove normal-user site/meter selection from request contracts.
-- [ ] Store rotated refresh token returned by backend.
-- [ ] Add single-flight refresh handling.
-- [ ] Revoke refresh session on logout.
-- [ ] Normalize email and enforce password policy.
-- [ ] Protect the final active admin.
-- [ ] Add migration, ownership, refresh, concurrency, and logout tests.
+- [x] Store rotated refresh token returned by backend.
+- [x] Add single-flight refresh handling.
+- [x] Revoke refresh session on logout.
+- [x] Normalize email and enforce password policy.
+- [x] Protect the final active admin.
+- [x] Add migration, ownership, refresh, concurrency, and logout tests.
 
 #### D. Data-source workflows
 

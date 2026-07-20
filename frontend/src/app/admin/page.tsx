@@ -41,7 +41,6 @@ import {
   UserCheck,
   UserX,
   Server,
-  Database,
   Clock,
   CheckCircle2,
   XCircle,
@@ -55,16 +54,6 @@ import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 
-
-// Fallback demo data in case of error
-const demoSystemHealth = {
-  status: 'healthy',
-  uptime_seconds: 3900000,
-  cpu_usage: 23,
-  memory_usage: 48,
-  active_users: 0,
-  requests_today: 0,
-};
 
 const isOnline = (lastActivity: string | undefined | null) => {
   if (!lastActivity) return false;
@@ -85,7 +74,8 @@ export default function AdminPage() {
   
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [models, setModels] = useState<ModelRegistry[]>([]);
-  const [health, setHealth] = useState<SystemHealth | any>(demoSystemHealth);
+  const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
@@ -103,14 +93,17 @@ export default function AdminPage() {
     
     const fetchData = async () => {
       try {
-        const [usersData, modelsData, healthData] = await Promise.all([
+        const [usersData, modelsData, healthResult] = await Promise.all([
           adminApi.getUsers(),
           adminApi.getModels(),
-          adminApi.getHealth().catch(() => demoSystemHealth)
+          adminApi.getHealth()
+            .then((data) => ({ data, error: null }))
+            .catch(() => ({ data: null, error: 'System health is unavailable.' }))
         ]);
         setUsers(usersData);
         setModels(modelsData);
-        setHealth(healthData);
+        setHealth(healthResult.data);
+        setHealthError(healthResult.error);
       } catch (err) {
         console.error('Failed to fetch admin data', err);
       } finally {
@@ -165,21 +158,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleRetrainModel = async (modelName: string, displayName: string) => {
-    // 1. Instantly transition status locally to 'training' for immediate UI feedback
-    setModels(prev => prev.map(m => m.name === modelName ? { ...m, status: 'training' } : m));
-    
-    try {
-      await adminApi.retrainModel(modelName);
-      toast.success(`Simulating model retraining for ${displayName}. Keep polling state...`);
-    } catch (err) {
-      console.error('Failed to trigger retraining', err);
-      toast.error(`Failed to trigger retraining for ${displayName}`);
-      // Revert status on failure
-      setModels(prev => prev.map(m => m.name === modelName ? { ...m, status: 'active' } : m));
-    }
-  };
-
   function formatUptime(seconds: number): string {
     const d = Math.floor(seconds / (3600 * 24));
     const h = Math.floor((seconds % (3600 * 24)) / 3600);
@@ -214,7 +192,7 @@ export default function AdminPage() {
             Admin Panel
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Manage users, models, and system settings
+            Manage users and review system readiness
           </p>
         </div>
 
@@ -223,14 +201,14 @@ export default function AdminPage() {
           {[
             {
               label: 'System Status',
-              value: health.status,
+              value: health?.status || 'Unavailable',
               icon: Activity,
               iconBg: 'bg-emerald-500/10',
               iconText: 'text-emerald-400',
             },
             {
               label: 'Uptime',
-              value: formatUptime(health.uptime_seconds || 0),
+              value: health ? formatUptime(health.uptime_seconds || 0) : 'Unavailable',
               icon: Clock,
               iconBg: 'bg-blue-500/10',
               iconText: 'text-blue-400',
@@ -244,7 +222,7 @@ export default function AdminPage() {
             },
             {
               label: 'Database Status',
-              value: health.database_status || 'healthy',
+              value: health?.database_status || 'Unavailable',
               icon: Server,
               iconBg: 'bg-violet-500/10',
               iconText: 'text-violet-400',
@@ -274,6 +252,12 @@ export default function AdminPage() {
             </Card>
           ))}
         </div>
+
+        {healthError && (
+          <div role="alert" className="rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            {healthError}
+          </div>
+        )}
 
         {/* Resource Bars */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -635,26 +619,7 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2 mt-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRetrainModel(model.name, (model as any).display_name || model.name)}
-                        disabled={model.status === 'training'}
-                        className="flex-1 border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.04] text-xs"
-                      >
-                        {model.status === 'training' ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin text-amber-400" />
-                            Training...
-                          </>
-                        ) : (
-                          <>
-                            <Database className="w-3 h-3 mr-1" />
-                            Retrain
-                          </>
-                        )}
-                      </Button>
+                    <div className="flex mt-4">
                       <Button
                         size="sm"
                         variant="outline"
@@ -662,7 +627,7 @@ export default function AdminPage() {
                           setSelectedModel(model);
                           setIsDetailsOpen(true);
                         }}
-                        className="flex-1 border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.04] text-xs"
+                        className="w-full border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.04] text-xs"
                       >
                         <MoreHorizontal className="w-3 h-3 mr-1" />
                         Details
