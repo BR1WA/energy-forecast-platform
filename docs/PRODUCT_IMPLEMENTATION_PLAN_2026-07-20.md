@@ -273,8 +273,8 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 #### I. Release validation
 
-- [ ] Backend product suite passes.
-- [ ] Frontend lint, typecheck, build, and focused tests pass.
+- [x] Backend product suite passes.
+- [x] Frontend lint, typecheck, build, and focused tests pass.
 - [ ] Fresh PostgreSQL migration reaches head.
 - [ ] Critical browser journeys pass on desktop and mobile.
 - [ ] Clean Docker deployment reaches liveness and model readiness.

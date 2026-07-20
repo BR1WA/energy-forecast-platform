@@ -17,6 +17,7 @@
 ```powershell
 cd backend
 python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements-ml.txt
 python -m app.cli migrate
 python -m app.cli create-admin
 python -m uvicorn app.main:app --reload --port 8000
@@ -55,20 +56,6 @@ docker compose exec backend python -m app.cli create-admin
 Compose refuses to render when required secrets are missing. Production should
 keep `DEBUG=false`.
 
-## Demo data
-
-Demo seeding is intentionally separate from startup and is blocked outside debug
-mode. It creates presentation users and generated forecast history.
-
-```powershell
-cd backend
-$env:ALLOW_DEMO_SEED="true"
-$env:DEMO_USER_PASSWORD="choose-a-demo-password"
-python seed_db.py
-```
-
-Never run the demo seed command against a client or production database.
-
 ## Quality gates
 
 ```powershell
@@ -93,11 +80,11 @@ docker run --rm --env-file backend/.env energy-backend-test
 
 - `GET /health`: process liveness alias.
 - `GET /api/v1/system/live`: process liveness for orchestration.
-- `GET /api/v1/system/ready`: database and active-model artifact readiness.
+- `GET /api/v1/system/ready`: database and packaged Global TFT artifact warm-up.
 - `GET /api/v1/system/health`: backward-compatible health summary.
 
-Readiness returns HTTP 503 when the database is unavailable, there is no active
-model, or required model artifacts are missing. Liveness remains available so
+Readiness returns HTTP 503 when the database is unavailable or the fixed
+checkpoint fails integrity validation or warm-up. Liveness remains available so
 operators can distinguish a dead process from an unready dependency.
 
 ## Startup failure policy

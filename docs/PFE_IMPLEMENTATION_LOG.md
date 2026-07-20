@@ -270,3 +270,30 @@
 
 - Browser-check alert/recommendation actions and downloads.
 - Finish the read-only Admin model/runtime readiness replacement.
+
+## 2026-07-20 - Fixed Artifact Runtime and Focused Admin
+
+### Completed
+
+- Removed the legacy model registry API, activation controls, experiment scanner,
+  multi-architecture loader, and stale client/server schemas.
+- Rebuilt Admin around user role/activation management plus read-only database,
+  process, and fixed-artifact readiness with fingerprint and warm-up status.
+- Replaced system readiness with database validation and packaged Global TFT
+  integrity/load checks; no registry row or research directory is required.
+- Removed research `models/` and `training/` copies and host experiment mounts
+  from Docker. The runtime receives only the packaged backend artifact.
+- Split ML runtime dependencies so ordinary tests do not install Torch and the
+  runtime image installs the CPU-only PyTorch wheel rather than CUDA packages.
+- Removed dormant SMTP configuration, synthetic demo database seeding, and stale
+  model-registry operations documentation. Added the fixed artifact contract and
+  local inference dependency instructions.
+
+### Verification
+
+- Backend product suite: 47 passed.
+- Frontend lint, typecheck, and production build: passed; 16 pages generated.
+- `docker compose config --quiet`: passed.
+- The first local Docker test-image build exceeded the 120-second command window;
+  the pre-existing image timestamp confirmed that run did not complete. A longer
+  release build remains required and is not recorded as passed.

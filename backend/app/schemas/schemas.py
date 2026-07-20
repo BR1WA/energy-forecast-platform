@@ -207,41 +207,6 @@ class PasswordUpdate(BaseModel):
 
 # ======================== FORECAST ========================
 
-class ForecastRequest(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
-
-    model_name: Optional[str] = Field(None, description="Model to use: 'patchtst', 'sota', 'cnn_bilstm', 'itransformer'")
-    sample_name: Optional[str] = Field(None, description="Name of pre-loaded sample dataset")
-    data: Optional[List[List[float]]] = Field(None, description="Raw input data [lookback timesteps x 7 features]")
-    calendar: Optional[List[List[float]]] = Field(None, description="Calendar features [lookback x 6]")
-    horizon: int = Field(24, description="Forecast horizon in hours (24, 168, or 720)")
-
-
-class ForecastResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
-
-    id: int
-    model_name: str
-    predictions: List[List[float]]  # [24 x 7]
-    prediction_labels: List[str]  # column names
-    created_at: datetime
-    alerts: List[Dict[str, Any]] = []
-    input_data: Optional[List[float]] = None  # GAP lookback values for chart
-    model_id: Optional[int] = None
-    model_version: Optional[str] = None
-    horizon: Optional[int] = None
-    input_source: Optional[str] = None
-    confidence_method: str = "model output without calibrated interval"
-
-class ForecastHistoryItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
-
-    id: int
-    model_name: str
-    created_at: datetime
-    peak_power: Optional[float] = None
-
-
 class ForecastModelStatus(BaseModel):
     available: bool
     name: str
@@ -307,28 +272,6 @@ class ProductForecastHistoryItem(BaseModel):
     method: str
     forecast_start: Optional[datetime] = None
     created_at: datetime
-
-class ModelInfo(BaseModel):
-    id: str
-    name: str
-    display_name: str
-    architecture_type: str
-    description: Optional[str] = None
-    training_metrics: Optional[Dict[str, float]] = None
-    is_active: bool
-    version: str
-    accuracy: float
-    last_trained: Optional[str] = None
-    parameters: Dict[str, Any] = {}
-    status: str
-
-
-class SampleDataset(BaseModel):
-    name: str
-    description: str
-    season: str
-    date_range: str
-
 
 # ======================== ALERTS ========================
 
@@ -439,10 +382,14 @@ class AnalyticsSummary(BaseModel):
 
 class SystemHealth(BaseModel):
     status: str
-    active_models: int
     total_users: int
     total_forecasts: int
     database_status: str
+    forecast_status: str
+    forecast_error: Optional[str] = None
+    model_name: str
+    model_version: str
+    artifact_fingerprint: Optional[str] = None
     uptime_seconds: float
     cpu_usage: float
     memory_usage: float

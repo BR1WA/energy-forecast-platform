@@ -87,68 +87,6 @@ export interface PrimaryMeter {
   push_key_configured: boolean;
 }
 
-// ============================================================
-// Forecast Types
-// ============================================================
-export interface ForecastModel {
-  id: string;
-  name: string;
-  display_name: string;
-  description: string;
-  architecture_type?: string;
-  training_metrics?: ForecastMetrics;
-  accuracy?: number;
-  is_active: boolean;
-  version: string;
-}
-
-export interface ForecastRequest {
-  model_name: string;
-  data: string | Record<string, unknown>;
-}
-
-export interface ForecastPoint {
-  timestamp: string;
-  actual?: number;
-  predicted: number;
-  lower_bound?: number;
-  upper_bound?: number;
-}
-
-export interface ForecastResult {
-  id?: string;
-  model_name: string;
-  predictions: number[][];
-  input_data?: number[][];
-  metrics?: ForecastMetrics;
-  created_at: string;
-  status: 'completed' | 'processing' | 'failed';
-}
-
-export interface ForecastMetrics {
-  mae: number;
-  rmse: number;
-  mape: number;
-  r2_score: number;
-}
-
-export interface ForecastHistory {
-  id: string;
-  model_name: string;
-  created_at: string | null;
-  peak_power?: number | null;
-  status?: 'completed' | 'processing' | 'failed';
-  metrics?: ForecastMetrics;
-  data_points?: number;
-}
-
-export interface SampleDataset {
-  name: string;
-  description: string;
-  season?: string;
-  date_range?: string;
-}
-
 export interface ForecastModelStatus {
   available: boolean;
   name: string;
@@ -298,18 +236,14 @@ export interface AdminUser extends User {
   last_login?: string;
 }
 
-export interface ModelRegistry {
-  id: string;
+export interface ModelReadiness {
+  available: boolean;
+  warmed: boolean;
   name: string;
-  display_name?: string;
-  description?: string;
-  architecture_type?: string;
-  training_metrics?: ForecastMetrics;
+  display_name: string;
   version: string;
-  status: 'active' | 'inactive' | 'training';
-  accuracy: number;
-  last_trained?: string;
-  parameters: Record<string, unknown>;
+  artifact_fingerprint: string | null;
+  error: string | null;
 }
 
 export interface SystemHealth {
@@ -317,12 +251,14 @@ export interface SystemHealth {
   uptime_seconds: number;
   cpu_usage: number;
   memory_usage: number;
-  active_models?: number;
-  total_users?: number;
-  total_forecasts?: number;
-  database_status?: string;
-  active_users?: number;
-  requests_today?: number;
+  total_users: number;
+  total_forecasts: number;
+  database_status: string;
+  forecast_status: string;
+  forecast_error: string | null;
+  model_name: string;
+  model_version: string;
+  artifact_fingerprint: string | null;
 }
 
 // ============================================================

@@ -31,14 +31,9 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
       DEBUG: ${DEBUG:-false}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      MODELS_DIR: /app/models
-      EXPERIMENTS_DIR: /app/experiments
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@energyforecast.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       PYTHONUNBUFFERED: "1"
-    volumes:
-      - ./models:/app/models:ro
-      - ./backend/experiments:/app/experiments:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/live', timeout=3)"]
       interval: 10s
@@ -82,9 +77,6 @@ services:
       DEBUG: ${DEBUG:-false}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       PYTHONUNBUFFERED: "1"
-    volumes:
-      - ./models:/app/models:ro
-      - ./backend/experiments:/app/experiments:ro
     depends_on:
       backend:
         condition: service_healthy

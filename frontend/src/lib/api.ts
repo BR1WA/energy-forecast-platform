@@ -10,7 +10,7 @@ import type {
   Alert,
   AlertConfig,
   AdminUser,
-  ModelRegistry,
+  ModelReadiness,
   SystemHealth,
   EnergyBudget,
   SystemSettings,
@@ -326,8 +326,8 @@ export const adminApi = {
       body: JSON.stringify(data),
     }),
 
-  getModels: (): Promise<ModelRegistry[]> =>
-    apiFetch('/api/v1/admin/models'),
+  getModelReadiness: (): Promise<ModelReadiness> =>
+    apiFetch('/api/v1/admin/model-readiness'),
 
   getHealth: (): Promise<SystemHealth> =>
     apiFetch('/api/v1/admin/health'),

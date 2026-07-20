@@ -17,7 +17,7 @@ from app.database import engine, Base, SessionLocal
 from app.routers import (
     auth, forecast, alerts, analytics, admin, settings as settings_router,
     system, consumption,
-    simulation, models_registry, ingestion, monitoring, recommendations
+    simulation, ingestion, monitoring, recommendations
 )
 from app.migrations import run_migrations
 from app.limiter import limiter
@@ -154,7 +154,6 @@ app.include_router(consumption.router)
 app.include_router(simulation.router)
 app.include_router(ingestion.router)
 app.include_router(monitoring.router)
-app.include_router(models_registry.router)
 app.include_router(recommendations.router)
 
 

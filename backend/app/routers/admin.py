@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.models import User, Forecast, Alert, ModelRegistry
+from app.models import User, Forecast, Alert
 from app.schemas import UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role
 from app.services.audit_service import record_audit_event
+from app.services.product_forecast_service import FALLBACK_NAME, MODEL_NAME, product_forecast_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
@@ -124,18 +125,18 @@ def system_health(
     cpu_percent = psutil.cpu_percent(interval=0.1)
     mem_percent = psutil.virtual_memory().percent
 
-    from app.services.forecast_service import get_forecast_service
-    service = get_forecast_service()
-
-    active_model = service.get_active_model_registry(db)
-    active_models_count = 1 if active_model else 0
+    model = product_forecast_service.warmup()
 
     return SystemHealth(
-        status="operational",
-        active_models=active_models_count,
+        status="operational" if db_status == "healthy" and model["available"] and model["warmed"] else "degraded",
         total_users=db.query(User).count(),
-        total_forecasts=db.query(Forecast).count(),
+        total_forecasts=db.query(Forecast).filter(Forecast.model_name.in_([MODEL_NAME, FALLBACK_NAME])).count(),
         database_status=db_status,
+        forecast_status="ready" if model["available"] and model["warmed"] else "not_ready",
+        forecast_error=model["error"],
+        model_name=model["display_name"],
+        model_version=model["version"],
+        artifact_fingerprint=model["artifact_fingerprint"],
         uptime_seconds=time.time() - _start_time,
         cpu_usage=cpu_percent,
         memory_usage=mem_percent,
@@ -148,32 +149,14 @@ def get_stats(
     db: Session = Depends(get_db),
 ):
     """Get platform statistics (admin only)."""
-    from sqlalchemy import func
-
     total_users = db.query(User).count()
     total_forecasts = db.query(Forecast).count()
     total_alerts = db.query(Alert).count()
-
-    # Model usage breakdown
-    model_usage = (
-        db.query(Forecast.model_name, func.count(Forecast.id))
-        .group_by(Forecast.model_name)
-        .all()
-    )
-
-    # Recent activity
-    recent_forecasts = (
-        db.query(Forecast)
-        .order_by(Forecast.created_at.desc())
-        .limit(10)
-        .all()
-    )
 
     return {
         "total_users": total_users,
         "total_forecasts": total_forecasts,
         "total_alerts": total_alerts,
-        "model_usage": {name: count for name, count in model_usage},
         "users_by_role": {
             "admin": db.query(User).filter(User.role == "admin").count(),
             "user": db.query(User).filter(User.role == "user").count(),
@@ -181,11 +164,9 @@ def get_stats(
     }
 
 
-@router.get("/models")
-def list_models(
+@router.get("/model-readiness")
+def model_readiness(
     current_user: User = Depends(require_role(["admin"])),
 ):
-    """List all registered ML models (admin only)."""
-    from app.services.forecast_service import get_forecast_service
-    service = get_forecast_service()
-    return service.get_available_models()
+    """Return fixed packaged-artifact status without mutation controls."""
+    return product_forecast_service.warmup()

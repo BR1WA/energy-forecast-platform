@@ -1,14 +1,10 @@
-from pathlib import Path
-import hashlib
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
-from app.models import ModelRegistry
 from app.routers.system import build_readiness
-from app.services.forecast_service import REQUEST_FEATURE_SCHEMA, get_forecast_service
+from app.services.product_forecast_service import product_forecast_service
 
 
 def make_session():
@@ -21,86 +17,63 @@ def make_session():
     return sessionmaker(bind=engine)()
 
 
-def test_readiness_requires_an_active_model():
+def model_status(*, available: bool, warmed: bool, error: str | None = None) -> dict:
+    return {
+        "available": available,
+        "warmed": warmed,
+        "name": "global_tft_24h",
+        "display_name": "Global TFT 24-hour",
+        "version": "1.0.0",
+        "artifact_fingerprint": "abc123",
+        "error": error,
+    }
+
+
+def test_readiness_requires_the_packaged_runtime(monkeypatch):
     db = make_session()
     try:
+        monkeypatch.setattr(
+            product_forecast_service,
+            "warmup",
+            lambda: model_status(available=False, warmed=False, error="PyTorch unavailable"),
+        )
         result = build_readiness(db)
         assert result["ready"] is False
         assert result["database"]["status"] == "ready"
         assert result["forecast"]["status"] == "not_ready"
+        assert result["forecast"]["error"] == "PyTorch unavailable"
     finally:
         db.close()
 
 
-def test_readiness_warms_a_validated_model(tmp_path: Path, monkeypatch):
+def test_readiness_reports_a_warmed_fixed_artifact(monkeypatch):
     db = make_session()
     try:
-        for filename in ("model.pt", "pipeline.pkl"):
-            (tmp_path / filename).write_bytes(b"test")
-        (tmp_path / "config.yaml").write_text(
-            "architecture:\n  name: TestModel\n  forecast_horizon: 24\n", encoding="utf-8"
+        monkeypatch.setattr(
+            product_forecast_service,
+            "warmup",
+            lambda: model_status(available=True, warmed=True),
         )
-        (tmp_path / "metrics.json").write_text("{}", encoding="utf-8")
-        fingerprint = hashlib.sha256((tmp_path / "model.pt").read_bytes()).hexdigest()
-        model = ModelRegistry(
-            name="test-model",
-            version="1.0.0",
-            dataset="test",
-            horizon=24,
-            lookback=96,
-            experiment_path=str(tmp_path),
-            artifact_contract={
-                "horizon": 24,
-                "lookback": 96,
-                "target_schema": ["gap"],
-                "request_feature_schema": REQUEST_FEATURE_SCHEMA,
-                "expected_model_input_shape": [96, len(REQUEST_FEATURE_SCHEMA)],
-                "accepted_request_shapes": [[96, len(REQUEST_FEATURE_SCHEMA)]],
-                "artifact_location": "test-model",
-                "fingerprint": fingerprint,
-            },
-            model_fingerprint=fingerprint,
-            active=True,
-        )
-        db.add(model)
-        db.commit()
-        warmed = []
-        monkeypatch.setattr(get_forecast_service(), "warm_model", lambda entry: warmed.append(entry.id))
-
         result = build_readiness(db)
         assert result["ready"] is True
-        assert result["forecast"]["active_model"] == "test-model"
-        assert warmed == [model.id]
+        assert result["forecast"]["status"] == "ready"
+        assert result["forecast"]["name"] == "global_tft_24h"
+        assert result["forecast"]["artifact_fingerprint"] == "abc123"
     finally:
         db.close()
 
 
-def test_readiness_rejects_a_model_that_cannot_warm(tmp_path: Path, monkeypatch):
+def test_readiness_rejects_an_artifact_that_cannot_warm(monkeypatch):
     db = make_session()
     try:
-        for filename in ("model.pt", "pipeline.pkl"):
-            (tmp_path / filename).write_bytes(b"test")
-        (tmp_path / "config.yaml").write_text(
-            "architecture:\n  name: TestModel\n  forecast_horizon: 24\n", encoding="utf-8"
+        monkeypatch.setattr(
+            product_forecast_service,
+            "warmup",
+            lambda: model_status(available=False, warmed=False, error="State dict mismatch"),
         )
-        (tmp_path / "metrics.json").write_text("{}", encoding="utf-8")
-        fingerprint = hashlib.sha256((tmp_path / "model.pt").read_bytes()).hexdigest()
-        db.add(ModelRegistry(
-            name="unloadable-model", version="1.0.0", dataset="unloadable", horizon=24,
-            lookback=96, experiment_path=str(tmp_path), active=True, model_fingerprint=fingerprint,
-            artifact_contract={
-                "horizon": 24, "lookback": 96, "target_schema": ["gap"],
-                "request_feature_schema": REQUEST_FEATURE_SCHEMA,
-                "expected_model_input_shape": [96, len(REQUEST_FEATURE_SCHEMA)],
-                "accepted_request_shapes": [[96, len(REQUEST_FEATURE_SCHEMA)]],
-                "artifact_location": "unloadable-model", "fingerprint": fingerprint,
-            },
-        ))
-        db.commit()
-        monkeypatch.setattr(get_forecast_service(), "warm_model", lambda entry: (_ for _ in ()).throw(RuntimeError("broken")))
-
         result = build_readiness(db)
         assert result["ready"] is False
-        assert result["forecast"]["missing_artifacts"] == ["model warm-up failed: RuntimeError"]
+        assert result["forecast"]["warmed"] is False
+        assert result["forecast"]["error"] == "State dict mismatch"
     finally:
         db.close()

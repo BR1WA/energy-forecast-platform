@@ -245,6 +245,18 @@ class ProductForecastService:
             "error": error,
         }
 
+    def warmup(self) -> dict:
+        """Validate and load the fixed production artifact without running client data."""
+        status = self.model_status()
+        if not status["available"]:
+            return {**status, "warmed": False}
+        try:
+            self._load_model()
+            return {**status, "warmed": True}
+        except Exception as exc:
+            logger.exception("Global TFT warm-up failed")
+            return {**status, "available": False, "warmed": False, "error": str(exc)}
+
     def readiness(self, db: Session, user_id: int) -> dict:
         prepared = self.prepare_input(db, user_id)
         model = self.model_status()

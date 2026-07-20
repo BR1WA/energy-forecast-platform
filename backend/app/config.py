@@ -58,19 +58,8 @@ class Settings(BaseSettings):
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"
 
-    # ML Models
-    MODELS_DIR: str = "../models"
-
     # Rate Limiting
     RATE_LIMIT: str = "10/minute"
-
-    # SMTP Settings
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: str = ""
-    SMTP_FROM: str = "noreply@energyforecast.com"
-    SMTP_TLS: bool = True
 
     # Alert worker
     ALERT_WORKER_INTERVAL_SECONDS: int = 60

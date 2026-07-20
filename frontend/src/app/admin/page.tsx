@@ -1,742 +1,153 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  CheckCircle2,
+  Cpu,
+  Database,
+  Edit2,
+  Loader2,
+  RefreshCw,
+  Search,
+  Shield,
+  UserCheck,
+  Users,
+  UserX,
+  XCircle,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
 import AppLayout from '@/components/layout/app-layout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Shield,
-  Users,
-  Cpu,
-  Activity,
-  Search,
-  Edit2,
-  MoreHorizontal,
-  UserCheck,
-  UserX,
-  Server,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-} from 'lucide-react';
+import { adminApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { adminApi, API_BASE_URL } from '@/lib/api';
-import { parseDate } from '@/lib/utils';
-import { AdminUser, SystemHealth, ModelRegistry } from '@/types';
-import { toast } from 'sonner';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import type { AdminUser, ModelReadiness, SystemHealth } from '@/types';
 
 
-
-const isOnline = (lastActivity: string | undefined | null) => {
-  if (!lastActivity) return false;
-  try {
-    const activityDate = parseDate(lastActivity);
-    // Since backend activity updates are throttled to 10s, and frontend navbar alerts poll
-    // every 10s, active tabs will have a last_activity update within 20s.
-    // Set threshold to 25 seconds for highly responsive offline detection.
-    return Date.now() - activityDate.getTime() < 25 * 1000;
-  } catch {
-    return false;
-  }
-};
+function Fact({ label, value, healthy }: { label: string; value: string | number; healthy?: boolean }) {
+  return <div className="border-l-2 border-indigo-400/60 pl-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">{healthy === undefined ? null : healthy ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <XCircle className="h-4 w-4 text-red-400" />}{value}</p></div>;
+}
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState('users');
-  const [searchQuery, setSearchQuery] = useState('');
-  
+  const { user, isLoading: authLoading } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [models, setModels] = useState<ModelRegistry[]>([]);
   const [health, setHealth] = useState<SystemHealth | null>(null);
-  const [healthError, setHealthError] = useState<string | null>(null);
+  const [model, setModel] = useState<ModelReadiness | null>(null);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  
-  const [editUser, setEditUser] = useState<AdminUser | null>(null);
-  const [editRole, setEditRole] = useState('');
-  const [isSavingUser, setIsSavingUser] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
-  const [selectedModel, setSelectedModel] = useState<ModelRegistry | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  
-  const { user } = useAuth();
+  const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [role, setRole] = useState<'admin' | 'user'>('user');
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    try {
+      const [nextUsers, nextHealth, nextModel] = await Promise.all([
+        adminApi.getUsers(),
+        adminApi.getHealth(),
+        adminApi.getModelReadiness(),
+      ]);
+      setUsers(nextUsers);
+      setHealth(nextHealth);
+      setModel(nextModel);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to load administration data.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (user?.role !== 'admin') return;
-    
-    const fetchData = async () => {
-      try {
-        const [usersData, modelsData, healthResult] = await Promise.all([
-          adminApi.getUsers(),
-          adminApi.getModels(),
-          adminApi.getHealth()
-            .then((data) => ({ data, error: null }))
-            .catch(() => ({ data: null, error: 'System health is unavailable.' }))
-        ]);
-        setUsers(usersData);
-        setModels(modelsData);
-        setHealth(healthResult.data);
-        setHealthError(healthResult.error);
-      } catch (err) {
-        console.error('Failed to fetch admin data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchData();
-    const interval = setInterval(fetchData, 5000); // Poll user list every 5s for real-time presence
-    return () => clearInterval(interval);
-  }, [user]);
+    void load();
+    const timer = window.setInterval(() => void load(true), 30_000);
+    return () => window.clearInterval(timer);
+  }, [load, user?.role]);
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return users;
+    return users.filter((entry) => `${entry.full_name || ''} ${entry.email}`.toLowerCase().includes(query));
+  }, [search, users]);
 
-  const handleSaveUser = async () => {
-    if (!editUser) return;
-    setIsSavingUser(true);
+  const openEditor = (entry: AdminUser) => {
+    setEditing(entry);
+    setRole(entry.role);
+  };
+
+  const saveRole = async () => {
+    if (!editing) return;
+    setSaving(true);
     try {
-      const updatedUser = await adminApi.updateUser(editUser.id, {
-        role: editRole as any,
-      });
-      setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
-      setIsDialogOpen(false);
-      toast.success(`User updated successfully`);
-    } catch (err) {
-      console.error('Failed to update user', err);
-      toast.error('Failed to update user');
+      const updated = await adminApi.updateUser(editing.id, { role });
+      setUsers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry));
+      setEditing(null);
+      toast.success('User role updated.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update this user.');
     } finally {
-      setIsSavingUser(false);
+      setSaving(false);
     }
   };
 
-  const handleToggleStatus = async () => {
-    if (!editUser) return;
-    setIsSavingUser(true);
+  const toggleActive = async (entry: AdminUser) => {
+    setSaving(true);
     try {
-      const updatedUser = await adminApi.updateUser(editUser.id, {
-        is_active: !editUser.is_active,
-      });
-      setUsers(users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
-      setEditUser({ ...editUser, ...updatedUser });
-      toast.success(updatedUser.is_active ? 'User activated' : 'User deactivated');
-    } catch (err) {
-      console.error('Failed to update status', err);
-      toast.error('Failed to update user status');
+      const updated = await adminApi.updateUser(entry.id, { is_active: !entry.is_active });
+      setUsers((current) => current.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
+      toast.success(updated.is_active ? 'User activated.' : 'User deactivated.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update this user.');
     } finally {
-      setIsSavingUser(false);
+      setSaving(false);
     }
   };
 
-  function formatUptime(seconds: number): string {
-    const d = Math.floor(seconds / (3600 * 24));
-    const h = Math.floor((seconds % (3600 * 24)) / 3600);
-    if (d > 0) return `${d}d ${h}h`;
-    return `${h}h`;
-  }
-
-  // Admin guard
-  if (user && user.role !== 'admin') {
-    return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center h-[60vh]">
-          <Shield className="w-16 h-16 text-slate-600 mb-4" />
-          <h2 className="text-xl font-semibold text-white mb-2">
-            Access Denied
-          </h2>
-          <p className="text-sm text-slate-400">
-            You need admin privileges to access this page.
-          </p>
-        </div>
-      </AppLayout>
-    );
-  }
+  if (authLoading) return <AppLayout><div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-indigo-400" /></div></AppLayout>;
+  if (user?.role !== 'admin') return <AppLayout><div className="flex min-h-[60vh] flex-col items-center justify-center text-center"><Shield className="h-12 w-12 text-slate-600" /><h1 className="mt-4 text-xl font-semibold text-white">Access denied</h1><p className="mt-2 text-sm text-slate-400">Administrator access is required.</p></div></AppLayout>;
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Shield className="w-6 h-6 text-blue-400" />
-            Admin Panel
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Manage users and review system readiness
-          </p>
-        </div>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <header className="flex items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-white"><Shield className="h-6 w-6 text-indigo-400" />Administration</h1><p className="mt-1 text-sm text-slate-400">User access and read-only release readiness</p></div><Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} title="Refresh administration data" aria-label="Refresh administration data"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button></header>
 
-        {/* System Health Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            {
-              label: 'System Status',
-              value: health?.status || 'Unavailable',
-              icon: Activity,
-              iconBg: 'bg-emerald-500/10',
-              iconText: 'text-emerald-400',
-            },
-            {
-              label: 'Uptime',
-              value: health ? formatUptime(health.uptime_seconds || 0) : 'Unavailable',
-              icon: Clock,
-              iconBg: 'bg-blue-500/10',
-              iconText: 'text-blue-400',
-            },
-            {
-              label: 'Active Users',
-              value: users.filter(u => isOnline(u.last_activity)).length.toString(),
-              icon: Users,
-              iconBg: 'bg-cyan-500/10',
-              iconText: 'text-cyan-400',
-            },
-            {
-              label: 'Database Status',
-              value: health?.database_status || 'Unavailable',
-              icon: Server,
-              iconBg: 'bg-violet-500/10',
-              iconText: 'text-violet-400',
-            },
-          ].map((stat) => (
-            <Card
-              key={stat.label}
-              className="glass-card border-white/[0.06] stat-card"
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center ${stat.iconBg}`}
-                  >
-                    <stat.icon
-                      className={`w-4 h-4 ${stat.iconText}`}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">{stat.label}</p>
-                    <p className="text-sm font-semibold text-white capitalize">
-                      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : stat.value}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <section className="grid gap-5 border-y border-white/10 bg-white/[0.025] px-4 py-5 sm:grid-cols-2 lg:grid-cols-5">
+          <Fact label="Users" value={health?.total_users ?? users.length} />
+          <Fact label="Product forecasts" value={health?.total_forecasts ?? 0} />
+          <Fact label="Database" value={health?.database_status || 'Unknown'} healthy={health?.database_status === 'healthy'} />
+          <Fact label="Forecast runtime" value={health?.forecast_status || 'Unknown'} healthy={health?.forecast_status === 'ready'} />
+          <Fact label="Process" value={health?.status || 'Unknown'} healthy={health?.status === 'operational'} />
+        </section>
 
-        {healthError && (
-          <div role="alert" className="rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            {healthError}
-          </div>
-        )}
-
-        {/* Resource Bars */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { label: 'CPU Usage', value: Math.round(health?.cpu_usage ?? 0), color: '#3B82F6' },
-            {
-              label: 'Memory Usage',
-              value: Math.round(health?.memory_usage ?? 0),
-              color: '#06B6D4',
-            },
-          ].map((resource) => (
-            <Card
-              key={resource.label}
-              className="glass-card border-white/[0.06]"
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-400">
-                    {resource.label}
-                  </span>
-                  <span className="text-xs font-medium text-white">
-                    {resource.value}%
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-white/[0.04] overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000"
-                    style={{
-                      width: `${resource.value}%`,
-                      background: `linear-gradient(90deg, ${resource.color}60, ${resource.color})`,
-                    }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-white/[0.04] border border-white/[0.06] p-1">
-            <TabsTrigger
-              id="admin-tab-users"
-              value="users"
-              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger
-              id="admin-tab-models"
-              value="models"
-              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 text-slate-400"
-            >
-              <Cpu className="w-4 h-4 mr-2" />
-              Model Registry
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Users Tab */}
-          <TabsContent value="users" className="space-y-4 mt-4">
-            {/* Search */}
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <Input
-                  id="admin-search-users"
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-white/[0.04] border-white/[0.08] text-white placeholder:text-slate-500 h-10"
-                />
-              </div>
-              <Badge className="bg-white/[0.04] text-slate-400 border-white/[0.06]">
-                {filteredUsers.length} users
-              </Badge>
+        <Tabs defaultValue="users">
+          <TabsList><TabsTrigger value="users"><Users className="h-4 w-4" />Users</TabsTrigger><TabsTrigger value="system"><Activity className="h-4 w-4" />System</TabsTrigger></TabsList>
+          <TabsContent value="users" className="mt-5 space-y-4">
+            <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users" className="pl-9" /></div>
+            <div className="overflow-x-auto border border-white/10">
+              <Table><TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead><TableHead className="w-24 text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+                {filtered.map((entry) => <TableRow key={entry.id}><TableCell><p className="font-medium text-white">{entry.full_name || 'Unnamed user'}</p><p className="text-xs text-slate-500">{entry.email}</p></TableCell><TableCell><Badge variant="outline" className="capitalize">{entry.role}</Badge></TableCell><TableCell><span className={entry.is_active ? 'text-emerald-300' : 'text-slate-500'}>{entry.is_active ? 'Active' : 'Disabled'}</span></TableCell><TableCell className="text-slate-400">{new Date(entry.created_at).toLocaleDateString()}</TableCell><TableCell><div className="flex justify-end gap-1"><Button size="icon-sm" variant="ghost" onClick={() => openEditor(entry)} title="Edit role" aria-label={`Edit ${entry.email}`}><Edit2 className="h-4 w-4" /></Button><Button size="icon-sm" variant="ghost" onClick={() => void toggleActive(entry)} disabled={saving || entry.id === user.id} title={entry.is_active ? 'Disable user' : 'Activate user'} aria-label={`${entry.is_active ? 'Disable' : 'Activate'} ${entry.email}`}>{entry.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}</Button></div></TableCell></TableRow>)}
+                {!filtered.length && !loading ? <TableRow><TableCell colSpan={5} className="py-12 text-center text-slate-500">No users match this search.</TableCell></TableRow> : null}
+              </TableBody></Table>
             </div>
-
-            {/* Users Table */}
-            <Card className="glass-card border-white/[0.06] overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-white/[0.06] hover:bg-transparent">
-                    <TableHead className="text-slate-400 font-medium">
-                      User
-                    </TableHead>
-                    <TableHead className="text-slate-400 font-medium">
-                      Role
-                    </TableHead>
-                    <TableHead className="text-slate-400 font-medium">
-                      Status
-                    </TableHead>
-                    <TableHead className="text-slate-400 font-medium">
-                      Created At
-                    </TableHead>
-                    <TableHead className="text-slate-400 font-medium text-right">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
-                        <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredUsers.map((u) => (
-                    <TableRow
-                      key={u.id}
-                      className="border-white/[0.04] hover:bg-white/[0.02] transition-colors"
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-8 h-8">
-                            {u.avatar_url && (
-                              <AvatarImage
-                                src={u.avatar_url.startsWith('http') ? u.avatar_url : `${API_BASE_URL}${u.avatar_url}`}
-                                alt={u.full_name}
-                                className="object-cover"
-                              />
-                            )}
-                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white text-xs font-semibold">
-                              {u.full_name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')
-                                .toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium text-white">
-                              {u.full_name}
-                            </p>
-                            <p className="text-xs text-slate-500">{u.email}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] uppercase ${
-                            u.role === 'admin'
-                              ? 'border-purple-500/20 text-purple-400 bg-purple-500/10'
-                              : 'border-slate-500/20 text-slate-400 bg-slate-500/10'
-                          }`}
-                        >
-                          {u.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          {isOnline(u.last_activity) ? (
-                            <>
-                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                              <span className="text-xs text-emerald-400">
-                                Online
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                              <span className="text-xs text-slate-500">
-                                Offline
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-slate-400">
-                        {parseDate(u.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Dialog open={isDialogOpen && editUser?.id === u.id} onOpenChange={(open) => {
-                          if (!open) setIsDialogOpen(false);
-                          else {
-                            setEditUser(u);
-                            setEditRole(u.role);
-                            setIsDialogOpen(true);
-                          }
-                        }}>
-                          <DialogTrigger
-                            render={
-                              <Button
-                                id={`edit-user-${u.id}`}
-                                variant="ghost"
-                                size="sm"
-                                className="text-slate-400 hover:text-white hover:bg-white/[0.06]"
-                              />
-                            }
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </DialogTrigger>
-                          <DialogContent className="bg-[#111827] border-white/10 text-white">
-                            <DialogHeader>
-                              <DialogTitle>Edit User</DialogTitle>
-                            </DialogHeader>
-                            {editUser && (
-                              <div className="space-y-4 mt-2">
-                                <div>
-                                  <Label className="text-xs text-slate-300">
-                                    Name
-                                  </Label>
-                                  <p className="text-sm text-white mt-1">
-                                    {editUser.full_name}
-                                  </p>
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-slate-300">
-                                    Email
-                                  </Label>
-                                  <p className="text-sm text-white mt-1">
-                                    {editUser.email}
-                                  </p>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-slate-300">
-                                    Role
-                                  </Label>
-                                  <Select
-                                    value={editRole}
-                                    onValueChange={(v) => setEditRole(v ?? '')}
-                                  >
-                                    <SelectTrigger className="bg-white/[0.04] border-white/[0.08] text-white">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-[#111827] border-white/10">
-                                      <SelectItem value="user" className="text-slate-300">User</SelectItem>
-                                      <SelectItem
-                                        value="admin"
-                                        className="text-slate-300"
-                                      >
-                                        Admin
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="flex gap-2 pt-2">
-                                  <Button
-                                    id="save-user-btn"
-                                    className="flex-1 bg-blue-600 hover:bg-blue-500"
-                                    onClick={handleSaveUser}
-                                    disabled={isSavingUser}
-                                  >
-                                    {isSavingUser ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                                    Save Changes
-                                  </Button>
-                                  <Button
-                                    id="toggle-status-btn"
-                                    variant="outline"
-                                    onClick={handleToggleStatus}
-                                    disabled={isSavingUser}
-                                    className={`border-white/[0.08] ${
-                                      editUser.is_active
-                                        ? 'text-red-400 hover:bg-red-500/10'
-                                        : 'text-emerald-400 hover:bg-emerald-500/10'
-                                    }`}
-                                  >
-                                    {editUser.is_active ? (
-                                      <>
-                                        <UserX className="w-4 h-4 mr-1" />{' '}
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <UserCheck className="w-4 h-4 mr-1" />{' '}
-                                        Activate
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
           </TabsContent>
-
-          {/* Models Tab */}
-          <TabsContent value="models" className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {loading ? (
-                <div className="col-span-2 py-12 flex justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
-                </div>
-              ) : models.map((model) => (
-                <Card
-                  key={model.id || model.name}
-                  id={`model-card-${model.id || model.name}`}
-                  className="glass-card border-white/[0.06] hover:border-white/[0.1] transition-all duration-200"
-                >
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                          <Cpu className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-semibold text-white">
-                            {(model as any).display_name || model.name}
-                          </h3>
-                          <p className="text-xs text-slate-500">
-                            v{model.version || '1.0.0'}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] uppercase ${
-                          model.status === 'active' || (model as any).is_active || model.status === undefined
-                            ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/10'
-                            : model.status === 'training'
-                            ? 'border-amber-500/20 text-amber-400 bg-amber-500/10'
-                            : 'border-slate-500/20 text-slate-500 bg-slate-500/10'
-                        }`}
-                      >
-                        {(model.status === 'active' || (model as any).is_active || model.status === undefined) && (
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                        )}
-                        {model.status === 'training' && (
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        )}
-                        {model.status === 'inactive' && (
-                          <XCircle className="w-3 h-3 mr-1" />
-                        )}
-                        {model.status || ((model as any).is_active ? 'active' : 'inactive')}
-                      </Badge>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="p-2 rounded-lg bg-white/[0.02]">
-                        <p className="text-[10px] text-slate-500 uppercase">
-                          R² Score
-                        </p>
-                        <p className="text-sm font-semibold text-emerald-400">
-                          {(model as any).training_metrics?.r2_score ? (model as any).training_metrics.r2_score.toFixed(4) : (model.accuracy ? `${model.accuracy}%` : 'N/A')}
-                        </p>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white/[0.02]">
-                        <p className="text-[10px] text-slate-500 uppercase">
-                          Params
-                        </p>
-                        <p className="text-sm font-semibold text-white">
-                          {(model as any).parameters ? 'Custom' : 'Default'}
-                        </p>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white/[0.02]">
-                        <p className="text-[10px] text-slate-500 uppercase">
-                          Type
-                        </p>
-                        <p className="text-sm font-semibold text-slate-300 truncate">
-                          {(model as any).architecture_type || 'Unknown'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex mt-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedModel(model);
-                          setIsDetailsOpen(true);
-                        }}
-                        className="w-full border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.04] text-xs"
-                      >
-                        <MoreHorizontal className="w-3 h-3 mr-1" />
-                        Details
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+          <TabsContent value="system" className="mt-5">
+            <div className="grid gap-6 border-y border-white/10 py-5 lg:grid-cols-2">
+              <div><h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Cpu className="h-4 w-4 text-cyan-400" />Packaged forecast artifact</h2><dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-500">Artifact</dt><dd className="text-slate-200">{model?.display_name || health?.model_name || 'Unavailable'}</dd></div><div><dt className="text-slate-500">Version</dt><dd className="text-slate-200">{model?.version || health?.model_version || 'Unknown'}</dd></div><div><dt className="text-slate-500">Warm-up</dt><dd className={model?.warmed ? 'text-emerald-300' : 'text-red-300'}>{model?.warmed ? 'Passed' : 'Failed'}</dd></div><div><dt className="text-slate-500">SHA-256</dt><dd className="break-all font-mono text-xs text-slate-300">{model?.artifact_fingerprint || 'Unavailable'}</dd></div>{model?.error ? <div><dt className="text-slate-500">Error</dt><dd className="text-red-300">{model.error}</dd></div> : null}</dl></div>
+              <div><h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Database className="h-4 w-4 text-emerald-400" />Runtime</h2><dl className="mt-4 grid grid-cols-2 gap-4 text-sm"><div><dt className="text-slate-500">CPU</dt><dd className="mt-1 text-lg text-white">{health?.cpu_usage.toFixed(1) ?? '-'}%</dd></div><div><dt className="text-slate-500">Memory</dt><dd className="mt-1 text-lg text-white">{health?.memory_usage.toFixed(1) ?? '-'}%</dd></div><div><dt className="text-slate-500">Uptime</dt><dd className="mt-1 text-lg text-white">{health ? `${Math.floor(health.uptime_seconds / 3600)}h` : '-'}</dd></div><div><dt className="text-slate-500">Database</dt><dd className="mt-1 text-lg capitalize text-white">{health?.database_status || '-'}</dd></div></dl></div>
             </div>
           </TabsContent>
         </Tabs>
+
+        <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}><DialogContent><DialogHeader><DialogTitle>Edit user role</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>User</Label><p className="mt-2 text-sm text-slate-300">{editing?.email}</p></div><div><Label htmlFor="admin-role">Role</Label><Select value={role} onValueChange={(value) => setRole(value as 'admin' | 'user')}><SelectTrigger id="admin-role" className="mt-2"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="user">User</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent></Select></div><Button onClick={() => void saveRole()} disabled={saving} className="w-full">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save role</Button></div></DialogContent></Dialog>
       </div>
-
-      {/* Model Details Dialog */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="bg-[#111827] border-white/10 text-white max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-white">
-              <Cpu className="w-5 h-5 text-blue-400" />
-              {selectedModel ? (selectedModel as any).display_name || selectedModel.name : 'Model Details'}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedModel && (
-            <div className="space-y-4 mt-2">
-              <div>
-                <Label className="text-xs text-slate-400">Description</Label>
-                <p className="text-sm text-slate-200 mt-1">
-                  {(selectedModel as any).description || 'No description available.'}
-                </p>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-slate-400">Version</Label>
-                  <p className="text-sm text-white mt-0.5">{selectedModel.version || '1.0.0'}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-400">Architecture Type</Label>
-                  <p className="text-sm text-white capitalize mt-0.5">
-                    {(selectedModel as any).architecture_type || 'Unknown'}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-400">R² Score</Label>
-                  <p className="text-sm text-emerald-400 font-semibold mt-0.5">
-                    {(selectedModel as any).training_metrics?.r2_score ? (selectedModel as any).training_metrics.r2_score.toFixed(4) : (selectedModel.accuracy ? `${selectedModel.accuracy}%` : 'N/A')}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-400">Last Trained</Label>
-                  <p className="text-sm text-white mt-0.5">
-                    {selectedModel.last_trained ? new Date(selectedModel.last_trained).toLocaleString() : 'N/A'}
-                  </p>
-                </div>
-              </div>
-
-              {(selectedModel as any).training_metrics && (
-                <div>
-                  <Label className="text-xs text-slate-400 block mb-2">Training Metrics</Label>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                      <p className="text-[10px] text-slate-500 uppercase">MAE</p>
-                      <p className="text-sm font-medium text-white">{(selectedModel as any).training_metrics.mae}</p>
-                    </div>
-                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                      <p className="text-[10px] text-slate-500 uppercase">RMSE</p>
-                      <p className="text-sm font-medium text-white">{(selectedModel as any).training_metrics.rmse}</p>
-                    </div>
-                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                      <p className="text-[10px] text-slate-500 uppercase">MAPE</p>
-                      <p className="text-sm font-medium text-white">{(selectedModel as any).training_metrics.mape}%</p>
-                    </div>
-                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                      <p className="text-[10px] text-slate-500 uppercase">R² Score</p>
-                      <p className="text-sm font-medium text-blue-400">{(selectedModel as any).training_metrics.r2_score}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <Label className="text-xs text-slate-400 block mb-2">Model Hyperparameters</Label>
-                <div className="border border-white/10 rounded-lg overflow-hidden bg-white/[0.02] max-h-60 overflow-y-auto">
-                  <Table>
-                    <TableHeader className="bg-white/[0.04]">
-                      <TableRow className="border-white/10 hover:bg-transparent">
-                        <TableHead className="text-xs text-slate-400 h-8 py-1 font-medium">Hyperparameter</TableHead>
-                        <TableHead className="text-xs text-slate-400 h-8 py-1 font-medium text-right">Value</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedModel.parameters && Object.entries(selectedModel.parameters).map(([key, val]) => (
-                        <TableRow key={key} className="border-white/[0.04] hover:bg-white/[0.01]">
-                          <TableCell className="text-xs text-slate-300 py-1.5 capitalize">
-                            {key.replace(/_/g, ' ')}
-                          </TableCell>
-                          <TableCell className="text-xs text-white text-right py-1.5 font-mono">
-                            {String(val)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }
