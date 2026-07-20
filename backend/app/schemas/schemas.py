@@ -239,6 +239,73 @@ class ForecastHistoryItem(BaseModel):
     created_at: datetime
     peak_power: Optional[float] = None
 
+
+class ForecastModelStatus(BaseModel):
+    available: bool
+    name: str
+    display_name: str
+    version: str
+    artifact_fingerprint: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ForecastReadiness(BaseModel):
+    status: Literal["ready", "fallback_ready", "insufficient_data"]
+    ready_for_tft: bool
+    fallback_available: bool
+    required_hours: int
+    minimum_coverage_percent: float
+    maximum_allowed_gap_hours: int
+    coverage_percent: float
+    observed_hours: int
+    missing_hours: int
+    imputed_hours: int
+    maximum_gap_hours: int
+    unit: Literal["kWh"]
+    resolution: Literal["hourly"]
+    latest_reading_at: Optional[datetime] = None
+    forecast_origin: Optional[datetime] = None
+    reasons: List[str] = Field(default_factory=list)
+    model: ForecastModelStatus
+
+
+class ProductForecastPoint(BaseModel):
+    timestamp: datetime
+    p10_kwh: Optional[float] = None
+    p50_kwh: float
+    p90_kwh: Optional[float] = None
+
+
+class ProductForecastResponse(BaseModel):
+    id: int
+    model_name: str
+    model_version: str
+    method: Literal["global_tft", "seasonal_naive", "unknown"]
+    fallback_reason: Optional[str] = None
+    unit: Literal["kWh"] = "kWh"
+    timezone: str
+    horizon_hours: int
+    input_start: Optional[datetime] = None
+    input_end: Optional[datetime] = None
+    forecast_start: datetime
+    forecast_end: Optional[datetime] = None
+    coverage_percent: float
+    observed_hours: int
+    maximum_gap_hours: int
+    sources: List[str]
+    confidence_method: str
+    artifact_fingerprint: Optional[str] = None
+    points: List[ProductForecastPoint]
+    created_at: datetime
+
+
+class ProductForecastHistoryItem(BaseModel):
+    id: int
+    model_name: str
+    method: str
+    forecast_start: Optional[datetime] = None
+    created_at: datetime
+
 class ModelInfo(BaseModel):
     id: str
     name: str

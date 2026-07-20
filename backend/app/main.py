@@ -19,7 +19,6 @@ from app.routers import (
     system, dashboard, consumption,
     simulation, models_registry, ingestion, monitoring, recommendations
 )
-from app.services.forecast_service import get_forecast_service
 from app.migrations import run_migrations
 from app.limiter import limiter
 from app.logging_config import configure_logging, RequestIDMiddleware
@@ -52,12 +51,6 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("[DB] Database migration failed; refusing to start.")
         raise
-
-    # Initialise the forecast service singleton (lazy — no model is loaded until a request comes in)
-    forecast_service = get_forecast_service()
-    with SessionLocal() as db:
-        forecast_service.sync_registry(db)
-    logger.info("[ML] ForecastService singleton initialised (model will be loaded on first request).")
 
     # Start only explicitly user-controlled simulator sessions. Alerts are
     # evaluated from persisted meter data in a later worker phase.
@@ -119,8 +112,8 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=(
         "Energy Forecasting Platform — "
-        "3 ML models (PatchTST, SOTA Hybrid, CNN-BiLSTM), "
-        "JWT authentication, RBAC, and alert management."
+        "one-site monitoring and a truthful 24-hour Global TFT forecast, "
+        "with JWT authentication and alert management."
     ),
     docs_url="/docs",
     redoc_url="/redoc",

@@ -193,15 +193,15 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 - [x] Remove the synthetic dashboard smart-meter WebSocket and automatic data
   generation on view.
-- [ ] Remove fabricated forecast peak/cost/weather/AI insight content.
+- [x] Remove fabricated forecast peak/cost/weather/AI insight content.
 - [x] Remove missing email dispatch calls from forecast execution.
 - [x] Disable unsafe forecast outcome matching until exact timestamps are used.
-- [ ] Remove client model comparison/training performance and client Models page.
+- [x] Remove client model comparison/training performance and client Models page.
 - [x] Remove Admin retraining and fake healthy fallback behavior.
 - [x] Remove multi-site frontend/API/navigation.
 - [x] Merge or redirect duplicate Profile, Analytics, Budget, Smart Meter, and
   Simulator pages into the focused navigation without losing required functions.
-- [ ] Remove unsupported AI/solar/grid/appliance/energy-score language and widgets.
+- [x] Remove unsupported AI/solar/grid/appliance/energy-score language and widgets.
 - [ ] Fix duplicate/dead report download controls and misleading auth/landing copy.
 
 #### C. One-site and sessions
@@ -250,17 +250,17 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 #### G. 24-hour Global TFT
 
-- [ ] Extract Global TFT architecture into reusable backend code.
-- [ ] Build hourly-kWh aggregation and site-local preprocessing adapter.
-- [ ] Implement 336h/95%/3h/non-finite readiness validation.
-- [ ] Persist imputation and scaler provenance.
-- [ ] Package the 24h artifact without training arrays.
-- [ ] Add registry/factory support and clean-deployment artifact delivery.
-- [ ] Persist target timestamps, quantile output, unit, method, and fallback reason.
-- [ ] Add readiness endpoint and client insufficient-data UI.
-- [ ] Add explicit seasonal-naive fallback.
-- [ ] Remove static forecast claims and client model selection.
-- [ ] Add shape, finite, deterministic, warm-up, latency, baseline, and API tests.
+- [x] Extract Global TFT architecture into reusable backend code.
+- [x] Build hourly-kWh aggregation and site-local preprocessing adapter.
+- [x] Implement 336h/95%/3h/non-finite readiness validation.
+- [x] Persist imputation and scaler provenance.
+- [x] Package the 24h artifact without training arrays.
+- [x] Add an inference loader and clean-deployment artifact delivery.
+- [x] Persist target timestamps, quantile output, unit, method, and fallback reason.
+- [x] Add readiness endpoint and client insufficient-data UI.
+- [x] Add explicit seasonal-naive fallback.
+- [x] Remove static forecast claims and client model selection.
+- [~] Add shape, finite, deterministic, warm-up, latency, baseline, and API tests.
 
 #### H. Alerts, recommendations, and reports
 

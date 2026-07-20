@@ -3,10 +3,9 @@ import type {
   LoginResponse,
   RegisterPayload,
   User,
-  ForecastModel,
-  ForecastResult,
-  ForecastHistory,
-  SampleDataset,
+  ForecastReadiness,
+  ProductForecast,
+  ProductForecastHistoryItem,
   AnalyticsSummary,
   Alert,
   AlertConfig,
@@ -215,64 +214,17 @@ export const authApi = {
 // Forecast API
 // ============================================================
 export const forecastApi = {
-  getModels: (): Promise<ForecastModel[]> =>
-    apiFetch('/api/v1/forecast/models'),
+  getReadiness: (): Promise<ForecastReadiness> =>
+    apiFetch('/api/v1/forecast/readiness'),
 
-  predict: (modelName: string, data: File | string, horizon: number = 24): Promise<ForecastResult> => {
-    if (data instanceof File) {
-      const formData = new FormData();
-      formData.append('model_name', modelName);
-      formData.append('file', data);
-      formData.append('horizon', String(horizon));
+  run: (): Promise<ProductForecast> =>
+    apiFetch('/api/v1/forecast/run', { method: 'POST' }),
 
-      return apiFetch('/api/v1/forecast/predict/upload', {
-        method: 'POST',
-        body: formData,
-      });
-    }
+  getLatest: (): Promise<ProductForecast | null> =>
+    apiFetch('/api/v1/forecast/latest'),
 
-    // String = sample name
-    return apiFetch('/api/v1/forecast/predict', {
-      method: 'POST',
-      body: JSON.stringify({ model_name: modelName, sample_name: data, horizon }),
-    });
-  },
-
-  compare: (data: File | string, horizon: number = 24): Promise<Record<string, unknown>> => {
-    if (data instanceof File) {
-      const formData = new FormData();
-      formData.append('file', data);
-      formData.append('horizon', String(horizon));
-
-      return apiFetch('/api/v1/forecast/compare/upload', {
-        method: 'POST',
-        body: formData,
-      });
-    }
-
-    return apiFetch('/api/v1/forecast/compare', {
-      method: 'POST',
-      body: JSON.stringify({ sample_name: data, horizon }),
-    });
-  },
-
-  predictSmartMeter: (modelName: string, horizon: number = 24): Promise<ForecastResult> =>
-    apiFetch('/api/v1/forecast/smart-meter/sync', {
-      method: 'POST',
-      body: JSON.stringify({ model_name: modelName, horizon }),
-    }),
-
-  compareSmartMeter: (horizon: number = 24): Promise<Record<string, unknown>> =>
-    apiFetch('/api/v1/forecast/smart-meter/compare', {
-      method: 'POST',
-      body: JSON.stringify({ horizon }),
-    }),
-
-  getHistory: (): Promise<ForecastHistory[]> =>
+  getHistory: (): Promise<ProductForecastHistoryItem[]> =>
     apiFetch('/api/v1/forecast/history'),
-
-  getSamples: (): Promise<SampleDataset[]> =>
-    apiFetch('/api/v1/forecast/samples'),
 };
 
 // ============================================================

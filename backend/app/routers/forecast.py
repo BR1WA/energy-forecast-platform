@@ -1,688 +1,155 @@
-"""
-Forecast router — model inference, history, samples.
-"""
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
+"""Product forecast API: one site, one primary meter, one 24-hour contract."""
+from __future__ import annotations
+
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
-import numpy as np
-import io
 
 from app.database import get_db
-from app.models import User, Forecast, Alert, AlertConfig, ModelRegistry
-from app.schemas import (
-    ForecastRequest, ForecastResponse, ForecastHistoryItem,
-    ModelInfo, SampleDataset
-)
+from app.models import Forecast, User
+from app.schemas import ForecastReadiness, ProductForecastHistoryItem, ProductForecastResponse
 from app.services.auth_service import get_current_user
-from app.services.site_service import ensure_default_site
-from app.services.forecast_service import get_forecast_service, REQUEST_FEATURE_SCHEMA, TARGET_COLS
-from app.limiter import limiter
-from app.config import get_settings
-
-settings = get_settings()
-
-router = APIRouter(prefix="/api/v1/forecast", tags=["Forecasting"])
-
-HORIZON_TO_LOOKBACK = {24: 96, 168: 512, 720: 1440}
-CONFIDENCE_METHOD = "point forecast; calibrated interval not available"
+from app.services.product_forecast_service import (
+    FALLBACK_NAME,
+    MODEL_NAME,
+    ForecastInputError,
+    product_forecast_service,
+)
 
 
-def build_input_snapshot(
-    targets: np.ndarray,
-    calendar: Optional[np.ndarray] = None,
-    timestamps=None,
-) -> dict:
-    """Persist the exact inference inputs needed to reproduce a forecast."""
+router = APIRouter(prefix="/api/v1/forecast", tags=["Forecast"])
+PRODUCT_MODELS = (MODEL_NAME, FALLBACK_NAME)
+
+
+def _serialize(forecast: Forecast) -> dict:
+    snapshot = forecast.input_snapshot or {}
+    origin = snapshot.get("forecast_origin")
+    rows = forecast.predictions or []
+    points = []
+    if origin:
+        from datetime import datetime
+
+        parsed_origin = datetime.fromisoformat(origin)
+        for index, row in enumerate(rows):
+            points.append(
+                {
+                    "timestamp": parsed_origin + timedelta(hours=index),
+                    "p50_kwh": float(row[0]),
+                    "p10_kwh": float(row[1]) if len(row) > 1 and row[1] is not None else None,
+                    "p90_kwh": float(row[2]) if len(row) > 2 and row[2] is not None else None,
+                }
+            )
     return {
-        "target_schema": TARGET_COLS,
-        "input_feature_schema": REQUEST_FEATURE_SCHEMA,
-        "targets": np.asarray(targets, dtype=float).tolist(),
-        "calendar": np.asarray(calendar, dtype=float).tolist() if calendar is not None else None,
-        "timestamps": [value.isoformat() if hasattr(value, "isoformat") else str(value) for value in timestamps]
-        if timestamps is not None
-        else None,
+        "id": forecast.id,
+        "model_name": forecast.model_name,
+        "model_version": snapshot.get("model_version", "unknown"),
+        "method": snapshot.get("method", "unknown"),
+        "fallback_reason": snapshot.get("fallback_reason"),
+        "unit": "kWh",
+        "timezone": snapshot.get("timezone", "UTC"),
+        "horizon_hours": forecast.horizon or 24,
+        "input_start": forecast.input_start,
+        "input_end": forecast.input_end,
+        "forecast_start": origin,
+        "forecast_end": snapshot.get("forecast_end"),
+        "coverage_percent": snapshot.get("coverage_percent", 0),
+        "observed_hours": snapshot.get("observed_hours", 0),
+        "maximum_gap_hours": snapshot.get("maximum_gap_hours", 0),
+        "sources": snapshot.get("sources", []),
+        "confidence_method": forecast.confidence_method,
+        "artifact_fingerprint": snapshot.get("artifact_fingerprint"),
+        "points": points,
+        "created_at": forecast.created_at,
     }
 
 
-@router.get("/models", response_model=List[ModelInfo])
-def list_models(current_user: User = Depends(get_current_user)):
-    """List available forecasting models with metrics."""
-    service = get_forecast_service()
-    return service.get_available_models()
-
-
-@router.get("/samples", response_model=List[SampleDataset])
-def list_samples(current_user: User = Depends(get_current_user)):
-    """List available sample datasets for quick demo."""
-    service = get_forecast_service()
-    return service.get_sample_datasets()
-
-
-@router.post("/predict", response_model=ForecastResponse)
-@limiter.limit(settings.RATE_LIMIT)
-def predict(
-    request: Request,
-    payload: ForecastRequest,
-    current_user: User = Depends(get_current_user),
+@router.get("/readiness", response_model=ForecastReadiness)
+def get_readiness(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    service = get_forecast_service()
+    return product_forecast_service.readiness(db, current_user.id)
 
-    if not payload.model_name:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="model_name is required for predictions",
-        )
 
-    # Determine lookback based on horizon
-    lookback = HORIZON_TO_LOOKBACK.get(payload.horizon, 96)
-
-    # Get input data
-    start_hour = None
-    input_start = None
-    input_end = None
-    timestamps = None
-
-    if payload.sample_name:
-        if payload.sample_name not in service.samples:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Sample '{payload.sample_name}' not found. Available: {list(service.samples.keys())}",
-            )
-        sample = service.samples[payload.sample_name]
-        targets = sample['targets'][-lookback:]
-        calendar = sample['calendar'][-lookback:] if sample.get('calendar') is not None else None
-        start_hour = sample.get('start_hour')
-        input_start = sample.get('input_start')
-        input_end = sample.get('input_end')
-        timestamps = sample.get('timestamps')
-        if timestamps is not None:
-            timestamps = timestamps[-lookback:]
-    elif payload.data:
-        targets = np.array(payload.data, dtype=np.float32)
-        calendar = np.array(payload.calendar, dtype=np.float32) if payload.calendar else None
-        if targets.ndim != 2 or targets.shape != (lookback, len(REQUEST_FEATURE_SCHEMA)):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Input data must be [{lookback}, {len(REQUEST_FEATURE_SCHEMA)}] for horizon {payload.horizon}h, got {targets.shape}",
-            )
-        import datetime
-        input_end = datetime.datetime.now(datetime.timezone.utc)
-        input_start = input_end - datetime.timedelta(hours=lookback-1)
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provide either 'sample_name' or 'data'",
-        )
-
-    # Get user's custom alert threshold from config
-    alert_config = db.query(AlertConfig).filter(
-        AlertConfig.user_id == current_user.id
-    ).first()
-    threshold = alert_config.threshold_kw if alert_config else 3.0
-
-    # Run inference
+@router.post("/run", response_model=ProductForecastResponse, status_code=status.HTTP_201_CREATED)
+def run_forecast(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
-        predictions, alerts_data = service.predict(
-            payload.model_name, targets, calendar, threshold_kw=threshold, 
-            start_hour=start_hour, horizon=payload.horizon, timestamps=timestamps
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Model inference failed: {str(e)}",
-        )
+        result = product_forecast_service.generate(db, current_user.id)
+    except ForecastInputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    model_entry = db.query(ModelRegistry).filter(
-        ModelRegistry.name == payload.model_name,
-        ModelRegistry.horizon == payload.horizon,
-    ).first()
-    if model_entry is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The compatible model registration is no longer available.")
-
-    # Save forecast to database, using the model name with horizon suffix for clarity
-    model_db_name = payload.model_name
-    if payload.horizon != 24 and not payload.model_name.endswith(f"_{payload.horizon}"):
-        model_db_name = f"{payload.model_name}_{payload.horizon}"
-
-    site = ensure_default_site(db, current_user.id)
+    origin = result["origin"]
     forecast = Forecast(
         user_id=current_user.id,
-        site_id=site.id,
-        model_name=model_db_name,
-        predictions=predictions.tolist(),
-        input_start=input_start,
-        input_end=input_end,
-        model_registry_id=model_entry.id,
-        horizon=payload.horizon,
-        input_source="sample" if payload.sample_name else "api",
-        input_snapshot=build_input_snapshot(targets, calendar, timestamps),
-        confidence_method=CONFIDENCE_METHOD,
-    )
-    db.add(forecast)
-    db.flush()
-
-    # Email delivery is deferred until the Product V1 outbox is implemented.
-    for alert_data in alerts_data:
-        alert = Alert(
-            user_id=current_user.id,
-            site_id=site.id,
-            forecast_id=forecast.id,
-            alert_type=alert_data['alert_type'],
-            severity=alert_data['severity'],
-            message=alert_data['message'],
-            peak_kw=alert_data.get('peak_kw'),
-        )
-        db.add(alert)
-
-    db.commit()
-    db.refresh(forecast)
-
-    # Return the full lookback window of actual GAP values as input_data for charting
-    input_gap = targets[:, 0].tolist()  # All 96 hours of Global Active Power
-
-    return ForecastResponse(
-        id=forecast.id,
-        model_name=forecast.model_name,
-        predictions=predictions.tolist(),
-        prediction_labels=TARGET_COLS,
-        created_at=forecast.created_at,
-        alerts=alerts_data,
-        input_data=input_gap,
-        model_id=model_entry.id if model_entry else None,
-        model_version=model_entry.version if model_entry else None,
-        horizon=forecast.horizon,
-        input_source=forecast.input_source,
-        confidence_method=forecast.confidence_method or CONFIDENCE_METHOD,
-    )
-
-
-@router.post("/compare")
-def compare_models(
-    request: ForecastRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """Run all models on the same input for comparison."""
-    service = get_forecast_service()
-
-    # Determine lookback based on horizon
-    lookback = HORIZON_TO_LOOKBACK.get(request.horizon, 96)
-
-    timestamps = None
-
-    if request.sample_name:
-        if request.sample_name not in service.samples:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Sample '{request.sample_name}' not found",
-            )
-        sample = service.samples[request.sample_name]
-        targets = sample['targets'][-lookback:]
-        calendar = sample['calendar'][-lookback:] if sample.get('calendar') is not None else None
-        timestamps = sample.get('timestamps')
-        if timestamps is not None:
-            timestamps = timestamps[-lookback:]
-    elif request.data:
-        targets = np.array(request.data, dtype=np.float32)
-        calendar = np.array(request.calendar, dtype=np.float32) if request.calendar else None
-        if targets.ndim != 2 or targets.shape != (lookback, len(REQUEST_FEATURE_SCHEMA)):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Input data must be [{lookback}, {len(REQUEST_FEATURE_SCHEMA)}] for horizon {request.horizon}h, got {targets.shape}",
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provide either 'sample_name' or 'data'",
-        )
-
-    results = service.predict_comparison(targets, calendar, horizon=request.horizon, timestamps=timestamps)
-
-    return {
-        'models': {
-            name: preds.tolist() for name, preds in results.items()
+        site_id=result["site"].id,
+        model_name=result["model_name"],
+        horizon=24,
+        input_source="meter",
+        input_start=origin - timedelta(hours=336),
+        input_end=origin,
+        predictions=result["prediction_rows"],
+        confidence_method=result["confidence_method"],
+        input_snapshot={
+            "product_contract": "one_site_primary_meter_24h_v1",
+            "model_version": result["model_version"],
+            "method": result["method"],
+            "fallback_reason": result["fallback_reason"],
+            "timezone": result["site"].timezone,
+            "meter_id": result["meter"].id,
+            "forecast_origin": origin.isoformat(),
+            "forecast_end": (origin + timedelta(hours=24)).isoformat(),
+            "coverage_percent": result["coverage_percent"],
+            "observed_hours": result["observed_hours"],
+            "maximum_gap_hours": result["maximum_gap_hours"],
+            "sources": result["sources"],
+            "preprocessing": result["preprocessing"],
+            "inference_seconds": result["inference_seconds"],
+            "artifact_fingerprint": result["artifact_fingerprint"],
         },
-        'labels': TARGET_COLS,
-        'input_data': targets[:, 0].tolist(),  # GAP lookback for chart
-    }
-
-
-@router.post("/predict/upload", response_model=ForecastResponse)
-@limiter.limit(settings.RATE_LIMIT)
-def predict_upload(
-    request: Request,
-    file: UploadFile = File(...),
-    requested_model_name: str = Form(..., alias="model_name"),
-    horizon: int = Form(24),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Run forecast from an uploaded CSV file."""
-    import pandas as pd
-
-    if not file.filename or not file.filename.endswith('.csv'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only CSV files are accepted.",
-        )
-
-    try:
-        contents = file.file.read()
-        df = pd.read_csv(io.BytesIO(contents), index_col=0, parse_dates=True)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to parse CSV: {str(e)}",
-        )
-
-    # Determine lookback based on horizon
-    lookback = 96
-    if horizon == 168:
-        lookback = 512
-    elif horizon == 720:
-        lookback = 1440
-
-    service = get_forecast_service()
-
-    # Validate rows count before slicing
-    if len(df) < lookback:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV must have at least {lookback} rows for horizon {horizon}h, got {len(df)}.",
-        )
-    df = df.tail(lookback)
-
-    # Rename Global_active_power to gap for compatibility with exported samples
-    df = df.rename(columns={
-        'Global_active_power': 'gap', 'Global_reactive_power': 'grp',
-        'Voltage': 'voltage', 'Global_intensity': 'current',
-    })
-
-    # Validate columns
-    missing = [c for c in REQUEST_FEATURE_SCHEMA if c not in df.columns]
-    if missing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV missing required columns: {missing}. Expected: {REQUEST_FEATURE_SCHEMA}",
-        )
-
-    targets = df[REQUEST_FEATURE_SCHEMA].values.astype(np.float32)
-
-    # Generate cyclical calendar features from the datetime index
-    hours = df.index.hour.values
-    days = df.index.dayofweek.values
-    months = df.index.month.values
-    from app.services.forecast_service import generate_calendar_features
-    calendar = generate_calendar_features(hours, days, months)
-
-    # Get user's custom alert threshold
-    alert_config = db.query(AlertConfig).filter(
-        AlertConfig.user_id == current_user.id
-    ).first()
-    threshold = alert_config.threshold_kw if alert_config else 3.0
-
-    # Run inference
-    start_hour = int((df.index[-1].hour + 1) % 24)
-    try:
-        predictions, alerts_data = service.predict(
-            requested_model_name, targets, calendar, threshold_kw=threshold,
-            start_hour=start_hour, horizon=horizon, timestamps=df.index
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Model inference failed: {str(e)}",
-        )
-
-    import datetime
-    input_start = df.index[0].to_pydatetime()
-    input_end = df.index[-1].to_pydatetime()
-    if input_start.tzinfo is None:
-        input_start = input_start.replace(tzinfo=datetime.timezone.utc)
-        input_end = input_end.replace(tzinfo=datetime.timezone.utc)
-
-    model_entry = db.query(ModelRegistry).filter(
-        ModelRegistry.name == requested_model_name,
-        ModelRegistry.horizon == horizon,
-    ).first()
-    if model_entry is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The compatible model registration is no longer available.")
-
-    # Save forecast
-    site = ensure_default_site(db, current_user.id)
-    forecast = Forecast(
-        user_id=current_user.id,
-        site_id=site.id,
-        model_name=requested_model_name,
-        predictions=predictions.tolist(),
-        input_start=input_start,
-        input_end=input_end,
-        model_registry_id=model_entry.id,
-        horizon=horizon,
-        input_source="csv_upload",
-        input_snapshot=build_input_snapshot(targets, calendar, df.index),
-        confidence_method=CONFIDENCE_METHOD,
     )
     db.add(forecast)
-    db.flush()
-
-    # Save alerts
-    for alert_data in alerts_data:
-        alert = Alert(
-            user_id=current_user.id,
-            site_id=site.id,
-            forecast_id=forecast.id,
-            alert_type=alert_data['alert_type'],
-            severity=alert_data['severity'],
-            message=alert_data['message'],
-            peak_kw=alert_data.get('peak_kw'),
-        )
-        db.add(alert)
     db.commit()
     db.refresh(forecast)
-
-    input_gap = targets[:, 0].tolist()
-
-    return ForecastResponse(
-        id=forecast.id,
-        model_name=forecast.model_name,
-        predictions=predictions.tolist(),
-        prediction_labels=TARGET_COLS,
-        created_at=forecast.created_at,
-        alerts=alerts_data,
-        input_data=input_gap,
-        model_id=model_entry.id,
-        model_version=model_entry.version,
-        horizon=forecast.horizon,
-        input_source=forecast.input_source,
-        confidence_method=forecast.confidence_method or CONFIDENCE_METHOD,
-    )
+    return _serialize(forecast)
 
 
-@router.post("/compare/upload")
-def compare_upload(
-    file: UploadFile = File(...),
-    horizon: int = Form(24),
-    current_user: User = Depends(get_current_user),
-):
-    """Run comparison from an uploaded CSV file."""
-    import pandas as pd
-
-    if not file.filename or not file.filename.endswith('.csv'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only CSV files are accepted.",
-        )
-
-    try:
-        contents = file.file.read()
-        df = pd.read_csv(io.BytesIO(contents), index_col=0, parse_dates=True)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to parse CSV: {str(e)}",
-        )
-
-    # Determine lookback based on horizon
-    lookback = 96
-    if horizon == 168:
-        lookback = 512
-    elif horizon == 720:
-        lookback = 1440
-
-    service = get_forecast_service()
-    if len(df) < lookback:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV must have at least {lookback} rows for horizon {horizon}h, got {len(df)}.",
-        )
-    df = df.tail(lookback)
-
-    # Rename Global_active_power to gap for compatibility with exported samples
-    df = df.rename(columns={
-        'Global_active_power': 'gap', 'Global_reactive_power': 'grp',
-        'Voltage': 'voltage', 'Global_intensity': 'current',
-    })
-
-    missing = [c for c in REQUEST_FEATURE_SCHEMA if c not in df.columns]
-    if missing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"CSV missing required columns: {missing}.",
-        )
-
-    targets = df[REQUEST_FEATURE_SCHEMA].values.astype(np.float32)
-    hours = df.index.hour.values
-    days = df.index.dayofweek.values
-    months = df.index.month.values
-    from app.services.forecast_service import generate_calendar_features
-    calendar = generate_calendar_features(hours, days, months)
-
-    results = service.predict_comparison(targets, calendar, horizon=horizon, timestamps=df.index)
-
-    return {
-        'models': {name: preds.tolist() for name, preds in results.items()},
-        'labels': TARGET_COLS,
-        'input_data': targets[:, 0].tolist(),
-    }
-
-
-@router.post("/smart-meter/sync", response_model=ForecastResponse)
-def sync_smart_meter_forecast(
-    payload: ForecastRequest,
-    current_user: User = Depends(get_current_user),
+@router.get("/latest", response_model=ProductForecastResponse | None)
+def get_latest_forecast(
     db: Session = Depends(get_db),
-):
-    """
-    Sync live readings from the simulated Enedis Linky smart meter,
-    run the selected forecast model, and save the forecast to the database.
-    """
-    import datetime
-    from datetime import timezone
-    import pandas as pd
-    from app.services.smart_meter_service import get_smart_meter_service
-    from app.services.forecast_service import get_forecast_service
-    
-    model_name = payload.model_name or 'sota'
-    horizon = payload.horizon or 24
-
-    # Determine lookback based on horizon
-    lookback = HORIZON_TO_LOOKBACK.get(horizon, 96)
-
-    service = get_forecast_service()
-    full_model_key = model_name
-
-    # Fetch live readings with dynamic lookback
-    meter_service = get_smart_meter_service()
-    targets = meter_service.fetch_live_readings(db=db, limit=lookback) # Shape (lookback, 7)
-    
-    # Generate cyclical calendar features for lookback hours
-    now = datetime.datetime.now(timezone.utc)
-    hours = []
-    days = []
-    months = []
-    for h in range(lookback):
-        step_time = now - datetime.timedelta(hours=(lookback - 1 - h))
-        hours.append(step_time.hour)
-        days.append(step_time.weekday())
-        months.append(step_time.month)
-        
-    hours = np.array(hours)
-    days = np.array(days)
-    months = np.array(months)
-    
-    from app.services.forecast_service import generate_calendar_features
-    calendar = generate_calendar_features(hours, days, months)
-    timestamps = pd.date_range(end=now, periods=lookback, freq='h')
-
-    # Get user alert threshold config
-    alert_config = db.query(AlertConfig).filter(AlertConfig.user_id == current_user.id).first()
-    threshold = alert_config.threshold_kw if alert_config else 3.0
-
-    start_hour = (now + datetime.timedelta(hours=1)).hour # Start of forecast horizon
-    
-    try:
-        predictions, alerts_data = service.predict(
-            model_name, targets, calendar, threshold_kw=threshold, 
-            start_hour=start_hour, horizon=horizon, timestamps=timestamps
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Smart meter forecast execution failed: {str(e)}",
-        )
-
-    model_entry = db.query(ModelRegistry).filter(
-        ModelRegistry.name == model_name,
-        ModelRegistry.horizon == horizon,
-    ).first()
-    if model_entry is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The compatible model registration is no longer available.")
-
-    # Save to DB
-    input_end = now
-    input_start = now - datetime.timedelta(hours=lookback - 1)
-    site = ensure_default_site(db, current_user.id)
-    forecast = Forecast(
-        user_id=current_user.id,
-        site_id=site.id,
-        model_name=full_model_key,
-        predictions=predictions.tolist(),
-        input_start=input_start,
-        input_end=input_end,
-        model_registry_id=model_entry.id,
-        horizon=horizon,
-        input_source="simulator",
-        input_snapshot=build_input_snapshot(targets, calendar, timestamps),
-        confidence_method=CONFIDENCE_METHOD,
-    )
-    db.add(forecast)
-    db.flush()
-
-    # Save alerts
-    for alert_data in alerts_data:
-        alert = Alert(
-            user_id=current_user.id,
-            site_id=site.id,
-            forecast_id=forecast.id,
-            alert_type=alert_data['alert_type'],
-            severity=alert_data['severity'],
-            message=alert_data['message'],
-            peak_kw=alert_data.get('peak_kw'),
-        )
-        db.add(alert)
-        
-    db.commit()
-    db.refresh(forecast)
-
-    return ForecastResponse(
-        id=forecast.id,
-        model_name=model_name,
-        predictions=predictions.tolist(),
-        prediction_labels=TARGET_COLS,
-        created_at=forecast.created_at,
-        alerts=[
-            {
-                "alert_type": a['alert_type'],
-                "severity": a['severity'],
-                "message": a['message'],
-                "peak_kw": a.get('peak_kw')
-            } for a in alerts_data
-        ],
-        input_data=targets[:, 0].tolist(),
-        model_id=model_entry.id,
-        model_version=model_entry.version,
-        horizon=forecast.horizon,
-        input_source=forecast.input_source,
-        confidence_method=forecast.confidence_method or CONFIDENCE_METHOD,
-    )
-
-
-@router.post("/smart-meter/compare")
-def compare_smart_meter_forecasts(
-    payload: ForecastRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    """
-    Sync live readings from the simulated Enedis Linky smart meter,
-    run all forecast models for the chosen horizon, and return comparison results.
-    """
-    import datetime
-    from datetime import timezone
-    import pandas as pd
-    from app.services.smart_meter_service import get_smart_meter_service
-    
-    horizon = payload.horizon or 24
-    
-    # Determine lookback based on horizon
-    lookback = HORIZON_TO_LOOKBACK.get(horizon, 96)
-
-    # Fetch live readings with dynamic lookback
-    meter_service = get_smart_meter_service()
-    targets = meter_service.fetch_live_readings(db=db, limit=lookback) # Shape (lookback, 7)
-    
-    # Generate cyclical calendar features for lookback hours
-    now = datetime.datetime.now(timezone.utc)
-    hours = []
-    days = []
-    months = []
-    for h in range(lookback):
-        step_time = now - datetime.timedelta(hours=(lookback - 1 - h))
-        hours.append(step_time.hour)
-        days.append(step_time.weekday())
-        months.append(step_time.month)
-        
-    hours = np.array(hours)
-    days = np.array(days)
-    months = np.array(months)
-    
-    from app.services.forecast_service import generate_calendar_features
-    calendar = generate_calendar_features(hours, days, months)
-    timestamps = pd.date_range(end=now, periods=lookback, freq='h')
-
-    service = get_forecast_service()
-    results = service.predict_comparison(targets, calendar, horizon=horizon, timestamps=timestamps)
-
-    return {
-        'models': {name: preds.tolist() for name, preds in results.items()},
-        'labels': TARGET_COLS,
-        'input_data': targets[:, 0].tolist(),
-    }
+    forecast = (
+        db.query(Forecast)
+        .filter(Forecast.user_id == current_user.id, Forecast.model_name.in_(PRODUCT_MODELS))
+        .order_by(Forecast.created_at.desc(), Forecast.id.desc())
+        .first()
+    )
+    return _serialize(forecast) if forecast else None
 
 
-@router.get("/history", response_model=List[ForecastHistoryItem])
-def get_history(
-    limit: int = 20,
+@router.get("/history", response_model=list[ProductForecastHistoryItem])
+def get_forecast_history(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    """Get forecast history for current user."""
     forecasts = (
         db.query(Forecast)
-        .filter(Forecast.user_id == current_user.id)
-        .order_by(Forecast.created_at.desc())
-        .limit(limit)
+        .filter(Forecast.user_id == current_user.id, Forecast.model_name.in_(PRODUCT_MODELS))
+        .order_by(Forecast.created_at.desc(), Forecast.id.desc())
+        .limit(20)
         .all()
     )
-
-    result = []
-    for f in forecasts:
-        peak_power = None
-        if f.predictions and len(f.predictions) > 0:
-            gap_preds = [row[0] for row in f.predictions if len(row) > 0]
-            peak_power = max(gap_preds) if gap_preds else None
-
-        result.append(ForecastHistoryItem(
-            id=f.id,
-            model_name=f.model_name,
-            created_at=f.created_at,
-            peak_power=peak_power,
-        ))
-
-    return result
-
+    return [
+        {
+            "id": forecast.id,
+            "model_name": forecast.model_name,
+            "method": (forecast.input_snapshot or {}).get("method", "unknown"),
+            "forecast_start": (forecast.input_snapshot or {}).get("forecast_origin"),
+            "created_at": forecast.created_at,
+        }
+        for forecast in forecasts
+    ]

@@ -199,3 +199,36 @@
 - Backend product suite: 42 tests passed; four deleted tests belonged exclusively
   to the removed no-op alert WebSocket.
 - Frontend lint and typecheck: passed.
+
+## 2026-07-20 - Product 24-Hour Global TFT
+
+### Completed
+
+- Packaged the selected 5.6 MB Global TFT checkpoint with its inference
+  architecture, SHA-256 fingerprint, feature contract, research metrics,
+  provenance, and limitations; no training arrays or prediction samples ship.
+- Added primary-meter interval integration into 336 site-local hourly-kWh inputs,
+  95% coverage and three-hour gap gates, finite checks, bounded interpolation,
+  site calendar features, and rolling-window z-score adaptation.
+- Persisted the scaler, imputed timestamps, source, coverage, model fingerprint,
+  target timestamps, quantiles, method, runtime, and fallback reason.
+- Added readiness, run, latest, and owned-history APIs for one fixed 24-hour
+  contract. PyTorch and artifact failures use a visibly labelled weekly seasonal
+  baseline with no fabricated uncertainty interval.
+- Rebuilt Forecast around meter readiness, one Generate action, hourly kWh,
+  10th/50th/90th model quantiles, fallback disclosure, provenance, and history.
+  Removed sample uploads, client model choice, model comparison, and static claims.
+
+### Verification
+
+- Packaged checkpoint inference test: ordered finite 24-hour quantiles passed.
+- Forecast API ownership and explicit fallback test: passed.
+- Backend product suite before the final API regression: 44 tests passed.
+- Focused forecast tests after provenance completion: 6 passed.
+- Frontend lint, typecheck, and production build: passed; 16 static pages generated.
+
+### Remaining in this area
+
+- Exercise deterministic repeatability and measured latency in release validation.
+- Validate packaged model readiness from the clean Docker runtime.
+- Complete browser-level insufficient-data, TFT, and fallback journeys.

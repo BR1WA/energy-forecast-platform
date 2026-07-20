@@ -147,6 +147,73 @@ export interface SampleDataset {
   date_range?: string;
 }
 
+export interface ForecastModelStatus {
+  available: boolean;
+  name: string;
+  display_name: string;
+  version: string;
+  artifact_fingerprint: string | null;
+  error: string | null;
+}
+
+export interface ForecastReadiness {
+  status: 'ready' | 'fallback_ready' | 'insufficient_data';
+  ready_for_tft: boolean;
+  fallback_available: boolean;
+  required_hours: number;
+  minimum_coverage_percent: number;
+  maximum_allowed_gap_hours: number;
+  coverage_percent: number;
+  observed_hours: number;
+  missing_hours: number;
+  imputed_hours: number;
+  maximum_gap_hours: number;
+  unit: 'kWh';
+  resolution: 'hourly';
+  latest_reading_at: string | null;
+  forecast_origin: string | null;
+  reasons: string[];
+  model: ForecastModelStatus;
+}
+
+export interface ProductForecastPoint {
+  timestamp: string;
+  p10_kwh: number | null;
+  p50_kwh: number;
+  p90_kwh: number | null;
+}
+
+export interface ProductForecast {
+  id: number;
+  model_name: string;
+  model_version: string;
+  method: 'global_tft' | 'seasonal_naive' | 'unknown';
+  fallback_reason: string | null;
+  unit: 'kWh';
+  timezone: string;
+  horizon_hours: number;
+  input_start: string | null;
+  input_end: string | null;
+  forecast_start: string;
+  forecast_end: string | null;
+  coverage_percent: number;
+  observed_hours: number;
+  maximum_gap_hours: number;
+  sources: string[];
+  confidence_method: string;
+  artifact_fingerprint: string | null;
+  points: ProductForecastPoint[];
+  created_at: string;
+}
+
+export interface ProductForecastHistoryItem {
+  id: number;
+  model_name: string;
+  method: string;
+  forecast_start: string | null;
+  created_at: string;
+}
+
 // ============================================================
 // Analytics Types
 // ============================================================

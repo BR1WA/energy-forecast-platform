@@ -1,0 +1,47 @@
+{
+  "artifact_contract_version": 1,
+  "name": "global_tft_24h",
+  "display_name": "Global TFT 24-hour",
+  "version": "1.0.0",
+  "checkpoint_file": "model.pt",
+  "checkpoint_sha256": "60fedcdee375dc0b2973e55b9f4ec752da69c2a7e390e1f951ed5cbb7bc5a04d",
+  "checkpoint_size_bytes": 5600105,
+  "task": "day_24h",
+  "input_unit": "kWh per hour",
+  "output_unit": "kWh per hour",
+  "lookback_hours": 336,
+  "horizon_hours": 24,
+  "normalization": "per-site rolling-window z-score",
+  "quantiles": [0.1, 0.5, 0.9],
+  "calendar_features": [
+    "hour_sin",
+    "hour_cos",
+    "weekday_sin",
+    "weekday_cos",
+    "month_sin",
+    "month_cos",
+    "is_workday",
+    "is_holiday",
+    "next_day_is_workday"
+  ],
+  "data_gates": {
+    "minimum_coverage_percent": 95,
+    "maximum_consecutive_gap_hours": 3,
+    "finite_values_required": true
+  },
+  "training": {
+    "dataset": "Low Carbon London smart-meter households",
+    "seed": 2026,
+    "trainable_parameters": 1386262,
+    "cold_start_households": 500,
+    "cold_start_macro_mae_kwh": 0.18492806722570176,
+    "cold_start_seasonal_naive_macro_mae_kwh": 0.25153957011982997,
+    "cold_start_mae_improvement_percent": 26.48152052672882,
+    "cold_start_households_beating_seasonal_percent": 99.0
+  },
+  "limitations": [
+    "Validation metrics describe the London research cohort and are not a guarantee for a client site.",
+    "A new site is normalized from its latest 336-hour window rather than a training-period household scaler.",
+    "Quantile outputs are native model estimates and have not been recalibrated for each client site."
+  ]
+}
