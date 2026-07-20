@@ -314,3 +314,38 @@
 - Pagination order, page boundaries, invalid cursor/limit, and cross-user
   isolation regression: passed.
 - Frontend lint and typecheck: passed.
+
+## 2026-07-20 - Final Release Validation
+
+### Completed
+
+- Replaced appliance, occupancy, cooling, and solar simulator assumptions with a
+  generic bounded base-load and variation profile; simulator rows remain explicitly
+  labelled synthetic data.
+- Removed the dormant pull-connector/smart-meter service and its connector-only SSRF
+  tests, while retaining old database columns solely for migration compatibility.
+- Reduced setup and preference contracts to implemented product behavior and removed
+  stale multi-site, retraining, model-selection, and email-notification translations.
+- Added dependency integrity checks to the Docker build and launch through
+  `python -m uvicorn`, preventing a cached partial package layer from appearing healthy.
+- Added deterministic repeated-output and inference timing assertions to the packaged
+  Global TFT contract test.
+- Completed the final P0/P1 source audit and wrote the release walkthrough,
+  limitations, manual check, and report guidance in `docs/PFE_RELEASE_NOTES.md`.
+
+### Verification
+
+- Final local backend suite: 44 passed.
+- Final Docker test image: 43 passed, 1 skipped by design because Torch is excluded
+  from that target; packaged inference passed in the local Torch-enabled suite.
+- Frontend lint, typecheck, and production build: passed; 16 routes generated.
+- Fresh PostgreSQL migration from the initial revision to head: passed.
+- Clean isolated Docker runtime: liveness and readiness passed; database ready and
+  Global TFT warmed with the expected artifact fingerprint.
+- PostgreSQL custom-format backup/restore into an isolated database: passed with both
+  verification rows intact; temporary databases and dump were removed.
+
+### Open Release Check
+
+- Browser automation remained unavailable after reconnect attempts. The desktop and
+  360px journeys in the release notes must be completed manually before presentation.

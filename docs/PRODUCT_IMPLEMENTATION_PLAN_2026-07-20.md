@@ -246,7 +246,8 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Add tariff/budget, forecast, alert, and recommendation summaries.
 - [x] Implement loading/empty/stale/partial/error/live reconnect states.
 - [x] Implement mobile drawer and responsive chart/KPI behavior.
-- [ ] Add desktop/mobile dashboard tests.
+- [!] Complete the final desktop/mobile dashboard journey manually; automated
+  browser control was unavailable during release validation.
 
 #### G. 24-hour Global TFT
 
@@ -260,7 +261,7 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 - [x] Add readiness endpoint and client insufficient-data UI.
 - [x] Add explicit seasonal-naive fallback.
 - [x] Remove static forecast claims and client model selection.
-- [~] Add shape, finite, deterministic, warm-up, latency, baseline, and API tests.
+- [x] Add shape, finite, deterministic, warm-up, latency, baseline, and API tests.
 
 #### H. Alerts, recommendations, and reports
 
@@ -275,12 +276,12 @@ Status values: `[ ]` pending, `[~]` in progress, `[x]` complete, `[!]` blocked.
 
 - [x] Backend product suite passes.
 - [x] Frontend lint, typecheck, build, and focused tests pass.
-- [ ] Fresh PostgreSQL migration reaches head.
-- [ ] Critical browser journeys pass on desktop and mobile.
-- [ ] Clean Docker deployment reaches liveness and model readiness.
-- [ ] Restore procedure is demonstrated or listed as an explicit release blocker.
-- [ ] Complete final code review and P0/P1 audit.
-- [ ] Record final walkthrough, known limitations, and PFE report notes.
+- [x] Fresh PostgreSQL migration reaches head.
+- [!] Critical browser journeys require the final manual desktop/mobile pass.
+- [x] Clean Docker deployment reaches liveness and model readiness.
+- [x] Restore procedure is demonstrated.
+- [x] Complete final code review and P0/P1 audit.
+- [x] Record final walkthrough, known limitations, and PFE report notes.
 
 ### 4.5 Acceptance criteria
 
