@@ -314,7 +314,6 @@ export interface SystemSettings {
   peak_start_hour: number;
   peak_end_hour: number;
   sensor_type: string;
-  sensor_api_url: string | null;
   updated_at?: string;
 }
 
@@ -346,9 +345,6 @@ export interface AlertConfigResponse {
 export interface UserPreferences {
   theme?: string;
   language?: string;
-  email_alerts?: boolean;
-  push_alerts?: boolean;
-  [key: string]: any;
 }
 
 export interface SiteCircuit {

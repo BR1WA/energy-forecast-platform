@@ -25,7 +25,6 @@ const initialSettings = {
   peak_start_hour: 6,
   peak_end_hour: 22,
   sensor_type: 'simulator',
-  sensor_api_url: null as string | null,
 };
 
 export default function SettingsPage() {

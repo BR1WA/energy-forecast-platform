@@ -76,14 +76,14 @@ class TestUserOwnedEnergyData(unittest.TestCase):
     def test_simulator_configuration_is_not_shared_between_users(self):
         response = client.post(
             "/api/v1/simulation/configure",
-            json={"occupants": 5, "ac_level": "high"},
+            json={"base_load_kw": 5, "variation_percent": 25},
             headers=self.headers_a,
         )
         self.assertEqual(response.status_code, 200)
 
         state_a = client.get("/api/v1/simulation/status", headers=self.headers_a).json()
         state_b = client.get("/api/v1/simulation/status", headers=self.headers_b).json()
-        self.assertEqual(state_a["occupants"], 5)
-        self.assertEqual(state_a["ac_level"], "high")
-        self.assertEqual(state_b["occupants"], 2)
-        self.assertEqual(state_b["ac_level"], "medium")
+        self.assertEqual(state_a["base_load_kw"], 5)
+        self.assertEqual(state_a["variation_percent"], 25)
+        self.assertEqual(state_b["base_load_kw"], 1.2)
+        self.assertEqual(state_b["variation_percent"], 10)

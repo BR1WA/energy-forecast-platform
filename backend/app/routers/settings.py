@@ -12,6 +12,8 @@ from app.services.audit_service import record_audit_event
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 class SetupPayload(BaseModel):
+    model_config = {"extra": "forbid"}
+
     site_name: str | None = Field(default=None, min_length=1, max_length=120)
     timezone: str | None = None
     country: str = Field(min_length=2, max_length=100)
@@ -23,7 +25,6 @@ class SetupPayload(BaseModel):
     peak_start_hour: int = Field(ge=0, le=23)
     peak_end_hour: int = Field(ge=0, le=23)
     sensor_type: Literal["csv", "push", "simulator"]
-    sensor_api_url: str | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -36,13 +37,10 @@ class SetupPayload(BaseModel):
         return value
 
 class PreferencesPayload(BaseModel):
-    theme: str | None = None
-    language: str | None = None
-    email_alerts: bool | None = None
-    push_alerts: bool | None = None
-    default_model_24: str | None = None
-    default_model_168: str | None = None
-    default_model_720: str | None = None
+    model_config = {"extra": "forbid"}
+
+    theme: Literal["light", "dark", "system"] | None = None
+    language: Literal["en", "fr", "ar"] | None = None
 
 class BudgetPayload(BaseModel):
     monthly_budget_mad: float = Field(ge=0, le=10_000_000)
@@ -73,7 +71,6 @@ def get_settings(
             "peak_start_hour": 6,
             "peak_end_hour": 22,
             "sensor_type": "simulator",
-            "sensor_api_url": None,
         }
     return settings
 
@@ -132,17 +129,7 @@ def update_preferences(
         prefs["theme"] = payload.theme
     if payload.language is not None:
         prefs["language"] = payload.language
-    if payload.email_alerts is not None:
-        prefs["email_alerts"] = payload.email_alerts
-    if payload.push_alerts is not None:
-        prefs["push_alerts"] = payload.push_alerts
-    if payload.default_model_24 is not None:
-        prefs["default_model_24"] = payload.default_model_24
-    if payload.default_model_168 is not None:
-        prefs["default_model_168"] = payload.default_model_168
-    if payload.default_model_720 is not None:
-        prefs["default_model_720"] = payload.default_model_720
-        
+
     current_user.preferences = prefs
     db.commit()
     db.refresh(current_user)

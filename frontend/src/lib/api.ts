@@ -240,9 +240,6 @@ export const analyticsApi = {
 };
 
 // ============================================================
-// Multi-Site API
-// ============================================================
-// ============================================================
 // Alerts API
 // ============================================================
 export const alertsApi = {
@@ -360,7 +357,6 @@ export const settingsApi = {
     peak_start_hour: number;
     peak_end_hour: number;
     sensor_type: string;
-    sensor_api_url: string | null;
   }): Promise<{ message: string; settings: SystemSettings }> =>
     apiFetch('/api/v1/settings/setup', {
       method: 'POST',
@@ -370,11 +366,6 @@ export const settingsApi = {
   updatePreferences: (data: {
     theme?: string;
     language?: string;
-    email_alerts?: boolean;
-    push_alerts?: boolean;
-    default_model_24?: string;
-    default_model_168?: string;
-    default_model_720?: string;
   }): Promise<{ message: string; preferences: UserPreferences }> =>
     apiFetch('/api/v1/settings/preferences', {
       method: 'PUT',
@@ -504,12 +495,8 @@ export const simulationApi = {
     status: string; 
     is_running: boolean; 
     uptime: number;
-    day_part?: string;
-    occupants?: number;
-    temperature?: number;
-    ac_level?: string;
-    washing_machine?: boolean;
-    solar?: string;
+    base_load_kw?: number;
+    variation_percent?: number;
   }> =>
     apiFetch('/api/v1/simulation/status'),
 
@@ -517,12 +504,8 @@ export const simulationApi = {
     apiFetch('/api/v1/simulation/reset', { method: 'POST' }),
 
   configure: (config: {
-    day_part: string;
-    occupants: number;
-    temperature: number;
-    ac_level: string;
-    washing_machine: boolean;
-    solar: string;
+    base_load_kw: number;
+    variation_percent: number;
   }): Promise<{ status: string }> =>
     apiFetch('/api/v1/simulation/configure', { 
       method: 'POST',

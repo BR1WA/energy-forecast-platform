@@ -11,9 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { consumptionApi, simulationApi } from '@/lib/api';
 import type { ConsumptionPeriodSummary } from '@/types';
 
-type DayPart = 'morning' | 'afternoon' | 'evening' | 'night';
-type Cooling = 'off' | 'low' | 'medium' | 'high';
-
 function durationLabel(seconds: number) {
   const hours = Math.floor(seconds / 3600).toString().padStart(2, '0');
   const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
@@ -27,11 +24,8 @@ export default function SimulationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [summary, setSummary] = useState<ConsumptionPeriodSummary | null>(null);
-  const [dayPart, setDayPart] = useState<DayPart>('evening');
-  const [occupants, setOccupants] = useState(2);
-  const [temperature, setTemperature] = useState(25);
-  const [cooling, setCooling] = useState<Cooling>('medium');
-  const [washingMachine, setWashingMachine] = useState(false);
+  const [baseLoadKw, setBaseLoadKw] = useState(1.2);
+  const [variationPercent, setVariationPercent] = useState(10);
 
   const load = useCallback(async () => {
     try {
@@ -41,11 +35,8 @@ export default function SimulationPage() {
       ]);
       setIsRunning(status.is_running);
       setUptime(status.uptime || 0);
-      if (status.day_part) setDayPart(status.day_part as DayPart);
-      if (status.occupants !== undefined) setOccupants(status.occupants);
-      if (status.temperature !== undefined) setTemperature(status.temperature);
-      if (status.ac_level) setCooling(status.ac_level as Cooling);
-      if (status.washing_machine !== undefined) setWashingMachine(status.washing_machine);
+      if (status.base_load_kw !== undefined) setBaseLoadKw(status.base_load_kw);
+      if (status.variation_percent !== undefined) setVariationPercent(status.variation_percent);
       setSummary(period);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to load simulator status.');
@@ -64,14 +55,10 @@ export default function SimulationPage() {
     setSaving(true);
     try {
       await simulationApi.configure({
-        day_part: dayPart,
-        occupants,
-        temperature,
-        ac_level: cooling,
-        washing_machine: washingMachine,
-        solar: 'off',
+        base_load_kw: baseLoadKw,
+        variation_percent: variationPercent,
       });
-      toast.success('Demo scenario saved.');
+      toast.success('Demo load profile saved.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to save the demo scenario.');
     } finally {
@@ -115,18 +102,13 @@ export default function SimulationPage() {
           </Card>
 
           <Card className="rounded-lg border-white/10 bg-[#111827]">
-            <CardHeader><CardTitle className="text-sm">Household scenario</CardTitle><p className="text-xs text-slate-400">Controls adjust the synthetic load profile only.</p></CardHeader>
+            <CardHeader><CardTitle className="text-sm">Load profile</CardTitle><p className="text-xs text-slate-400">Configure a generic synthetic load without appliance or generation assumptions.</p></CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid grid-cols-4 gap-2">
-                {(['morning', 'afternoon', 'evening', 'night'] as DayPart[]).map((part) => <button className={`h-9 rounded-md border text-xs capitalize ${dayPart === part ? 'border-cyan-400 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-slate-400 hover:text-white'}`} key={part} onClick={() => setDayPart(part)} type="button">{part}</button>)}
-              </div>
               <div className="grid gap-5 sm:grid-cols-2">
-                <label className="grid gap-2 text-xs text-slate-400"><span className="flex justify-between"><span>People at home</span><span className="text-white">{occupants}</span></span><input className="accent-cyan-400" max="12" min="1" onChange={(event) => setOccupants(Number(event.target.value))} type="range" value={occupants} /></label>
-                <label className="grid gap-2 text-xs text-slate-400"><span className="flex justify-between"><span>Temperature</span><span className="text-white">{temperature} C</span></span><input className="accent-cyan-400" max="50" min="5" onChange={(event) => setTemperature(Number(event.target.value))} type="range" value={temperature} /></label>
-                <label className="grid gap-2 text-xs text-slate-400">Cooling level<select className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white" onChange={(event) => setCooling(event.target.value as Cooling)} value={cooling}><option value="off">Off</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
-                <label className="flex h-9 items-center gap-2 self-end text-sm text-slate-300"><input checked={washingMachine} className="h-4 w-4 accent-cyan-400" onChange={(event) => setWashingMachine(event.target.checked)} type="checkbox" />Washing machine active</label>
+                <label className="grid gap-2 text-xs text-slate-400"><span className="flex justify-between"><span>Base load</span><span className="text-white">{baseLoadKw.toFixed(1)} kW</span></span><input className="accent-cyan-400" max="20" min="0.1" onChange={(event) => setBaseLoadKw(Number(event.target.value))} step="0.1" type="range" value={baseLoadKw} /></label>
+                <label className="grid gap-2 text-xs text-slate-400"><span className="flex justify-between"><span>Random variation</span><span className="text-white">{variationPercent}%</span></span><input className="accent-cyan-400" max="50" min="0" onChange={(event) => setVariationPercent(Number(event.target.value))} step="1" type="range" value={variationPercent} /></label>
               </div>
-              <Button disabled={saving} onClick={saveScenario}><Save />{saving ? 'Saving...' : 'Save scenario'}</Button>
+              <Button disabled={saving} onClick={saveScenario}><Save />{saving ? 'Saving...' : 'Save load profile'}</Button>
             </CardContent>
           </Card>
         </section>

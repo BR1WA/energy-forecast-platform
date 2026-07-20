@@ -7,12 +7,8 @@ from app.models import SimulationSession
 from app.services.site_service import ensure_user_site, get_primary_meter
 
 DEFAULT_CONFIGURATION = {
-    "day_part": "evening",
-    "occupants": 2,
-    "temperature": 25.0,
-    "ac_level": "medium",
-    "washing_machine": False,
-    "solar": "off",
+    "base_load_kw": 1.2,
+    "variation_percent": 10,
 }
 
 
@@ -36,7 +32,11 @@ class SimulationService:
 
     def get_state(self, db: Session, user_id: int) -> dict:
         session = self._session(db, user_id)
-        config = {**DEFAULT_CONFIGURATION, **(session.configuration or {})}
+        stored = session.configuration or {}
+        config = {
+            key: stored.get(key, default)
+            for key, default in DEFAULT_CONFIGURATION.items()
+        }
         uptime = 0.0
         if session.is_running and session.started_at:
             started_at = session.started_at
@@ -53,9 +53,8 @@ class SimulationService:
     def configure_simulation(self, db: Session, user_id: int, config: dict) -> dict:
         session = self._session(db, user_id)
         session.configuration = {
-            **DEFAULT_CONFIGURATION,
-            **(session.configuration or {}),
-            **{key: value for key, value in config.items() if key in DEFAULT_CONFIGURATION},
+            key: config.get(key, default)
+            for key, default in DEFAULT_CONFIGURATION.items()
         }
         db.commit()
         return {"status": "configured", **self.get_state(db, user_id)}
@@ -90,30 +89,15 @@ class SimulationService:
         """Generate one labeled simulator sample from an explicit session config."""
         import random
 
-        base_map = {"morning": 0.8, "afternoon": 0.4, "evening": 1.8, "night": 0.2}
-        gap = base_map.get(config.get("day_part"), 0.5)
-        gap += float(config.get("occupants", 2)) * 0.15
-
-        ac_map = {"off": 0.0, "low": 0.4, "medium": 0.9, "high": 1.8}
-        ac_base = ac_map.get(config.get("ac_level"), 0.0)
-        if float(config.get("temperature", 25.0)) > 30.0:
-            ac_base *= 1.25
-        gap += ac_base
-        if config.get("washing_machine"):
-            gap += 0.8
-        if config.get("day_part") in ("morning", "afternoon"):
-            gap += {"off": 0.0, "low": -0.4, "high": -1.2}.get(config.get("solar"), 0.0)
-
-        gap = max(0.02, gap + random.uniform(-0.08, 0.08))
+        base_load = float(config.get("base_load_kw", DEFAULT_CONFIGURATION["base_load_kw"]))
+        variation = float(config.get("variation_percent", DEFAULT_CONFIGURATION["variation_percent"])) / 100.0
+        gap = max(0.02, base_load * (1.0 + random.uniform(-variation, variation)))
         voltage = 230.0 + random.uniform(-1.0, 1.0)
         return {
             "active_power_kw": round(gap, 3),
             "reactive_power_kvar": round(gap * 0.08 + random.uniform(-0.01, 0.01), 3),
             "voltage_v": round(voltage, 1),
             "current_a": round((gap * 1000.0) / voltage, 2),
-            "sub_metering_1_wh": round(max(0.0, (800.0 if config.get("washing_machine") else 50.0) + random.uniform(-10.0, 10.0)), 2),
-            "sub_metering_2_wh": round(max(0.0, gap * 150.0 + random.uniform(-15.0, 15.0)), 2),
-            "sub_metering_3_wh": round(max(0.0, ac_base * 1000.0 + random.uniform(-20.0, 20.0)), 2),
             "timestamp": datetime.now(timezone.utc),
         }
 

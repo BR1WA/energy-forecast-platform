@@ -175,15 +175,15 @@ class TestMeterIngestion(unittest.TestCase):
         self.assertFalse(status_response.json()["is_running"])
 
     def test_simulator_configuration_is_strict_and_bounded(self):
-        too_many_occupants = client.post(
+        excessive_load = client.post(
             "/api/v1/simulation/configure",
             headers=self.headers,
-            json={"occupants": 99},
+            json={"base_load_kw": 99},
         )
         unknown_field = client.post(
             "/api/v1/simulation/configure",
             headers=self.headers,
             json={"unsupported": True},
         )
-        self.assertEqual(too_many_occupants.status_code, 422)
+        self.assertEqual(excessive_load.status_code, 422)
         self.assertEqual(unknown_field.status_code, 422)

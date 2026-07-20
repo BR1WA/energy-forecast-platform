@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import math
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -193,8 +194,12 @@ def test_packaged_tft_returns_ordered_24_hour_quantiles():
         add_complete_history(db, user.id)
 
         result = ProductForecastService().generate(db, user.id)
+        repeated = ProductForecastService().generate(db, user.id)
         assert result["method"] == "global_tft"
         assert len(result["prediction_rows"]) == 24
+        assert result["prediction_rows"] == repeated["prediction_rows"]
+        assert math.isfinite(result["inference_seconds"])
+        assert result["inference_seconds"] >= 0
         for median, lower, upper in result["prediction_rows"]:
             assert 0 <= lower <= median <= upper
     finally:

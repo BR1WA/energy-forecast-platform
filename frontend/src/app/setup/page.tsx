@@ -55,7 +55,7 @@ export default function SetupWizard() {
         site_name: siteName.trim() || 'My site', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Casablanca',
         country: 'Morocco', region, electricity_provider: provider, currency: 'MAD',
         peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22,
-        sensor_type: dataPath, sensor_api_url: null,
+        sensor_type: dataPath,
       });
       await settingsApi.setBudget({ monthly_budget_mad: Number(budget) || 0 });
       if (dataPath === 'csv' && csvFile && meterId) await ingestionApi.importCsv(meterId, csvFile);
