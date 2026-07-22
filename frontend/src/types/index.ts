@@ -23,7 +23,6 @@ export interface AuthTokens {
 
 export interface LoginResponse {
   access_token: string;
-  refresh_token: string;
   token_type: string;
   user: User;
 }
@@ -252,6 +251,7 @@ export interface AlertConfig {
   high_consumption_threshold: number;
   cooldown_minutes: number;
   missing_data_minutes: number;
+  email_enabled?: boolean;
 }
 
 export interface Recommendation {
@@ -364,6 +364,7 @@ export interface AlertConfigResponse {
   threshold_kw: number;
   cooldown_minutes: number;
   missing_data_minutes: number;
+  email_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

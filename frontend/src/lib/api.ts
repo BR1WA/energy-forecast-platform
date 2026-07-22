@@ -32,25 +32,13 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost
 // ============================================================
 // Token helpers
 // ============================================================
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
-}
+let accessToken: string | null = null;
 
-function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('refresh_token');
-}
+function getAccessToken(): string | null { return accessToken; }
 
-function setTokens(access: string, refresh: string) {
-  localStorage.setItem('access_token', access);
-  localStorage.setItem('refresh_token', refresh);
-}
+function setTokens(access: string) { accessToken = access; }
 
-function clearTokens() {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-}
+function clearTokens() { accessToken = null; }
 
 // ============================================================
 // Core fetch wrapper
@@ -91,14 +79,10 @@ function getApiErrorMessage(payload: unknown, status: number): string {
 let refreshPromise: Promise<string | null> | null = null;
 
 async function performTokenRefresh(): Promise<string | null> {
-  const refresh = getRefreshToken();
-  if (!refresh) return null;
-
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refresh }),
+      credentials: 'include',
     });
 
     if (!res.ok) {
@@ -107,11 +91,11 @@ async function performTokenRefresh(): Promise<string | null> {
     }
 
     const data = await res.json();
-    if (!data.refresh_token) {
+    if (!data.access_token) {
       clearTokens();
       return null;
     }
-    setTokens(data.access_token, data.refresh_token);
+    setTokens(data.access_token);
     return data.access_token;
   } catch {
     clearTokens();
@@ -152,6 +136,7 @@ async function apiFetch<T>(
   let res = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...rest,
     headers,
+    credentials: 'include',
   });
 
   // If 401, try refreshing the token
@@ -162,6 +147,7 @@ async function apiFetch<T>(
       res = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...rest,
         headers,
+        credentials: 'include',
       });
     } else {
       clearTokens();
@@ -213,6 +199,8 @@ export const authApi = {
 
   getMe: (): Promise<User> => apiFetch('/api/v1/auth/me'),
 
+  refresh: (): Promise<{ access_token: string }> => apiFetch('/api/v1/auth/refresh', { method: 'POST', skipAuth: true }),
+
   logout: (): Promise<{ message: string }> =>
     apiFetch('/api/v1/auth/logout', { method: 'POST' }),
 
@@ -241,6 +229,15 @@ export const authApi = {
     apiFetch('/api/v1/auth/me/avatar', {
       method: 'DELETE',
     }),
+
+  requestPasswordReset: (email: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }), skipAuth: true }),
+  confirmPasswordReset: (token: string, new_password: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify({ token, new_password }), skipAuth: true }),
+  confirmVerification: (token: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/verification/confirm', { method: 'POST', body: JSON.stringify({ token }), skipAuth: true }),
+};
+
+export const accountApi = {
+  exportData: (): Promise<Blob> => apiFetch('/api/v1/account/export', { isBlob: true }),
+  deleteAccount: (current_password: string): Promise<{ message: string }> => apiFetch('/api/v1/account', { method: 'DELETE', body: JSON.stringify({ current_password }) }),
 };
 
 // ============================================================
@@ -303,6 +300,7 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
+      email_enabled: raw.email_enabled,
     };
   },
 
@@ -311,6 +309,7 @@ export const alertsApi = {
       threshold_kw: config.high_consumption_threshold,
       cooldown_minutes: config.cooldown_minutes,
       missing_data_minutes: config.missing_data_minutes,
+      email_enabled: config.email_enabled ?? false,
     };
     const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config', {
       method: 'POST',
@@ -320,6 +319,7 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
+      email_enabled: raw.email_enabled,
     };
   },
 

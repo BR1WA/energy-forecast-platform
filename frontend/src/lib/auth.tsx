@@ -9,7 +9,7 @@ import React, {
   type ReactNode,
 } from 'react';
 import type { User, LoginPayload, RegisterPayload } from '@/types';
-import { authApi, setTokens, clearTokens, getAccessToken } from '@/lib/api';
+import { authApi, setTokens, clearTokens } from '@/lib/api';
 
 // ============================================================
 // Auth Context Types
@@ -35,31 +35,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check existing session on mount
   useEffect(() => {
-    const token = getAccessToken();
-    if (token) {
-      authApi
-        .getMe()
+    authApi
+        .refresh()
+        .then((session) => {
+          setTokens(session.access_token);
+          return authApi.getMe();
+        })
         .then((userData) => setUser(userData))
         .catch(() => {
           clearTokens();
           setUser(null);
         })
         .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
   }, []);
 
   const login = useCallback(async (payload: LoginPayload) => {
     const response = await authApi.login(payload);
-    setTokens(response.access_token, response.refresh_token);
+    setTokens(response.access_token);
     setUser(response.user);
     return response.user;
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const response = await authApi.register(payload);
-    setTokens(response.access_token, response.refresh_token);
+    setTokens(response.access_token);
     setUser(response.user);
     return response.user;
   }, []);

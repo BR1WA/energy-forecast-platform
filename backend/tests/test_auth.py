@@ -32,6 +32,7 @@ client = TestClient(app)
 class TestAuthAndTokens(unittest.TestCase):
     def setUp(self):
         app.dependency_overrides[get_db] = override_get_db
+        client.cookies.clear()
         Base.metadata.create_all(bind=engine)
         self.db = TestingSessionLocal()
 
@@ -51,10 +52,11 @@ class TestAuthAndTokens(unittest.TestCase):
         self.assertEqual(res.status_code, 201)
         data = res.json()
         self.assertIn("access_token", data)
-        self.assertIn("refresh_token", data)
+        self.assertNotIn("refresh_token", data)
 
         # Verify token is persisted in DB
-        refresh_token = data["refresh_token"]
+        refresh_token = res.cookies.get("refresh_token")
+        self.assertIsNotNone(refresh_token)
         token_hash = hashlib.sha256(refresh_token.encode('utf-8')).hexdigest()
         db_token = self.db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
         self.assertIsNotNone(db_token)
@@ -115,10 +117,11 @@ class TestAuthAndTokens(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertIn("access_token", data)
-        self.assertIn("refresh_token", data)
+        self.assertNotIn("refresh_token", data)
 
         # Verify token in DB
-        refresh_token = data["refresh_token"]
+        refresh_token = res.cookies.get("refresh_token")
+        self.assertIsNotNone(refresh_token)
         token_hash = hashlib.sha256(refresh_token.encode('utf-8')).hexdigest()
         db_token = self.db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
         self.assertIsNotNone(db_token)
@@ -139,16 +142,17 @@ class TestAuthAndTokens(unittest.TestCase):
         login_res = client.post("/api/v1/auth/login", json={"email": "refreshuser@example.com", "password": "refreshpassword123"})
         self.assertEqual(login_res.status_code, 200)
         tokens = login_res.json()
-        first_refresh = tokens["refresh_token"]
+        first_refresh = login_res.cookies.get("refresh_token")
+        self.assertIsNotNone(first_refresh)
 
         # 1. Refresh using first token
-        refresh_res = client.post("/api/v1/auth/refresh", json={"refresh_token": first_refresh})
+        refresh_res = client.post("/api/v1/auth/refresh")
         self.assertEqual(refresh_res.status_code, 200)
         refresh_data = refresh_res.json()
         self.assertIn("access_token", refresh_data)
-        self.assertIn("refresh_token", refresh_data)
+        self.assertNotIn("refresh_token", refresh_data)
         
-        second_refresh = refresh_data["refresh_token"]
+        second_refresh = refresh_res.cookies.get("refresh_token")
         self.assertNotEqual(first_refresh, second_refresh)
 
         # Verify first token is revoked in DB, second is active
@@ -164,11 +168,13 @@ class TestAuthAndTokens(unittest.TestCase):
         self.assertEqual(second_db.is_revoked, False)
 
         # 2. Replay prevention: try to refresh using first_refresh again -> should fail
-        replay_res = client.post("/api/v1/auth/refresh", json={"refresh_token": first_refresh})
+        client.cookies.set("refresh_token", first_refresh, path="/api/v1/auth")
+        replay_res = client.post("/api/v1/auth/refresh")
         self.assertEqual(replay_res.status_code, 401)
 
         # 3. Refresh using second_refresh -> should succeed
-        refresh_res2 = client.post("/api/v1/auth/refresh", json={"refresh_token": second_refresh})
+        client.cookies.set("refresh_token", second_refresh, path="/api/v1/auth")
+        refresh_res2 = client.post("/api/v1/auth/refresh")
         self.assertEqual(refresh_res2.status_code, 200)
 
     def test_logout_revokes_tokens(self):
@@ -186,13 +192,12 @@ class TestAuthAndTokens(unittest.TestCase):
         login_res = client.post("/api/v1/auth/login", json={"email": "logoutuser@example.com", "password": "logoutpassword123"})
         tokens = login_res.json()
         access_token = tokens["access_token"]
-        refresh_token = tokens["refresh_token"]
+        refresh_token = login_res.cookies.get("refresh_token")
         token_hash = hashlib.sha256(refresh_token.encode('utf-8')).hexdigest()
 
-        # Logout with token in body
+        # Logout reads the HttpOnly cookie rather than a JavaScript-visible body token.
         logout_res = client.post(
             "/api/v1/auth/logout",
-            json={"refresh_token": refresh_token},
             headers={"Authorization": f"Bearer {access_token}"}
         )
         self.assertEqual(logout_res.status_code, 200)
@@ -202,7 +207,7 @@ class TestAuthAndTokens(unittest.TestCase):
         self.assertEqual(db_token.is_revoked, True)
 
         # Try to refresh -> should fail
-        refresh_res = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+        refresh_res = client.post("/api/v1/auth/refresh")
         self.assertEqual(refresh_res.status_code, 401)
 
     def test_logout_without_body_revokes_all_user_sessions(self):
@@ -230,10 +235,7 @@ class TestAuthAndTokens(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            client.post(
-                "/api/v1/auth/refresh",
-                json={"refresh_token": second["refresh_token"]},
-            ).status_code,
+            client.post("/api/v1/auth/refresh").status_code,
             401,
         )
 
@@ -279,4 +281,4 @@ class TestAuthAndTokens(unittest.TestCase):
         self.assertEqual(change_res.status_code, 200)
         self.assertIn("Sign in again", change_res.json()["message"])
         self.assertTrue(all(token.is_revoked for token in self.db.query(RefreshToken).filter(RefreshToken.user_id == user.id).all()))
-        self.assertEqual(client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}).status_code, 401)
+        self.assertEqual(client.post("/api/v1/auth/refresh").status_code, 401)
