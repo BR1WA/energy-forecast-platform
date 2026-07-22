@@ -6,15 +6,29 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Alert, User
+from app.models import Alert, AlertConfig, User
 from app.schemas import AlertConfigCreate, AlertConfigResponse, AlertResponse
-from app.services.alert_service import alert_service
+from app.services.alert_service import alert_service, critical_email_delivery_status
 from app.services.audit_service import record_audit_event
 from app.services.auth_service import get_current_user
 from app.services.site_service import ensure_default_site
 
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
+
+
+def _config_response(config: AlertConfig, current_user: User) -> AlertConfigResponse:
+    available, reason = critical_email_delivery_status(current_user)
+    return AlertConfigResponse(
+        id=config.id,
+        threshold_kw=config.threshold_kw,
+        cooldown_minutes=config.cooldown_minutes,
+        missing_data_minutes=config.missing_data_minutes,
+        email_enabled=bool(config.email_enabled),
+        email_delivery_available=available,
+        email_delivery_unavailable_reason=reason,
+        created_at=config.created_at,
+    )
 
 
 def _state(alert: Alert) -> str:
@@ -153,7 +167,7 @@ def get_alert_config(
     config = alert_service.config_for_site(db, site)
     db.commit()
     db.refresh(config)
-    return AlertConfigResponse.model_validate(config)
+    return _config_response(config, current_user)
 
 
 @router.post("/config", response_model=AlertConfigResponse)
@@ -164,6 +178,16 @@ def update_alert_config(
 ):
     site = ensure_default_site(db, current_user.id)
     config = alert_service.config_for_site(db, site)
+    email_available, email_unavailable_reason = critical_email_delivery_status(current_user)
+    if data.email_enabled and not email_available and not config.email_enabled:
+        if email_unavailable_reason == "email_unverified":
+            message = "Verify your current email before enabling critical-alert delivery."
+        else:
+            message = "Critical-alert email delivery is not configured."
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "alert_email_delivery_unavailable", "message": message},
+        )
     config.threshold_kw = data.threshold_kw
     config.cooldown_minutes = data.cooldown_minutes
     config.missing_data_minutes = data.missing_data_minutes
@@ -178,4 +202,4 @@ def update_alert_config(
     )
     db.commit()
     db.refresh(config)
-    return AlertConfigResponse.model_validate(config)
+    return _config_response(config, current_user)

@@ -289,7 +289,7 @@ class AlertConfig(Base):
     threshold_kw = Column(Float, nullable=False, default=3.0)
     cooldown_minutes = Column(Integer, nullable=False, default=60)
     missing_data_minutes = Column(Integer, nullable=False, default=60)
-    email_enabled = Column(Boolean, default=False)
+    email_enabled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

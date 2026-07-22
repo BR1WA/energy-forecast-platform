@@ -14,6 +14,15 @@ from app.services.recommendation_service import recommendation_service
 logger = logging.getLogger(__name__)
 
 
+def critical_email_delivery_status(user: User) -> tuple[bool, str | None]:
+    """Return whether this account may opt in to critical-alert delivery."""
+    if not get_settings().EMAIL_DELIVERY_ENABLED:
+        return False, "mail_disabled"
+    if user.email_verified_at is None:
+        return False, "email_unverified"
+    return True, None
+
+
 def _as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
@@ -111,15 +120,22 @@ class AlertService:
         recommendation_service.create_for_alert(db, alert)
         if severity == "critical" and config.email_enabled:
             user = db.query(User).filter(User.id == site.user_id).first()
-            if user and user.email_verified_at and get_settings().EMAIL_DELIVERY_ENABLED:
+            if user and critical_email_delivery_status(user)[0]:
                 public_url = get_settings().PUBLIC_FRONTEND_URL.rstrip("/")
                 enqueue_email(
                     db,
                     user_id=user.id,
                     recipient=user.email,
                     template="critical_alert",
-                    dedup_key=f"critical-alert:{alert.id}",
-                    payload={"title": alert.alert_type.replace("_", " ").title(), "message": message, "url": f"{public_url}/alerts"},
+                    dedup_key=f"critical-alert:{alert.id}:{user.id}",
+                    payload={
+                        "alert_id": alert.id,
+                        "title": alert.alert_type.replace("_", " ").title(),
+                        "message": message,
+                        "evidence": dict(alert.evidence_json or {}),
+                        "timezone": site.timezone,
+                        "url": f"{public_url}/alerts#alert-{alert.id}",
+                    },
                 )
         return alert
 

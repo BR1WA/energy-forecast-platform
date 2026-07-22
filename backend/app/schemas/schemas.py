@@ -376,6 +376,8 @@ class AlertConfigResponse(BaseModel):
     cooldown_minutes: int
     missing_data_minutes: int
     email_enabled: bool
+    email_delivery_available: bool
+    email_delivery_unavailable_reason: Optional[Literal["mail_disabled", "email_unverified"]] = None
     created_at: datetime
 
 class AlertResponse(BaseModel):
