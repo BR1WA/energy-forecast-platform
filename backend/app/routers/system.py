@@ -25,6 +25,9 @@ def build_readiness(db: Session) -> dict:
     forecast = product_forecast_service.warmup()
     forecast_ready = bool(forecast["available"] and forecast.get("warmed"))
     ready = database_ready and forecast_ready
+    forecast_artifacts = {"24": forecast}
+    if product_forecast_service.is_enabled(168):
+        forecast_artifacts["168"] = product_forecast_service.warmup(168)
     return {
         "status": "ready" if ready else "not_ready",
         "ready": ready,
@@ -41,6 +44,7 @@ def build_readiness(db: Session) -> dict:
             "warmed": bool(forecast.get("warmed")),
             "error": forecast["error"],
         },
+        "forecast_artifacts": forecast_artifacts,
         "uptime_seconds": int(time.time() - START_TIME),
     }
 

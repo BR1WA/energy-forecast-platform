@@ -223,6 +223,9 @@ class PasswordUpdate(BaseModel):
 
 class ForecastModelStatus(BaseModel):
     available: bool
+    enabled: bool = True
+    warmed: bool = False
+    horizon_hours: Literal[24, 168] = 24
     name: str
     display_name: str
     version: str
@@ -230,7 +233,24 @@ class ForecastModelStatus(BaseModel):
     error: Optional[str] = None
 
 
+class ForecastCapability(BaseModel):
+    horizon_hours: Literal[24, 168]
+    label: str
+    description: str
+    model: ForecastModelStatus
+
+
+class ForecastCapabilitiesResponse(BaseModel):
+    default_horizon_hours: Literal[24] = 24
+    capabilities: List[ForecastCapability]
+
+
+class ForecastRunRequest(BaseModel):
+    horizon_hours: Literal[24, 168] = 24
+
+
 class ForecastReadiness(BaseModel):
+    horizon_hours: Literal[24, 168] = 24
     status: Literal["ready", "fallback_ready", "insufficient_data"]
     ready_for_tft: bool
     fallback_available: bool
@@ -288,6 +308,7 @@ class ProductForecastHistoryItem(BaseModel):
     id: int
     model_name: str
     method: str
+    horizon_hours: int
     forecast_start: Optional[datetime] = None
     created_at: datetime
 
@@ -380,6 +401,7 @@ class ReportForecastItem(BaseModel):
     id: int
     model_name: str
     method: str
+    horizon_hours: int
     created_at: datetime
     forecast_start: Optional[datetime] = None
     peak_hourly_kwh: Optional[float] = None

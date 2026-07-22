@@ -1,4 +1,4 @@
-"""Inference architecture for the production 24-hour Global TFT artifact."""
+"""Horizon-dynamic inference architecture for fixed production Global TFT artifacts."""
 from __future__ import annotations
 
 import torch
@@ -58,7 +58,7 @@ class VariableSelectionNetwork(nn.Module):
 
 
 class GlobalTFT(nn.Module):
-    """Architecture matching the packaged ``global_tft/day_24h`` checkpoint."""
+    """Architecture shared by the independently packaged 24h and 168h checkpoints."""
 
     def __init__(
         self,

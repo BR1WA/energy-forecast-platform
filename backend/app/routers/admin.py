@@ -12,7 +12,7 @@ from app.models import User, Forecast, Alert
 from app.schemas import UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role
 from app.services.audit_service import record_audit_event
-from app.services.product_forecast_service import FALLBACK_NAME, MODEL_NAME, product_forecast_service
+from app.services.product_forecast_service import PRODUCT_MODEL_NAMES, product_forecast_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
@@ -130,7 +130,7 @@ def system_health(
     return SystemHealth(
         status="operational" if db_status == "healthy" and model["available"] and model["warmed"] else "degraded",
         total_users=db.query(User).count(),
-        total_forecasts=db.query(Forecast).filter(Forecast.model_name.in_([MODEL_NAME, FALLBACK_NAME])).count(),
+        total_forecasts=db.query(Forecast).filter(Forecast.model_name.in_(PRODUCT_MODEL_NAMES)).count(),
         database_status=db_status,
         forecast_status="ready" if model["available"] and model["warmed"] else "not_ready",
         forecast_error=model["error"],
@@ -170,3 +170,17 @@ def model_readiness(
 ):
     """Return fixed packaged-artifact status without mutation controls."""
     return product_forecast_service.warmup()
+
+
+@router.get("/model-readiness/all")
+def all_model_readiness(
+    current_user: User = Depends(require_role(["admin"])),
+):
+    """Return independent readiness for every fixed forecast artifact."""
+    del current_user
+    return {
+        "artifacts": [
+            product_forecast_service.warmup(),
+            product_forecast_service.warmup(168),
+        ]
+    }
