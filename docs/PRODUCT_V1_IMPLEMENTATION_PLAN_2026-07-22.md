@@ -4,7 +4,7 @@
 **Base revision:** `102f8cd` (`main`, merged PFE pull request #2)  
 **Plan date:** 2026-07-22  
 **Target:** client-ready Product V1  
-**Status:** Ready for implementation  
+**Status:** G0-G5 complete; G6-G7 pending  
 **Timebox:** approximately one focused week, followed by release review  
 **Scope owner:** this document supersedes the short Product V1 outline in
 `docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md` where details conflict.
@@ -18,7 +18,8 @@
 | G2 - Transactional email | Complete | Transactional deduplicated outbox, PostgreSQL `SKIP LOCKED` leases, provider-neutral multipart delivery, bounded dead-letter retry, optional readiness, and outage/concurrency/leakage tests |
 | G3 - Verification and recovery | Complete | Unverified registration without a session, hashed single-use action tokens with sealed render-time delivery, neutral rate-limited journeys, session-revoking reset, and frontend/browser coverage |
 | G4 - Cookie sessions and Google identity | Complete | HttpOnly refresh-cookie rotation with Origin enforcement, server-verified Google challenges, password-confirmed linking, safe unlink/session revocation, capability-gated UI, and negative/race/browser tests |
-| G5-G7 | Pending | Intentionally not implemented or validated in this recovery run |
+| G5 - Critical-alert email | Complete | Verified opt-in gating, transactional per-alert delivery, evidence-complete multipart templates, provider-outage isolation, and backend/browser coverage |
+| G6-G7 | Pending | Product hardening and clean-clone release validation remain intentionally out of scope for the G5 run |
 
 ## 1. Outcome
 

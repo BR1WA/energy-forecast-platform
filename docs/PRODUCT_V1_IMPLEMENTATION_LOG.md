@@ -93,18 +93,74 @@
 The isolated production image check used `FORECAST_168H_ENABLED=true` and loaded
 both checkpoints with Torch without starting or changing the local database stack.
 
-## G2-G7 - Product operations, account safety, and delivery
+## G2 - Transactional email
 
-**Status:** Complete in the release branch; external SMTP and Google credentials remain operator-provisioned feature flags.
+**Status:** Complete
 
-- Added a deduplicated transactional email outbox, exponential retry worker, SMTP provider, CLI command, and Compose worker.
-- Added single-use hashed verification and password-reset tokens, generic reset responses, and browser-inaccessible HttpOnly refresh cookies. Access tokens now live only in browser memory.
-- Added critical-email alert opt-in, account JSON export/deletion, durable avatar volume configuration, and public privacy, terms, and support pages.
-- Added data-export/delete controls to Settings, performance indexes for delivery/action-token lookup, and high-severity dependency auditing in CI.
-- Existing accounts are marked verified during migration to avoid a disruptive lockout; new verification mail is available when email delivery is enabled and configured.
+- Added a caller-transaction-owned, deterministically deduplicated outbox.
+- Added PostgreSQL `FOR UPDATE SKIP LOCKED` claiming, expiring leases, bounded
+  retry/backoff, dead-letter state, and audited manual retry.
+- Added provider-neutral SMTP/test delivery, multipart templates, sanitized
+  logging, and optional mail readiness.
+
+## G3 - Verification and recovery
+
+**Status:** Complete
+
+- New local registrations remain unverified and receive no session.
+- Action-token SHA-256 hashes are stored separately from sealed render-time mail
+  payloads; raw tokens are not persisted.
+- Verification and reset are atomic and single-use, resend/reset requests are
+  neutral and rate-limited, and password reset revokes all sessions.
+- Added verification, resend, forgot-password, and reset-password browser states.
+
+## G4 - Cookie sessions and Google identity
+
+**Status:** Complete
+
+- Refresh credentials remain in HttpOnly cookies and server-side hashes with
+  rotation, replay prevention, Origin enforcement, logout, and logout-all.
+- Google credentials and one-time state/nonce challenges are validated server-side.
+- Linking requires an authenticated session and recent local-password
+  confirmation; unlinking protects the final usable login method and revokes
+  sessions.
+
+## G5 - Critical-alert email
+
+**Status:** Complete
+
+- Critical-alert mail is an explicit opt-in available only when delivery is
+  configured and the current account email is verified. Existing and new alert
+  configurations default to opt-out at the database layer.
+- Each newly persisted critical alert enqueues at most one logical message in the
+  alert transaction with dedup key `critical-alert:{alert_id}:{user_id}`.
+- Messages contain only persisted meter evidence, observed local time/timezone,
+  configured threshold, source label, and an owner-scoped alert link.
+- High/medium alerts and acknowledge/resolve/reopen actions do not enqueue mail.
+  SMTP failures affect only outbox delivery state, never alert or ingestion state.
+- Alert settings expose active, opted-out, unverified, and mail-unavailable states
+  truthfully.
+
+### G2-G5 validation evidence
+
+| Gate | Result |
+|---|---|
+| Backend full suite on PostgreSQL | `87 passed` |
+| G5 focused backend suite | `26 passed` after the final cooldown/medium additions |
+| Fresh Alembic upgrade | Reached `a8d4c6e2f105` |
+| PFE-head Alembic upgrade | Reached `a8d4c6e2f105`; legacy preference normalized to false/non-null |
+| Frontend ESLint | Passed |
+| Frontend TypeScript | Passed |
+| Next.js production build | Passed as part of the browser web-server gate |
+| Controlled Chromium journeys | `6 passed` |
+
+External SMTP and Google credentials remain operator-provisioned feature flags.
+G6 product/operational hardening and G7 clean-clone release validation are still
+pending.
 
 ## Next gate
 
-G2 introduces the transactional email outbox, provider abstraction, delivery
-worker, retry/deduplication rules, health detail, and captured-mail tests. Email
-and Google remain disabled and invisible after G0-G1.
+G6 adds durable avatar lifecycle and restore coverage, final legal/support
+content, complete owner-scoped export and deletion, measured PostgreSQL
+performance evidence, the full browser matrix, security scanning, backup/restore
+rehearsal, and operations documentation.
