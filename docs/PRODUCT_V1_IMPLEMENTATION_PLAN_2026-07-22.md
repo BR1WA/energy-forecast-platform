@@ -4,7 +4,7 @@
 **Base revision:** `102f8cd` (`main`, merged PFE pull request #2)  
 **Plan date:** 2026-07-22  
 **Target:** client-ready Product V1  
-**Status:** G0-G5 complete; G6-G7 pending  
+**Status:** G0-G5 complete; G6-G7 pending
 **Timebox:** approximately one focused week, followed by release review  
 **Scope owner:** this document supersedes the short Product V1 outline in
 `docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md` where details conflict.
