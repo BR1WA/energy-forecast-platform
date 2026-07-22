@@ -117,20 +117,55 @@ test('Google login is capability-gated and uses a controlled credential flow', a
   expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: [], session: [] });
 });
 
-test('local login reloads from the HttpOnly session and logout sends no refresh token body', async ({ page }) => {
+test('local login keeps the refresh credential out of JSON and browser storage', async ({ page }) => {
+  let loginBody = '';
+  await page.route(`${API}/**`, async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ status: 401, json: {} });
+    if (pathname === '/api/v1/auth/capabilities') return route.fulfill({ json: { email_delivery_enabled: true, google_auth_enabled: false, google_client_id: null } });
+    if (pathname === '/api/v1/auth/login') {
+      loginBody = request.postData() ?? '';
+      return route.fulfill({ json: { access_token: 'memory-local-access-token', token_type: 'bearer', user: USER } });
+    }
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    return route.fulfill({ status: 200, json: {} });
+  });
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('browser@example.com');
+  await page.getByLabel('Password').fill('browser-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  expect(JSON.parse(loginBody)).toEqual({ email: 'browser@example.com', password: 'browser-password' });
+  expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: [], session: [] });
+  expect((await page.context().cookies()).filter((cookie) => cookie.name === 'refresh_token')).toEqual([]);
+});
+
+test('concurrent expired requests share one refresh, reload restores, and logout has no token body', async ({ page }) => {
   let refreshCalls = 0;
   let logoutBody = 'unset';
+  let settingsAttempts = 0;
+  let budgetAttempts = 0;
   await page.route(`${API}/**`, async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     if (pathname === '/api/v1/auth/refresh') {
       refreshCalls += 1;
+      if (refreshCalls === 2) await new Promise((resolve) => setTimeout(resolve, 100));
       return route.fulfill({ json: { access_token: `memory-token-${refreshCalls}`, token_type: 'bearer' } });
     }
     if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
     if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
-    if (pathname === '/api/v1/settings') return route.fulfill({ json: { country: 'Morocco', region: 'Casablanca-Settat', electricity_provider: 'ONEE', currency: 'MAD', peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22, sensor_type: 'simulator' } });
-    if (pathname === '/api/v1/settings/budget') return route.fulfill({ json: null });
+    if (pathname === '/api/v1/settings') {
+      settingsAttempts += 1;
+      if (settingsAttempts === 1) return route.fulfill({ status: 401, json: { detail: { code: 'access_expired', message: 'Expired' } } });
+      return route.fulfill({ json: { country: 'Morocco', region: 'Casablanca-Settat', electricity_provider: 'ONEE', currency: 'MAD', peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22, sensor_type: 'simulator' } });
+    }
+    if (pathname === '/api/v1/settings/budget') {
+      budgetAttempts += 1;
+      if (budgetAttempts === 1) return route.fulfill({ status: 401, json: { detail: { code: 'access_expired', message: 'Expired' } } });
+      return route.fulfill({ json: null });
+    }
     if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [] });
     if (pathname === '/api/v1/auth/logout') {
       logoutBody = request.postData() ?? '';
@@ -141,8 +176,9 @@ test('local login reloads from the HttpOnly session and logout sends no refresh 
   });
   await page.goto('/settings');
   await expect(page).toHaveURL(/\/settings/);
+  await expect.poll(() => refreshCalls).toBe(2);
   await page.reload();
-  expect(refreshCalls).toBe(2);
+  expect(refreshCalls).toBe(3);
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
 
   await page.locator('#sidebar-user-menu').click();

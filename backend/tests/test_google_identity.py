@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import AuthIdentity, RefreshToken, User
+from app.models import AuthIdentity, Meter, RefreshToken, Site, User
 from app.routers import auth as auth_router
 from app.services.auth_service import create_access_token, hash_password
 
@@ -89,6 +89,29 @@ def test_matching_email_cannot_silently_merge_on_google_login():
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "google_link_required"
     assert db.query(AuthIdentity).count() == 0
+    db.close()
+
+
+def test_new_google_user_gets_the_same_one_site_ownership_workflow():
+    db = SessionLocal()
+    client = TestClient(app)
+    challenge = client.post("/api/v1/auth/google/challenge", headers={"Origin": ORIGIN}).json()
+    claims = _claims(challenge["nonce"], email="new-google@example.com", subject="new-google-subject")
+    with patch.object(auth_router, "_unverified_google_nonce", return_value=challenge["nonce"]), patch.object(
+        auth_router, "_verified_google_identity", return_value=claims
+    ):
+        response = client.post(
+            "/api/v1/auth/google",
+            headers={"Origin": ORIGIN},
+            json={"credential": CREDENTIAL, "state": challenge["state"]},
+        )
+    assert response.status_code == 200
+    assert "refresh_token" not in response.json()
+    user = db.query(User).filter_by(email="new-google@example.com").one()
+    assert user.is_setup_complete is False
+    site = db.query(Site).filter_by(user_id=user.id).one()
+    meter = db.query(Meter).filter_by(site_id=site.id, is_primary=True).one()
+    assert meter.name == "Primary meter"
     db.close()
 
 
