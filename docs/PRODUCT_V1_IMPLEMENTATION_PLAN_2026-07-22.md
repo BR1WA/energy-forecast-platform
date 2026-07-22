@@ -15,7 +15,10 @@
 |---|---|---|
 | G0 - Baseline and contracts | Complete | Baseline frozen, flags default off, enabled integration configuration validated, typed forecast capability errors added |
 | G1 - 168-hour forecast | Complete | Independent artifact packaged, strict CPU warm-up passed, horizon-aware API/UI/reporting delivered, regression and Docker gates passed |
-| G2-G7 | Pending | Not started on this implementation slice |
+| G2 - Transactional email | Complete | Transactional deduplicated outbox, PostgreSQL `SKIP LOCKED` leases, provider-neutral multipart delivery, bounded dead-letter retry, optional readiness, and outage/concurrency/leakage tests |
+| G3 - Verification and recovery | Complete | Unverified registration without a session, hashed single-use action tokens with sealed render-time delivery, neutral rate-limited journeys, session-revoking reset, and frontend/browser coverage |
+| G4 - Cookie sessions and Google identity | Complete | HttpOnly refresh-cookie rotation with Origin enforcement, server-verified Google challenges, password-confirmed linking, safe unlink/session revocation, capability-gated UI, and negative/race/browser tests |
+| G5-G7 | Pending | Intentionally not implemented or validated in this recovery run |
 
 ## 1. Outcome
 

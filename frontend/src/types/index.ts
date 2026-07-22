@@ -13,6 +13,7 @@ export interface User {
   last_activity?: string;
   is_setup_complete?: boolean;
   preferences?: Record<string, any>;
+  email_verified_at?: string | null;
 }
 
 export interface AuthTokens {
@@ -25,6 +26,17 @@ export interface LoginResponse {
   access_token: string;
   token_type: string;
   user: User;
+}
+
+export interface RegistrationResponse {
+  message: string;
+  verification_required: boolean;
+}
+
+export interface AuthCapabilities {
+  email_delivery_enabled: boolean;
+  google_auth_enabled: boolean;
+  google_client_id?: string | null;
 }
 
 export interface RegisterPayload {

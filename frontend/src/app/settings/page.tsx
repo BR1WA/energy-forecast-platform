@@ -10,9 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
 import { API_BASE_URL, accountApi, authApi, ingestionApi, settingsApi } from '@/lib/api';
+import { requestGoogleCredential } from '@/lib/google';
 import type { PrimaryMeter } from '@/types';
 import { toast } from 'sonner';
-import { CheckCircle2, Clipboard, Database, KeyRound, PlayCircle, Radio, Settings2, Upload, Wallet } from 'lucide-react';
+import { CheckCircle2, Clipboard, Database, KeyRound, Link2, PlayCircle, Radio, Settings2, Unlink, Upload, Wallet } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 
 const initialSettings = {
@@ -41,6 +42,11 @@ export default function SettingsPage() {
   const [pushKey, setPushKey] = useState<string | null>(null);
   const [meterSaving, setMeterSaving] = useState(false);
   const [pushTesting, setPushTesting] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [googleLinked, setGoogleLinked] = useState(false);
+  const [googleCanUnlink, setGoogleCanUnlink] = useState(false);
+  const [googlePassword, setGooglePassword] = useState('');
+  const [googleSaving, setGoogleSaving] = useState(false);
 
   useEffect(() => {
     Promise.all([settingsApi.getSettings(), settingsApi.getBudget(), ingestionApi.getMeters()])
@@ -64,6 +70,18 @@ export default function SettingsPage() {
       .catch(() => toast.error('Unable to load site settings.'));
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
     if (requestedTab && ['site', 'data', 'budget', 'security'].includes(requestedTab)) setActiveTab(requestedTab);
+    authApi.getCapabilities()
+      .then(async (capabilities) => {
+        const browserClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+        const enabled = Boolean(capabilities.google_auth_enabled && browserClientId && capabilities.google_client_id === browserClientId);
+        setGoogleEnabled(enabled);
+        if (enabled) {
+          const identity = await authApi.googleStatus();
+          setGoogleLinked(identity.linked);
+          setGoogleCanUnlink(identity.can_unlink);
+        }
+      })
+      .catch(() => setGoogleEnabled(false));
   }, []);
 
   const refreshMeter = async () => {
@@ -158,6 +176,44 @@ export default function SettingsPage() {
     }
   };
 
+  const linkGoogle = async () => {
+    const browserClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!browserClientId || !googlePassword) {
+      toast.error('Enter your current password before linking Google.');
+      return;
+    }
+    setGoogleSaving(true);
+    try {
+      const challenge = await authApi.googleLinkChallenge();
+      const credential = await requestGoogleCredential(browserClientId, challenge.nonce);
+      const result = await authApi.linkGoogle(credential, challenge.state, googlePassword);
+      setGoogleLinked(true);
+      setGoogleCanUnlink(true);
+      setGooglePassword('');
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to link Google.');
+    } finally {
+      setGoogleSaving(false);
+    }
+  };
+
+  const unlinkGoogle = async () => {
+    if (!googlePassword) {
+      toast.error('Enter your current password before unlinking Google.');
+      return;
+    }
+    setGoogleSaving(true);
+    try {
+      const result = await authApi.unlinkGoogle(googlePassword);
+      toast.success(result.message);
+      window.location.href = '/login';
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to unlink Google.');
+      setGoogleSaving(false);
+    }
+  };
+
   const exportAccount = async () => {
     try {
       const blob = await accountApi.exportData();
@@ -245,7 +301,7 @@ export default function SettingsPage() {
             <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Monthly budget</CardTitle><CardDescription>Set the monthly limit used for your budget progress and alerts.</CardDescription></CardHeader><CardContent className="flex max-w-sm items-end gap-3"><div className="flex-1 space-y-2"><Label>Budget (MAD)</Label><Input type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></div><Button onClick={saveSiteSettings} disabled={saving}>Save</Button></CardContent></Card>
           </TabsContent>
           <TabsContent value="security" className="mt-6">
-            <div className="space-y-4"><Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card><Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Privacy controls</CardTitle><CardDescription>Download your owned data or permanently delete your account.</CardDescription></CardHeader><CardContent className="space-y-4"><Button onClick={exportAccount} variant="outline">Download my data</Button><div className="flex max-w-md gap-2"><Input aria-label="Password to delete account" onChange={(event) => setDeletionPassword(event.target.value)} placeholder="Current password" type="password" value={deletionPassword} /><Button onClick={deleteAccount} variant="destructive">Delete account</Button></div></CardContent></Card></div>
+            <div className="space-y-4"><Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card>{googleEnabled ? <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Google sign-in</CardTitle><CardDescription>{googleLinked ? 'Google is linked. Unlinking revokes every active session.' : 'Link the Google account with the same verified email.'}</CardDescription></CardHeader><CardContent className="max-w-md space-y-4"><div className="space-y-2"><Label htmlFor="google-current-password">Current password</Label><Input id="google-current-password" autoComplete="current-password" onChange={(event) => setGooglePassword(event.target.value)} type="password" value={googlePassword} /></div>{googleLinked ? <Button disabled={googleSaving || !googleCanUnlink} onClick={unlinkGoogle} variant="destructive"><Unlink />{googleSaving ? 'Unlinking...' : 'Unlink Google'}</Button> : <Button disabled={googleSaving} onClick={linkGoogle}><Link2 />{googleSaving ? 'Linking...' : 'Link Google'}</Button>}{googleLinked && !googleCanUnlink ? <p className="text-xs text-amber-300">Set a local password before removing your last usable sign-in method.</p> : null}</CardContent></Card> : null}<Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Privacy controls</CardTitle><CardDescription>Download your owned data or permanently delete your account.</CardDescription></CardHeader><CardContent className="space-y-4"><Button onClick={exportAccount} variant="outline">Download my data</Button><div className="flex max-w-md gap-2"><Input aria-label="Password to delete account" onChange={(event) => setDeletionPassword(event.target.value)} placeholder="Current password" type="password" value={deletionPassword} /><Button onClick={deleteAccount} variant="destructive">Delete account</Button></div></CardContent></Card></div>
           </TabsContent>
         </Tabs>
       </div>

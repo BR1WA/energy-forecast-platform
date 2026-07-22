@@ -1,6 +1,8 @@
 import type {
   LoginPayload,
   LoginResponse,
+  RegistrationResponse,
+  AuthCapabilities,
   RegisterPayload,
   User,
   ForecastReadiness,
@@ -74,6 +76,21 @@ function getApiErrorMessage(payload: unknown, status: number): string {
     return detail.message;
   }
   return `API error: ${status}`;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly code: string | null, public readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+function getApiErrorCode(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || !('detail' in payload)) return null;
+  const detail = payload.detail;
+  return detail && typeof detail === 'object' && 'code' in detail && typeof detail.code === 'string'
+    ? detail.code
+    : null;
 }
 
 let refreshPromise: Promise<string | null> | null = null;
@@ -169,7 +186,7 @@ async function apiFetch<T>(
         toast.error(message || 'Access denied.');
       }).catch(err => console.error('Failed to load sonner toast', err));
     }
-    throw new Error(message);
+    throw new ApiError(message, getApiErrorCode(errorData), res.status);
   }
 
   if (isBlob) {
@@ -183,6 +200,7 @@ async function apiFetch<T>(
 // Auth API
 // ============================================================
 export const authApi = {
+  getCapabilities: (): Promise<AuthCapabilities> => apiFetch('/api/v1/auth/capabilities', { skipAuth: true }),
   login: (payload: LoginPayload): Promise<LoginResponse> =>
     apiFetch('/api/v1/auth/login', {
       method: 'POST',
@@ -190,7 +208,7 @@ export const authApi = {
       skipAuth: true,
     }),
 
-  register: (payload: RegisterPayload): Promise<LoginResponse> =>
+  register: (payload: RegisterPayload): Promise<RegistrationResponse> =>
     apiFetch('/api/v1/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -203,6 +221,9 @@ export const authApi = {
 
   logout: (): Promise<{ message: string }> =>
     apiFetch('/api/v1/auth/logout', { method: 'POST' }),
+
+  logoutAll: (): Promise<{ message: string }> =>
+    apiFetch('/api/v1/auth/logout-all', { method: 'POST' }),
 
   updateProfile: (data: { full_name?: string }): Promise<User> =>
     apiFetch('/api/v1/auth/me', {
@@ -233,6 +254,13 @@ export const authApi = {
   requestPasswordReset: (email: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }), skipAuth: true }),
   confirmPasswordReset: (token: string, new_password: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify({ token, new_password }), skipAuth: true }),
   confirmVerification: (token: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/verification/confirm', { method: 'POST', body: JSON.stringify({ token }), skipAuth: true }),
+  resendVerification: (email: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/verification/resend', { method: 'POST', body: JSON.stringify({ email }), skipAuth: true }),
+  googleChallenge: (): Promise<{ state: string; nonce: string; expires_in_seconds: number }> => apiFetch('/api/v1/auth/google/challenge', { method: 'POST', skipAuth: true }),
+  googleLogin: (credential: string, state: string): Promise<LoginResponse> => apiFetch('/api/v1/auth/google', { method: 'POST', body: JSON.stringify({ credential, state }), skipAuth: true }),
+  googleLinkChallenge: (): Promise<{ state: string; nonce: string; expires_in_seconds: number }> => apiFetch('/api/v1/auth/google/link/challenge', { method: 'POST' }),
+  googleStatus: (): Promise<{ linked: boolean; can_unlink: boolean }> => apiFetch('/api/v1/auth/google/status'),
+  linkGoogle: (credential: string, state: string, current_password: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/google/link', { method: 'POST', body: JSON.stringify({ credential, state, current_password }) }),
+  unlinkGoogle: (current_password?: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/google/link', { method: 'DELETE', body: JSON.stringify({ current_password }) }),
 };
 
 export const accountApi = {

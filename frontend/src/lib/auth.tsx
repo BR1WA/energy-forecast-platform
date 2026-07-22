@@ -8,7 +8,7 @@ import React, {
   useCallback,
   type ReactNode,
 } from 'react';
-import type { User, LoginPayload, RegisterPayload } from '@/types';
+import type { User, LoginPayload, RegisterPayload, RegistrationResponse } from '@/types';
 import { authApi, setTokens, clearTokens } from '@/lib/api';
 
 // ============================================================
@@ -19,7 +19,8 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (payload: LoginPayload) => Promise<User>;
-  register: (payload: RegisterPayload) => Promise<User>;
+  loginWithGoogle: (credential: string, state: string) => Promise<User>;
+  register: (payload: RegisterPayload) => Promise<RegistrationResponse>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -56,11 +57,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return response.user;
   }, []);
 
-  const register = useCallback(async (payload: RegisterPayload) => {
-    const response = await authApi.register(payload);
+  const loginWithGoogle = useCallback(async (credential: string, state: string) => {
+    const response = await authApi.googleLogin(credential, state);
     setTokens(response.access_token);
     setUser(response.user);
     return response.user;
+  }, []);
+
+  const register = useCallback(async (payload: RegisterPayload) => {
+    const response = await authApi.register(payload);
+    setUser(null);
+    return response;
   }, []);
 
   const logout = useCallback(async () => {
@@ -91,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
         register,
         logout,
         refreshUser,
