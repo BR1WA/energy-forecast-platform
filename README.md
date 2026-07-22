@@ -4,7 +4,8 @@ EnergyAI is a Master's PFE platform for monitoring and forecasting electricity
 consumption for one household or small site. It gives each user one private
 site and primary meter, then turns validated meter readings into live and
 historical monitoring, tariff-aware cost tracking, alerts, recommendations,
-reports, and a truthful 24-hour forecast.
+reports, a truthful 24-hour forecast, and an independently gated 168-hour
+Product V1 forecast when the week artifact is enabled and ready.
 
 The product is deliberately focused: it is free to use, has two roles
 (admin and user), and exposes only workflows that are implemented and backed
@@ -16,7 +17,7 @@ by persisted data.
 Register -> configure one site -> import/connect/simulate readings
          -> monitor Live and historical periods
          -> understand energy, cost, freshness, and coverage
-         -> generate a gated 24-hour forecast
+         -> generate a gated day forecast (or advertised week forecast)
          -> review alerts and recommendations -> export reports
 ~~~
 
@@ -36,7 +37,9 @@ Register -> configure one site -> import/connect/simulate readings
 - Deterministic recommendations based on recorded alert evidence.
 - CSV and PDF exports containing ownership, source, coverage, tariff, and method
   context.
-- A packaged Global TFT model for the next 24 hourly kWh values. It runs only
+- Independently packaged Global TFT models for the next 24 or 168 hourly kWh
+  values. Day remains the stable default; Week appears only when its feature
+  flag, manifest, checkpoint, runtime, and warm-up gates pass. Forecasts run only
   when the 336-hour history, 95% coverage, maximum-gap, and finite-value gates
   pass; otherwise the UI explains the missing-data state or shows a labelled
   seasonal-naive fallback.
@@ -59,7 +62,7 @@ Next.js frontend (port 3000)
 FastAPI backend (port 8000)
           |
           +-- SQLAlchemy + Alembic -> SQLite locally or PostgreSQL in Compose
-          +-- packaged Global TFT artifact -> gated 24-hour inference
+          +-- fixed Global TFT artifacts -> gated 24h / optional 168h inference
           +-- alert/recommendation/report services
           +-- background missing-data alert worker
 ~~~
@@ -188,18 +191,21 @@ the backend starts.
 
 ## Forecast Contract
 
-The production forecast is intentionally limited to 24 hourly values. The
-Global TFT artifact requires:
+The stable default forecast contains 24 hourly values. Product V1 adds an
+independent 168-hour artifact behind `FORECAST_168H_ENABLED`; the frontend never
+shows Week unless the backend advertises a successful artifact warm-up. Both
+fixed Global TFT capabilities require:
 
 - 336 hourly input values
 - at least 95% observed coverage
 - no unresolved gap longer than 3 hours
 - finite, valid hourly energy values
 
-The UI displays the model name, version, source, coverage, target timestamps,
-quantiles, preprocessing provenance, inference method, and fallback reason.
-Research checkpoints and multi-household experiments are not loaded by the
-production service.
+The UI displays the selected horizon, model name, version, source, coverage,
+target timestamps, quantiles, preprocessing provenance, inference method, and
+fallback reason. The week chart groups 168 stored hourly targets into seven
+readable local-day totals; reports retain every hourly value. Research folders
+and experiment runs are not loaded by the production service.
 
 ## Quality Gates
 
@@ -239,7 +245,7 @@ Runtime checks:
 The following are intentionally deferred until independently validated and
 implemented:
 
-- 168-hour, weekly, and monthly production forecasting
+- Monthly production forecasting
 - Pull connectors to utility providers
 - Google authentication, email verification, password reset email, and alert
   email delivery
@@ -257,6 +263,8 @@ application honest and usable while leaving a clear Product V1 path.
 - PFE release notes: docs/PFE_RELEASE_NOTES.md
 - Product implementation plan: docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md
 - Forecast artifact contract: docs/FORECAST_ARTIFACT.md
+- 168-hour artifact evidence: docs/FORECAST_168H_ARTIFACT.md
+- Product V1 execution plan: docs/PRODUCT_V1_IMPLEMENTATION_PLAN_2026-07-22.md
 
 ## License and Academic Context
 

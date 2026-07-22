@@ -323,7 +323,9 @@ Docker deployment.
 **Branch:** `release/product-v1`  
 **Creation dependency:** PFE reviewed and merged  
 **Timebox:** approximately one week  
-**Status:** Deferred; do not implement on `release/pfe`.
+**Status:** Active on `release/product-v1`.
+
+**Detailed execution plan:** `docs/PRODUCT_V1_IMPLEMENTATION_PLAN_2026-07-22.md`
 
 ### 5.1 Included features
 

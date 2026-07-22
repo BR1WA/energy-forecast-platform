@@ -56,6 +56,16 @@ docker compose exec backend python -m app.cli create-admin
 Compose refuses to render when required secrets are missing. Production should
 keep `DEBUG=false`.
 
+The 168-hour forecast is disabled by default. After the packaged week artifact
+has passed its integrity and CPU warm-up checks, enable it explicitly:
+
+```dotenv
+FORECAST_168H_ENABLED=true
+```
+
+If the optional week artifact later fails, the backend keeps the accepted
+24-hour readiness independent and removes Week from advertised capabilities.
+
 ## Quality gates
 
 ```powershell
@@ -80,11 +90,14 @@ docker run --rm --env-file backend/.env energy-backend-test
 
 - `GET /health`: process liveness alias.
 - `GET /api/v1/system/live`: process liveness for orchestration.
-- `GET /api/v1/system/ready`: database and packaged Global TFT artifact warm-up.
+- `GET /api/v1/system/ready`: database and primary 24-hour Global TFT warm-up,
+  plus per-artifact details for any enabled optional horizon.
 - `GET /api/v1/system/health`: backward-compatible health summary.
 
-Readiness returns HTTP 503 when the database is unavailable or the fixed
-checkpoint fails integrity validation or warm-up. Liveness remains available so
+Readiness returns HTTP 503 when the database is unavailable or the primary
+24-hour checkpoint fails integrity validation or warm-up. An optional 168-hour
+failure is reported under `forecast_artifacts` without taking the stable day
+service offline. Liveness remains available so
 operators can distinguish a dead process from an unready dependency.
 
 ## Startup failure policy
