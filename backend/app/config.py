@@ -64,6 +64,55 @@ class Settings(BaseSettings):
     # Alert worker
     ALERT_WORKER_INTERVAL_SECONDS: int = 60
 
+    # Product V1 capabilities. New integrations stay invisible until an operator
+    # explicitly enables them and supplies their complete configuration.
+    FORECAST_168H_ENABLED: bool = False
+    EMAIL_DELIVERY_ENABLED: bool = False
+    GOOGLE_AUTH_ENABLED: bool = False
+
+    # Product V1 integration contract. Delivery and identity services are
+    # implemented in later gates, but G0 validates configuration atomically now.
+    PUBLIC_FRONTEND_URL: str = ""
+    EMAIL_FROM_ADDRESS: str = ""
+    SMTP_HOST: str = ""
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+
+    def validate_enabled_integrations(self) -> None:
+        """Reject partially configured capabilities without exposing secrets."""
+        missing: dict[str, list[str]] = {}
+        if self.EMAIL_DELIVERY_ENABLED:
+            required = {
+                "PUBLIC_FRONTEND_URL": self.PUBLIC_FRONTEND_URL,
+                "EMAIL_FROM_ADDRESS": self.EMAIL_FROM_ADDRESS,
+                "SMTP_HOST": self.SMTP_HOST,
+                "SMTP_USERNAME": self.SMTP_USERNAME,
+                "SMTP_PASSWORD": self.SMTP_PASSWORD,
+            }
+            absent = [name for name, value in required.items() if not value.strip()]
+            if absent:
+                missing["email"] = absent
+        if self.GOOGLE_AUTH_ENABLED:
+            required = {
+                "PUBLIC_FRONTEND_URL": self.PUBLIC_FRONTEND_URL,
+                "GOOGLE_CLIENT_ID": self.GOOGLE_CLIENT_ID,
+                "GOOGLE_CLIENT_SECRET": self.GOOGLE_CLIENT_SECRET,
+            }
+            absent = [name for name, value in required.items() if not value.strip()]
+            if absent:
+                missing["google"] = absent
+        if missing:
+            summary = "; ".join(
+                f"{integration}: {', '.join(names)}"
+                for integration, names in missing.items()
+            )
+            raise RuntimeError(
+                "Refusing to start: enabled Product V1 integration configuration "
+                f"is incomplete ({summary})."
+            )
+
     def validate_secrets(self) -> None:
         """Fail fast on insecure secrets outside of local development.
 
@@ -71,6 +120,7 @@ class Settings(BaseSettings):
         frictionless. When DEBUG is False (any deployed/non-dev run) the
         presence of a placeholder/insecure secret is fatal. See audit C3.
         """
+        self.validate_enabled_integrations()
         insecure: list[str] = []
 
         if _looks_insecure(

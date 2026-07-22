@@ -1,10 +1,6 @@
 **
 !backend/
 !backend/**
-!training/
-!training/**
-!models/
-!models/**
 
 backend/.env
 backend/.pytest_cache/

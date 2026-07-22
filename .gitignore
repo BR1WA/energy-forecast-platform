@@ -45,6 +45,15 @@ frontend/out/
 experiments/
 backend/experiments/
 results/
+models/**/data/
+models/**/logs/
+models/**/runs/
+models/**/repos/
+models/**/__pycache__/
+models/**/*.pt
+models/**/*.npy
+models/**/*.npz
+models/__results___files*/
 benchmark_report.json
 logs_*.txt
 test.csv
