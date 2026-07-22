@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     SMTP_HOST: str = ""
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USE_TLS: bool = True
+    EMAIL_REPLY_TO: str = ""
+    EMAIL_WORKER_INTERVAL_SECONDS: int = 30
+    EMAIL_MAX_ATTEMPTS: int = 5
+    AVATAR_STORAGE_DIR: str = "static/avatars"
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 

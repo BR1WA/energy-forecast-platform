@@ -151,7 +151,6 @@ def get_alert_config(
 ):
     site = ensure_default_site(db, current_user.id)
     config = alert_service.config_for_site(db, site)
-    config.email_enabled = False
     db.commit()
     db.refresh(config)
     return AlertConfigResponse.model_validate(config)
@@ -168,7 +167,7 @@ def update_alert_config(
     config.threshold_kw = data.threshold_kw
     config.cooldown_minutes = data.cooldown_minutes
     config.missing_data_minutes = data.missing_data_minutes
-    config.email_enabled = False
+    config.email_enabled = data.email_enabled
     record_audit_event(
         db,
         "alert.config_updated",

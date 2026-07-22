@@ -41,9 +41,14 @@ services:
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       PYTHONUNBUFFERED: "1"
+    volumes:
+      - avatars:/app/static/avatars
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/live', timeout=3)"]
       interval: 10s
@@ -91,5 +96,29 @@ services:
       backend:
         condition: service_healthy
 
+  email-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m app.cli run-email-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-energy_forecast}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      DEBUG: ${DEBUG:-false}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      EMAIL_DELIVERY_ENABLED: ${EMAIL_DELIVERY_ENABLED:-false}
+      PUBLIC_FRONTEND_URL: ${PUBLIC_FRONTEND_URL:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  avatars:

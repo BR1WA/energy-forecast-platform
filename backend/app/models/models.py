@@ -14,7 +14,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)
     full_name = Column(String(100), nullable=True)
     role = Column(String(20), default="user", nullable=False)  # admin, user
     is_active = Column(Boolean, default=True)
@@ -25,6 +25,7 @@ class User(Base):
     is_setup_complete = Column(Boolean, default=False, nullable=False)
     preferences = Column(JSON, nullable=True, default=dict)
     data_mode = Column(String(20), default="SIMULATION", nullable=False) # LIVE, HISTORICAL, SIMULATION, TRAINING, DEMO
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     forecasts = relationship("Forecast", back_populates="user", cascade="all, delete-orphan")
@@ -32,6 +33,8 @@ class User(Base):
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
     recommendations = relationship("Recommendation", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    action_tokens = relationship("AccountActionToken", back_populates="user", cascade="all, delete-orphan")
+    identities = relationship("AuthIdentity", back_populates="user", cascade="all, delete-orphan")
     energy_budget = relationship("EnergyBudget", back_populates="user", uselist=False, cascade="all, delete-orphan")
     sites = relationship("Site", back_populates="user", cascade="all, delete-orphan")
 
@@ -48,6 +51,51 @@ class RefreshToken(Base):
 
     # Relationships
     user = relationship("User", back_populates="refresh_tokens")
+
+
+class AccountActionToken(Base):
+    __tablename__ = "account_action_tokens"
+    __table_args__ = (Index("ix_action_tokens_user_purpose", "user_id", "purpose"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    purpose = Column(String(40), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    user = relationship("User", back_populates="action_tokens")
+
+
+class AuthIdentity(Base):
+    __tablename__ = "auth_identities"
+    __table_args__ = (UniqueConstraint("provider", "subject", name="uq_auth_identity_provider_subject"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider = Column(String(40), nullable=False)
+    subject = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    user = relationship("User", back_populates="identities")
+
+
+class EmailOutbox(Base):
+    __tablename__ = "email_outbox"
+    __table_args__ = (UniqueConstraint("dedup_key", name="uq_email_outbox_dedup_key"), Index("ix_email_outbox_due", "status", "next_attempt_at"))
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    recipient = Column(String(255), nullable=False)
+    template = Column(String(80), nullable=False)
+    payload = Column(JSON, nullable=False, default=dict)
+    dedup_key = Column(String(255), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    attempts = Column(Integer, nullable=False, default=0)
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class Site(Base):
@@ -198,7 +246,7 @@ class AlertConfig(Base):
     threshold_kw = Column(Float, nullable=False, default=3.0)
     cooldown_minutes = Column(Integer, nullable=False, default=60)
     missing_data_minutes = Column(Integer, nullable=False, default=60)
-    email_enabled = Column(Boolean, default=True)
+    email_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

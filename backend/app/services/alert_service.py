@@ -6,7 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models import Alert, AlertConfig, Meter, Site, SmartMeterReading
+from app.models import Alert, AlertConfig, Meter, Site, SmartMeterReading, User
+from app.services.email_service import enqueue_email
+from app.config import get_settings
 from app.services.recommendation_service import recommendation_service
 
 logger = logging.getLogger(__name__)
@@ -107,6 +109,18 @@ class AlertService:
         db.add(alert)
         db.flush()
         recommendation_service.create_for_alert(db, alert)
+        if severity == "critical" and config.email_enabled:
+            user = db.query(User).filter(User.id == site.user_id).first()
+            if user and user.email_verified_at and get_settings().EMAIL_DELIVERY_ENABLED:
+                public_url = get_settings().PUBLIC_FRONTEND_URL.rstrip("/")
+                enqueue_email(
+                    db,
+                    user_id=user.id,
+                    recipient=user.email,
+                    template="critical_alert",
+                    dedup_key=f"critical-alert:{alert.id}",
+                    payload={"title": alert.alert_type.replace("_", " ").title(), "message": message, "url": f"{public_url}/alerts"},
+                )
         return alert
 
     @staticmethod

@@ -121,22 +121,43 @@ class UserResponse(BaseModel):
     last_activity: Optional[datetime] = None
     is_setup_complete: bool = False
     preferences: Optional[Dict[str, Any]] = None
+    email_verified_at: Optional[datetime] = None
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
+class VerifyTokenRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
 
 
 class TokenData(BaseModel):
     access_token: str
-    refresh_token: Optional[str] = None
     token_type: str = "bearer"
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+    new_password: str = Field(min_length=8, max_length=100)
+
+
+class AccountDeletionRequest(BaseModel):
+    current_password: str
+
+
+class GoogleCredentialRequest(BaseModel):
+    credential: str = Field(min_length=20, max_length=4096)
 
 
 # ======================== INGESTION ========================
@@ -318,6 +339,7 @@ class AlertConfigCreate(BaseModel):
     threshold_kw: float = Field(ge=0.1, le=20.0, default=3.0)
     cooldown_minutes: int = Field(ge=5, le=1440, default=60)
     missing_data_minutes: int = Field(ge=5, le=10080, default=60)
+    email_enabled: bool = False
 
 
 class AlertConfigResponse(BaseModel):
@@ -327,6 +349,7 @@ class AlertConfigResponse(BaseModel):
     threshold_kw: float
     cooldown_minutes: int
     missing_data_minutes: int
+    email_enabled: bool
     created_at: datetime
 
 class AlertResponse(BaseModel):

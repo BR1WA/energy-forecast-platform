@@ -76,7 +76,7 @@ def test_alert_lifecycle_filters_and_ownership():
 
         config = client.get("/api/v1/alerts/config", headers=owner_headers)
         assert config.status_code == 200
-        assert "email_enabled" not in config.json()
+        assert config.json()["email_enabled"] is False
     finally:
         db.close()
         app.dependency_overrides.pop(get_db, None)
