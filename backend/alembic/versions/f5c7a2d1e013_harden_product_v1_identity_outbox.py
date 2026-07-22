@@ -24,6 +24,17 @@ def upgrade() -> None:
             "ck_account_action_tokens_purpose",
             "purpose IN ('verify_email', 'reset_password')",
         )
+    # Terra's partial implementation stored raw action-token URLs in JSON. They
+    # cannot be safely transformed without re-exposing the token, so remove the
+    # affected delivery rows and revoke every outstanding legacy action token.
+    # Users can request a fresh link through the sealed render-time flow.
+    bind.execute(sa.text(
+        "UPDATE account_action_tokens SET revoked_at = CURRENT_TIMESTAMP "
+        "WHERE used_at IS NULL AND revoked_at IS NULL"
+    ))
+    bind.execute(sa.text(
+        "DELETE FROM email_outbox WHERE template IN ('verify_email', 'password_reset')"
+    ))
 
     with op.batch_alter_table("auth_identities") as batch:
         batch.add_column(sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False))
