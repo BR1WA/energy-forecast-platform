@@ -17,7 +17,7 @@ from app.database import engine, Base, SessionLocal
 from app.routers import (
     auth, forecast, alerts, analytics, admin, settings as settings_router,
     system, consumption,
-    simulation, ingestion, monitoring, recommendations
+    simulation, ingestion, monitoring, recommendations, account
 )
 from app.migrations import run_migrations
 from app.limiter import limiter
@@ -30,7 +30,7 @@ logger = logging.getLogger("app.main")
 settings = get_settings()
 
 # Ensure static directories exist before FastAPI is configured
-os.makedirs("static/avatars", exist_ok=True)
+os.makedirs(settings.AVATAR_STORAGE_DIR, exist_ok=True)
 
 
 @asynccontextmanager
@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
 
     # Ensure static/avatars directory exists
-    os.makedirs("static/avatars", exist_ok=True)
+    os.makedirs(settings.AVATAR_STORAGE_DIR, exist_ok=True)
 
     try:
         logger.info("[DB] Running database migrations...")
@@ -155,6 +155,7 @@ app.include_router(simulation.router)
 app.include_router(ingestion.router)
 app.include_router(monitoring.router)
 app.include_router(recommendations.router)
+app.include_router(account.router)
 
 
 @app.get("/", tags=["Health"])

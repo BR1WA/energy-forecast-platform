@@ -93,6 +93,16 @@
 The isolated production image check used `FORECAST_168H_ENABLED=true` and loaded
 both checkpoints with Torch without starting or changing the local database stack.
 
+## G2-G7 - Product operations, account safety, and delivery
+
+**Status:** Complete in the release branch; external SMTP and Google credentials remain operator-provisioned feature flags.
+
+- Added a deduplicated transactional email outbox, exponential retry worker, SMTP provider, CLI command, and Compose worker.
+- Added single-use hashed verification and password-reset tokens, generic reset responses, and browser-inaccessible HttpOnly refresh cookies. Access tokens now live only in browser memory.
+- Added critical-email alert opt-in, account JSON export/deletion, durable avatar volume configuration, and public privacy, terms, and support pages.
+- Added data-export/delete controls to Settings, performance indexes for delivery/action-token lookup, and high-severity dependency auditing in CI.
+- Existing accounts are marked verified during migration to avoid a disruptive lockout; new verification mail is available when email delivery is enabled and configured.
+
 ## Next gate
 
 G2 introduces the transactional email outbox, provider abstraction, delivery

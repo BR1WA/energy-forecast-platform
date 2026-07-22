@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
-import { API_BASE_URL, authApi, ingestionApi, settingsApi } from '@/lib/api';
+import { API_BASE_URL, accountApi, authApi, ingestionApi, settingsApi } from '@/lib/api';
 import type { PrimaryMeter } from '@/types';
 import { toast } from 'sonner';
 import { CheckCircle2, Clipboard, Database, KeyRound, PlayCircle, Radio, Settings2, Upload, Wallet } from 'lucide-react';
@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [deletionPassword, setDeletionPassword] = useState('');
   const [activeTab, setActiveTab] = useState('site');
   const [meter, setMeter] = useState<PrimaryMeter | null>(null);
   const [meterInterval, setMeterInterval] = useState('60');
@@ -157,6 +158,30 @@ export default function SettingsPage() {
     }
   };
 
+  const exportAccount = async () => {
+    try {
+      const blob = await accountApi.exportData();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'energyforecast-account-export.json';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to export account data.');
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!deletionPassword || !window.confirm('Delete your account and all owned energy data? This cannot be undone.')) return;
+    try {
+      await accountApi.deleteAccount(deletionPassword);
+      window.location.href = '/login';
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to delete account.');
+    }
+  };
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-5xl space-y-6">
@@ -220,7 +245,7 @@ export default function SettingsPage() {
             <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Monthly budget</CardTitle><CardDescription>Set the monthly limit used for your budget progress and alerts.</CardDescription></CardHeader><CardContent className="flex max-w-sm items-end gap-3"><div className="flex-1 space-y-2"><Label>Budget (MAD)</Label><Input type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></div><Button onClick={saveSiteSettings} disabled={saving}>Save</Button></CardContent></Card>
           </TabsContent>
           <TabsContent value="security" className="mt-6">
-            <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card>
+            <div className="space-y-4"><Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card><Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Privacy controls</CardTitle><CardDescription>Download your owned data or permanently delete your account.</CardDescription></CardHeader><CardContent className="space-y-4"><Button onClick={exportAccount} variant="outline">Download my data</Button><div className="flex max-w-md gap-2"><Input aria-label="Password to delete account" onChange={(event) => setDeletionPassword(event.target.value)} placeholder="Current password" type="password" value={deletionPassword} /><Button onClick={deleteAccount} variant="destructive">Delete account</Button></div></CardContent></Card></div>
           </TabsContent>
         </Tabs>
       </div>
