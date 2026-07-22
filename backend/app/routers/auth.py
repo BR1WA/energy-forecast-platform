@@ -55,11 +55,11 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     )
     db.add(user)
 
-    db.commit()
-    db.refresh(user)
+    db.flush()
     ensure_default_site(db, user.id)
     record_audit_event(db, "auth.registered", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
     db.commit()
+    db.refresh(user)
 
     # Generate tokens
     token_data = {"sub": str(user.id), "role": user.role}

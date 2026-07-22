@@ -16,10 +16,9 @@ from app.config import get_settings
 from app.database import engine, Base, SessionLocal
 from app.routers import (
     auth, forecast, alerts, analytics, admin, settings as settings_router,
-    multi_site, system, dashboard, data_mode, consumption,
-    simulation, models_registry, ingestion, recommendations
+    system, consumption,
+    simulation, ingestion, monitoring, recommendations
 )
-from app.services.forecast_service import get_forecast_service
 from app.migrations import run_migrations
 from app.limiter import limiter
 from app.logging_config import configure_logging, RequestIDMiddleware
@@ -53,12 +52,6 @@ async def lifespan(app: FastAPI):
         logger.exception("[DB] Database migration failed; refusing to start.")
         raise
 
-    # Initialise the forecast service singleton (lazy — no model is loaded until a request comes in)
-    forecast_service = get_forecast_service()
-    with SessionLocal() as db:
-        forecast_service.sync_registry(db)
-    logger.info("[ML] ForecastService singleton initialised (model will be loaded on first request).")
-
     # Start only explicitly user-controlled simulator sessions. Alerts are
     # evaluated from persisted meter data in a later worker phase.
     import asyncio
@@ -77,7 +70,10 @@ async def lifespan(app: FastAPI):
                 try:
                     sessions = db.query(SimulationSession).filter(SimulationSession.is_running.is_(True)).all()
                     for session in sessions:
-                        meter = db.query(Meter).filter(Meter.site_id == session.site_id).order_by(Meter.id).first()
+                        meter = db.query(Meter).filter(
+                            Meter.site_id == session.site_id,
+                            Meter.is_primary.is_(True),
+                        ).one_or_none()
                         if meter is None:
                             continue
                         ingestion_service.ingest(
@@ -116,8 +112,8 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=(
         "Energy Forecasting Platform — "
-        "3 ML models (PatchTST, SOTA Hybrid, CNN-BiLSTM), "
-        "JWT authentication, RBAC, and alert management."
+        "one-site monitoring and a truthful 24-hour Global TFT forecast, "
+        "with JWT authentication and alert management."
     ),
     docs_url="/docs",
     redoc_url="/redoc",
@@ -153,14 +149,11 @@ app.include_router(alerts.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
 app.include_router(settings_router.router)
-app.include_router(multi_site.router)
 app.include_router(system.router)
-app.include_router(dashboard.router)
-app.include_router(data_mode.router)
 app.include_router(consumption.router)
 app.include_router(simulation.router)
 app.include_router(ingestion.router)
-app.include_router(models_registry.router)
+app.include_router(monitoring.router)
 app.include_router(recommendations.router)
 
 

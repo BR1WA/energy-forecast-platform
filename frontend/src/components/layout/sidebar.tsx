@@ -9,7 +9,6 @@ import { useI18n } from '@/lib/i18n';
 import {
   LayoutDashboard,
   LineChart,
-  BarChart3,
   Bell,
   ChevronLeft,
   ChevronRight,
@@ -17,9 +16,7 @@ import {
   LogOut,
   Settings,
   User,
-  Cpu,
   Sparkles,
-  Target,
   FileText,
   Shield,
 } from 'lucide-react';
@@ -51,28 +48,22 @@ const navItems: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    label: 'Energy Analytics',
+    label: 'Consumption',
     translationKey: 'nav.consumption',
     href: '/consumption',
     icon: Zap,
   },
   {
-    label: 'Forecast Center',
+    label: 'Forecast',
     translationKey: 'nav.forecasts',
     href: '/forecast',
     icon: LineChart,
   },
   {
-    label: 'AI Recommendations',
+    label: 'Recommendations',
     translationKey: 'nav.recommendations',
     href: '/recommendations',
     icon: Sparkles,
-  },
-  {
-    label: 'Budget & Goals',
-    translationKey: 'nav.budget',
-    href: '/budget',
-    icon: Target,
   },
   {
     label: 'Reports',
@@ -81,22 +72,10 @@ const navItems: NavItem[] = [
     icon: FileText,
   },
   {
-    label: 'Virtual House',
-    translationKey: 'nav.simulation',
-    href: '/simulation',
-    icon: BarChart3,
-  },
-  {
     label: 'Notifications',
     translationKey: 'nav.alerts',
     href: '/alerts',
     icon: Bell,
-  },
-  {
-    label: 'Models',
-    translationKey: 'nav.models',
-    href: '/models',
-    icon: Cpu,
   },
   {
     label: 'Admin Panel',
@@ -115,10 +94,12 @@ const navItems: NavItem[] = [
 
 interface SidebarProps {
   collapsed: boolean;
+  mobileOpen: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  setMobileOpen: (open: boolean) => void;
 }
 
-export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
+export default function Sidebar({ collapsed, mobileOpen, setCollapsed, setMobileOpen }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -131,13 +112,23 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
     .toUpperCase() || 'U';
 
   return (
-    <aside
+    <>
+      {mobileOpen && (
+        <button
+          aria-label="Close navigation"
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          type="button"
+        />
+      )}
+      <aside
       id="sidebar"
       className={cn(
         'fixed top-0 z-40 h-screen flex flex-col transition-all duration-300 ease-in-out',
         'bg-[#0d1321]/80 backdrop-blur-2xl',
         isRTL ? 'right-0 border-l border-white/[0.06]' : 'left-0 border-r border-white/[0.06]',
-        collapsed ? 'w-[72px]' : 'w-[260px]'
+        collapsed ? 'w-[260px] md:w-[72px]' : 'w-[260px]',
+        mobileOpen ? 'translate-x-0' : isRTL ? 'translate-x-full md:translate-x-0' : '-translate-x-full md:translate-x-0'
       )}
     >
       {/* Logo */}
@@ -172,6 +163,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.disabled ? '#' : item.href}
+                onClick={() => setMobileOpen(false)}
                 id={`nav-${item.label.toLowerCase()}`}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative',
@@ -222,7 +214,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
         <button
           id="sidebar-collapse-btn"
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center justify-center w-full py-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.04] transition-all duration-200"
+          className="hidden items-center justify-center w-full py-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.04] transition-all duration-200 md:flex"
         >
           {collapsed ? (
             isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
@@ -276,9 +268,9 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
               id="menu-profile"
               className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
             >
-              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings?tab=security')}>
                 <User className="w-4 h-4 mr-2" />
-                {t('nav.profile')}
+                Account security
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/[0.06]" />
@@ -304,6 +296,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

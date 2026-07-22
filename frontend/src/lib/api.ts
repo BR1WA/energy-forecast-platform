@@ -3,23 +3,25 @@ import type {
   LoginResponse,
   RegisterPayload,
   User,
-  ForecastModel,
-  ForecastResult,
-  ForecastHistory,
-  SampleDataset,
+  ForecastReadiness,
+  ProductForecast,
+  ProductForecastHistoryItem,
   AnalyticsSummary,
   Alert,
   AlertConfig,
   AdminUser,
-  ModelRegistry,
+  ModelReadiness,
   SystemHealth,
   EnergyBudget,
   SystemSettings,
   RawAlertResponse,
   AlertConfigResponse,
   UserPreferences,
-  Site,
   Recommendation,
+  ConsumptionPeriodSummary,
+  ConsumptionReadingPage,
+  ConsumptionTimeframe,
+  PrimaryMeter,
 } from '@/types';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -55,7 +57,34 @@ interface FetchOptions extends RequestInit {
   isBlob?: boolean;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+function getApiErrorMessage(payload: unknown, status: number): string {
+  if (!payload || typeof payload !== 'object' || !('detail' in payload)) {
+    return `API error: ${status}`;
+  }
+
+  const detail = payload.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.flatMap((item) => {
+      if (!item || typeof item !== 'object' || !('msg' in item) || typeof item.msg !== 'string') {
+        return [];
+      }
+      const location = 'loc' in item && Array.isArray(item.loc)
+        ? item.loc.filter((part: unknown): part is string => typeof part === 'string' && part !== 'body').join('.')
+        : '';
+      return [location ? `${location}: ${item.msg}` : item.msg];
+    });
+    if (messages.length) return messages.join(' ');
+  }
+  if (detail && typeof detail === 'object' && 'msg' in detail && typeof detail.msg === 'string') {
+    return detail.msg;
+  }
+  return `API error: ${status}`;
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function performTokenRefresh(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
 
@@ -72,12 +101,25 @@ async function refreshAccessToken(): Promise<string | null> {
     }
 
     const data = await res.json();
-    setTokens(data.access_token, refresh);
+    if (!data.refresh_token) {
+      clearTokens();
+      return null;
+    }
+    setTokens(data.access_token, data.refresh_token);
     return data.access_token;
   } catch {
     clearTokens();
     return null;
   }
+}
+
+function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = performTokenRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 async function apiFetch<T>(
@@ -120,7 +162,7 @@ async function apiFetch<T>(
       if (typeof window !== 'undefined') {
         const currentPath = window.location.pathname;
         if (currentPath !== '/' && currentPath !== '/login' && currentPath !== '/register') {
-          window.location.href = '/';
+          window.location.href = '/login';
         }
       }
       throw new Error('Session expired');
@@ -129,12 +171,13 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    const message = getApiErrorMessage(errorData, res.status);
     if (res.status === 403 && typeof window !== 'undefined') {
       import('sonner').then(({ toast }) => {
-        toast.error(errorData.detail || 'Access denied.');
+        toast.error(message || 'Access denied.');
       }).catch(err => console.error('Failed to load sonner toast', err));
     }
-    throw new Error(errorData.detail || `API error: ${res.status}`);
+    throw new Error(message);
   }
 
   if (isBlob) {
@@ -163,6 +206,9 @@ export const authApi = {
     }),
 
   getMe: (): Promise<User> => apiFetch('/api/v1/auth/me'),
+
+  logout: (): Promise<{ message: string }> =>
+    apiFetch('/api/v1/auth/logout', { method: 'POST' }),
 
   updateProfile: (data: { full_name?: string }): Promise<User> =>
     apiFetch('/api/v1/auth/me', {
@@ -195,64 +241,17 @@ export const authApi = {
 // Forecast API
 // ============================================================
 export const forecastApi = {
-  getModels: (): Promise<ForecastModel[]> =>
-    apiFetch('/api/v1/forecast/models'),
+  getReadiness: (): Promise<ForecastReadiness> =>
+    apiFetch('/api/v1/forecast/readiness'),
 
-  predict: (modelName: string, data: File | string, horizon: number = 24): Promise<ForecastResult> => {
-    if (data instanceof File) {
-      const formData = new FormData();
-      formData.append('model_name', modelName);
-      formData.append('file', data);
-      formData.append('horizon', String(horizon));
+  run: (): Promise<ProductForecast> =>
+    apiFetch('/api/v1/forecast/run', { method: 'POST' }),
 
-      return apiFetch('/api/v1/forecast/predict/upload', {
-        method: 'POST',
-        body: formData,
-      });
-    }
+  getLatest: (): Promise<ProductForecast | null> =>
+    apiFetch('/api/v1/forecast/latest'),
 
-    // String = sample name
-    return apiFetch('/api/v1/forecast/predict', {
-      method: 'POST',
-      body: JSON.stringify({ model_name: modelName, sample_name: data, horizon }),
-    });
-  },
-
-  compare: (data: File | string, horizon: number = 24): Promise<Record<string, unknown>> => {
-    if (data instanceof File) {
-      const formData = new FormData();
-      formData.append('file', data);
-      formData.append('horizon', String(horizon));
-
-      return apiFetch('/api/v1/forecast/compare/upload', {
-        method: 'POST',
-        body: formData,
-      });
-    }
-
-    return apiFetch('/api/v1/forecast/compare', {
-      method: 'POST',
-      body: JSON.stringify({ sample_name: data, horizon }),
-    });
-  },
-
-  predictSmartMeter: (modelName: string, horizon: number = 24): Promise<ForecastResult> =>
-    apiFetch('/api/v1/forecast/smart-meter/sync', {
-      method: 'POST',
-      body: JSON.stringify({ model_name: modelName, horizon }),
-    }),
-
-  compareSmartMeter: (horizon: number = 24): Promise<Record<string, unknown>> =>
-    apiFetch('/api/v1/forecast/smart-meter/compare', {
-      method: 'POST',
-      body: JSON.stringify({ horizon }),
-    }),
-
-  getHistory: (): Promise<ForecastHistory[]> =>
+  getHistory: (): Promise<ProductForecastHistoryItem[]> =>
     apiFetch('/api/v1/forecast/history'),
-
-  getSamples: (): Promise<SampleDataset[]> =>
-    apiFetch('/api/v1/forecast/samples'),
 };
 
 // ============================================================
@@ -267,27 +266,22 @@ export const analyticsApi = {
 };
 
 // ============================================================
-// Multi-Site API
-// ============================================================
-export const multiSiteApi = {
-  getSites: (): Promise<{ data: Site[] }> =>
-    apiFetch('/api/v1/multi-site'),
-};
-
-// ============================================================
 // Alerts API
 // ============================================================
 export const alertsApi = {
-  getAlerts: async (): Promise<Alert[]> => {
-    const raw = await apiFetch<RawAlertResponse[]>('/api/v1/alerts');
+  getAlerts: async (state: 'all' | 'open' | 'acknowledged' | 'resolved' = 'all'): Promise<Alert[]> => {
+    const raw = await apiFetch<RawAlertResponse[]>(`/api/v1/alerts?state=${state}`);
     return raw.map((a) => ({
       id: String(a.id),
       type: a.alert_type as any,
       severity: a.severity,
       title: a.alert_type ? a.alert_type.replace(/_/g, ' ').toUpperCase() : 'ALERT',
       message: a.message || '',
+      state: a.state,
       is_read: a.is_acknowledged,
+      evidence: a.evidence_json || {},
       created_at: a.created_at,
+      resolved_at: a.resolved_at,
     }));
   },
 
@@ -297,7 +291,6 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
-      notification_email: raw.email_enabled,
     };
   },
 
@@ -306,7 +299,6 @@ export const alertsApi = {
       threshold_kw: config.high_consumption_threshold,
       cooldown_minutes: config.cooldown_minutes,
       missing_data_minutes: config.missing_data_minutes,
-      email_enabled: config.notification_email,
     };
     const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config', {
       method: 'POST',
@@ -316,15 +308,17 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
-      notification_email: raw.email_enabled,
     };
   },
 
-  acknowledgeAlert: (alertId: string | number): Promise<void> =>
-    apiFetch('/api/v1/alerts/acknowledge', {
-      method: 'POST',
-      body: JSON.stringify({ alert_id: Number(alertId) }),
-    }),
+  acknowledgeAlert: (alertId: string | number): Promise<RawAlertResponse> =>
+    apiFetch(`/api/v1/alerts/${Number(alertId)}/acknowledge`, { method: 'PATCH' }),
+
+  resolveAlert: (alertId: string | number): Promise<RawAlertResponse> =>
+    apiFetch(`/api/v1/alerts/${Number(alertId)}/resolve`, { method: 'PATCH' }),
+
+  reopenAlert: (alertId: string | number): Promise<RawAlertResponse> =>
+    apiFetch(`/api/v1/alerts/${Number(alertId)}/reopen`, { method: 'PATCH' }),
 };
 
 // ============================================================
@@ -356,8 +350,8 @@ export const adminApi = {
       body: JSON.stringify(data),
     }),
 
-  getModels: (): Promise<ModelRegistry[]> =>
-    apiFetch('/api/v1/admin/models'),
+  getModelReadiness: (): Promise<ModelReadiness> =>
+    apiFetch('/api/v1/admin/model-readiness'),
 
   getHealth: (): Promise<SystemHealth> =>
     apiFetch('/api/v1/admin/health'),
@@ -365,10 +359,6 @@ export const adminApi = {
   getStats: (): Promise<Record<string, unknown>> =>
     apiFetch('/api/v1/admin/stats'),
 
-  retrainModel: (modelName: string): Promise<{ message: string }> =>
-    apiFetch(`/api/v1/admin/models/${modelName}/retrain`, {
-      method: 'POST',
-    }),
 };
 
 // ============================================================
@@ -393,7 +383,6 @@ export const settingsApi = {
     peak_start_hour: number;
     peak_end_hour: number;
     sensor_type: string;
-    sensor_api_url: string | null;
   }): Promise<{ message: string; settings: SystemSettings }> =>
     apiFetch('/api/v1/settings/setup', {
       method: 'POST',
@@ -403,11 +392,6 @@ export const settingsApi = {
   updatePreferences: (data: {
     theme?: string;
     language?: string;
-    email_alerts?: boolean;
-    push_alerts?: boolean;
-    default_model_24?: string;
-    default_model_168?: string;
-    default_model_720?: string;
   }): Promise<{ message: string; preferences: UserPreferences }> =>
     apiFetch('/api/v1/settings/preferences', {
       method: 'PUT',
@@ -437,6 +421,29 @@ export const consumptionApi = {
   getHistory: (timeframe?: 'live' | 'day' | 'week' | 'month' | 'all'): Promise<Array<{ kw: number; timestamp: string }>> =>
     apiFetch(`/api/v1/consumption/history${timeframe ? `?timeframe=${timeframe}` : ''}`),
 
+  getPeriod: (
+    timeframe: ConsumptionTimeframe,
+    custom?: { start: string; end: string },
+  ): Promise<ConsumptionPeriodSummary> => {
+    const params = new URLSearchParams({ timeframe });
+    if (timeframe === 'custom' && custom) {
+      params.set('start', custom.start);
+      params.set('end', custom.end);
+    }
+    return apiFetch(`/api/v1/consumption/period?${params.toString()}`);
+  },
+
+  getReadings: (
+    timeframe: ConsumptionTimeframe,
+    options?: { start?: string; end?: string; cursor?: string; limit?: number },
+  ): Promise<ConsumptionReadingPage> => {
+    const params = new URLSearchParams({ timeframe, limit: String(options?.limit ?? 50) });
+    if (options?.start) params.set('start', options.start);
+    if (options?.end) params.set('end', options.end);
+    if (options?.cursor) params.set('cursor', options.cursor);
+    return apiFetch(`/api/v1/consumption/readings?${params.toString()}`);
+  },
+
   getStatistics: (): Promise<{
     month: string;
     total_kwh: number;
@@ -451,13 +458,32 @@ export const consumptionApi = {
   }> =>
     apiFetch('/api/v1/consumption/statistics'),
 
-  exportCsv: (): Promise<Blob> =>
-    apiFetch('/api/v1/consumption/export', { isBlob: true }),
+  exportCsv: (month?: string): Promise<Blob> =>
+    apiFetch(`/api/v1/consumption/export${month ? `?month=${encodeURIComponent(month)}` : ''}`, { isBlob: true }),
 };
 
 export const ingestionApi = {
-  getMeters: (): Promise<Array<{ id: number; name: string; source_type: string }>> =>
+  getMeters: (): Promise<PrimaryMeter[]> =>
     apiFetch('/api/v1/ingestion/meters'),
+
+  updateMeter: (meterId: number, data: { name?: string; expected_interval_seconds: number }): Promise<{ message: string }> =>
+    apiFetch(`/api/v1/ingestion/meters/${meterId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  rotatePushKey: (meterId: number): Promise<{ meter_id: number; api_key: string }> =>
+    apiFetch(`/api/v1/ingestion/meters/${meterId}/push-key`, { method: 'POST' }),
+
+  sendTestReading: (meterId: number, apiKey: string): Promise<{
+    accepted_rows: number;
+    duplicate_rows: number;
+    rejected_rows: number;
+  }> => apiFetch(`/api/v1/ingestion/meters/${meterId}/samples`, {
+    method: 'POST',
+    headers: { 'X-Meter-Key': apiKey },
+    body: JSON.stringify({
+      idempotency_key: `browser-test-${Date.now()}`,
+      samples: [{ timestamp: new Date().toISOString(), active_power_kw: 0.5, voltage_v: 230 }],
+    }),
+  }),
 
   previewCsv: (meterId: number, file: File): Promise<{
     mapped_columns: string[];
@@ -495,12 +521,8 @@ export const simulationApi = {
     status: string; 
     is_running: boolean; 
     uptime: number;
-    day_part?: string;
-    occupants?: number;
-    temperature?: number;
-    ac_level?: string;
-    washing_machine?: boolean;
-    solar?: string;
+    base_load_kw?: number;
+    variation_percent?: number;
   }> =>
     apiFetch('/api/v1/simulation/status'),
 
@@ -508,28 +530,13 @@ export const simulationApi = {
     apiFetch('/api/v1/simulation/reset', { method: 'POST' }),
 
   configure: (config: {
-    day_part: string;
-    occupants: number;
-    temperature: number;
-    ac_level: string;
-    washing_machine: boolean;
-    solar: string;
+    base_load_kw: number;
+    variation_percent: number;
   }): Promise<{ status: string }> =>
     apiFetch('/api/v1/simulation/configure', { 
       method: 'POST',
       body: JSON.stringify(config)
     }),
-};
-
-export const dashboardApi = {
-  // The dashboard is a composite endpoint with independently optional sections.
-  getSummary: (lat?: number, lon?: number): Promise<any> => {
-    let url = '/api/v1/dashboard/summary';
-    if (lat !== undefined && lon !== undefined) {
-      url += `?lat=${lat}&lon=${lon}`;
-    }
-    return apiFetch(url);
-  },
 };
 
 // Export helpers for use in auth context

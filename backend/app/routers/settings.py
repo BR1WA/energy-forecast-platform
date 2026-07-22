@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+from zoneinfo import ZoneInfo
 from app.database import get_db
 from app.models import EnergyBudget, Site, SiteSettings, User
 from app.services.auth_service import get_current_user
@@ -10,31 +12,39 @@ from app.services.audit_service import record_audit_event
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 class SetupPayload(BaseModel):
-    site_name: str | None = None
+    model_config = {"extra": "forbid"}
+
+    site_name: str | None = Field(default=None, min_length=1, max_length=120)
     timezone: str | None = None
-    country: str
-    region: str
-    electricity_provider: str
-    currency: str
-    peak_rate: float
-    off_peak_rate: float
-    peak_start_hour: int
-    peak_end_hour: int
-    sensor_type: str
-    sensor_api_url: str | None = None
+    country: str = Field(min_length=2, max_length=100)
+    region: str = Field(min_length=1, max_length=100)
+    electricity_provider: str = Field(min_length=1, max_length=100)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    peak_rate: float = Field(ge=0, le=100)
+    off_peak_rate: float = Field(ge=0, le=100)
+    peak_start_hour: int = Field(ge=0, le=23)
+    peak_end_hour: int = Field(ge=0, le=23)
+    sensor_type: Literal["csv", "push", "simulator"]
+
+    @field_validator("timezone")
+    @classmethod
+    def timezone_must_exist(cls, value: str | None) -> str | None:
+        if value is not None:
+            try:
+                ZoneInfo(value)
+            except (KeyError, ValueError) as exc:
+                raise ValueError("timezone must be a valid IANA timezone") from exc
+        return value
 
 class PreferencesPayload(BaseModel):
-    theme: str | None = None
-    language: str | None = None
-    email_alerts: bool | None = None
-    push_alerts: bool | None = None
-    default_model_24: str | None = None
-    default_model_168: str | None = None
-    default_model_720: str | None = None
+    model_config = {"extra": "forbid"}
+
+    theme: Literal["light", "dark", "system"] | None = None
+    language: Literal["en", "fr", "ar"] | None = None
 
 class BudgetPayload(BaseModel):
-    monthly_budget_mad: float
-    monthly_budget_kwh: float | None = None
+    monthly_budget_mad: float = Field(ge=0, le=10_000_000)
+    monthly_budget_kwh: float | None = Field(default=None, ge=0, le=10_000_000)
 
 @router.get("/setup-status")
 def get_setup_status(
@@ -61,7 +71,6 @@ def get_settings(
             "peak_start_hour": 6,
             "peak_end_hour": 22,
             "sensor_type": "simulator",
-            "sensor_api_url": None,
         }
     return settings
 
@@ -120,17 +129,7 @@ def update_preferences(
         prefs["theme"] = payload.theme
     if payload.language is not None:
         prefs["language"] = payload.language
-    if payload.email_alerts is not None:
-        prefs["email_alerts"] = payload.email_alerts
-    if payload.push_alerts is not None:
-        prefs["push_alerts"] = payload.push_alerts
-    if payload.default_model_24 is not None:
-        prefs["default_model_24"] = payload.default_model_24
-    if payload.default_model_168 is not None:
-        prefs["default_model_168"] = payload.default_model_168
-    if payload.default_model_720 is not None:
-        prefs["default_model_720"] = payload.default_model_720
-        
+
     current_user.preferences = prefs
     db.commit()
     db.refresh(current_user)

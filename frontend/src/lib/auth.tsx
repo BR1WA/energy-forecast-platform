@@ -18,9 +18,9 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
-  logout: () => void;
+  login: (payload: LoginPayload) => Promise<User>;
+  register: (payload: RegisterPayload) => Promise<User>;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -54,18 +54,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await authApi.login(payload);
     setTokens(response.access_token, response.refresh_token);
     setUser(response.user);
+    return response.user;
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const response = await authApi.register(payload);
     setTokens(response.access_token, response.refresh_token);
     setUser(response.user);
+    return response.user;
   }, []);
 
-  const logout = useCallback(() => {
-    clearTokens();
-    setUser(null);
-    window.location.href = '/';
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } catch (err) {
+      console.error('Failed to revoke the server session', err);
+    } finally {
+      clearTokens();
+      setUser(null);
+      window.location.href = '/login';
+    }
   }, []);
 
   const refreshUser = useCallback(async () => {

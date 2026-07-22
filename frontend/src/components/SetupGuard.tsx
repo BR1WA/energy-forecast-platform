@@ -9,13 +9,18 @@ import { useAuth } from "@/lib/auth";
 export function SetupGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
     if (authLoading) return;
 
     if (!isAuthenticated) {
+      setIsChecking(false);
+      return;
+    }
+
+    if (user?.role === 'admin') {
       setIsChecking(false);
       return;
     }
@@ -36,7 +41,7 @@ export function SetupGuard({ children }: { children: React.ReactNode }) {
     };
 
     checkSetupStatus();
-  }, [pathname, router, isAuthenticated, authLoading]);
+  }, [pathname, router, user?.role, isAuthenticated, authLoading]);
 
   if (isChecking || authLoading) {
     return (

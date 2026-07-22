@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 from fastapi.websockets import WebSocketDisconnect
 from sqlalchemy import create_engine
@@ -6,8 +7,9 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import User
+from app.models import SmartMeterReading, User
 from app.services.auth_service import hash_password, create_access_token
+from app.services.site_service import ensure_user_site, get_primary_meter
 
 from sqlalchemy.pool import StaticPool
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -61,39 +63,89 @@ class TestWebSocketAuth(unittest.TestCase):
         if get_db in app.dependency_overrides:
             del app.dependency_overrides[get_db]
 
-    def test_alerts_ws_no_token(self):
-        # Connecting with no token should fail
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user1.id}") as websocket:
-            with self.assertRaises(WebSocketDisconnect) as context:
-                websocket.receive_text()
-            self.assertEqual(context.exception.code, 1008)
-
-    def test_alerts_ws_invalid_token(self):
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user1.id}?token=invalid") as websocket:
-            with self.assertRaises(WebSocketDisconnect) as context:
-                websocket.receive_text()
-            self.assertEqual(context.exception.code, 1008)
-
-    def test_alerts_ws_mismatched_client_id(self):
-        # User 1 tries to connect with User 2's client_id
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user2.id}?token={self.token1}") as websocket:
-            with self.assertRaises(WebSocketDisconnect) as context:
-                websocket.receive_text()
-            self.assertEqual(context.exception.code, 1008)
-
-    def test_alerts_ws_success(self):
-        # Correct token and matching client_id
-        with client.websocket_connect(f"/api/v1/alerts/ws/{self.user1.id}?token={self.token1}") as websocket:
-            pass
-
-    def test_smart_meter_ws_no_token(self):
-        with client.websocket_connect("/api/v1/forecast/smart-meter/live-ws") as websocket:
+    def test_live_monitoring_rejects_missing_token(self):
+        with client.websocket_connect("/api/v1/monitoring/live") as websocket:
+            websocket.send_json({})
             with self.assertRaises(WebSocketDisconnect) as context:
                 websocket.receive_json()
             self.assertEqual(context.exception.code, 1008)
 
-    def test_smart_meter_ws_success(self):
-        with client.websocket_connect(f"/api/v1/forecast/smart-meter/live-ws?token={self.token1}") as websocket:
-            data = websocket.receive_json()
-            self.assertIn("voltage", data)
-            self.assertIn("predictions", data)
+    def test_live_monitoring_is_read_only_and_excludes_csv(self):
+        ensure_user_site(self.db, self.user1.id)
+        meter = get_primary_meter(self.db, self.user1.id)
+        self.db.add(
+            SmartMeterReading(
+                meter_id=meter.id,
+                timestamp=datetime(2026, 7, 20, 12, tzinfo=timezone.utc),
+                gap=2.5,
+                grp=0.1,
+                voltage=230,
+                intensity=10.9,
+                sub_metering_1=0,
+                sub_metering_2=0,
+                sub_metering_3=0,
+                source="csv",
+                quality="validated",
+            )
+        )
+        self.db.commit()
+        before = self.db.query(SmartMeterReading).count()
+
+        with client.websocket_connect("/api/v1/monitoring/live") as websocket:
+            websocket.send_json({"access_token": self.token1})
+            snapshot = websocket.receive_json()
+            self.assertEqual(snapshot["type"], "snapshot")
+            self.assertIsNone(snapshot["reading"])
+
+        self.assertEqual(self.db.query(SmartMeterReading).count(), before)
+
+    def test_live_monitoring_returns_owned_simulation_snapshot(self):
+        ensure_user_site(self.db, self.user1.id)
+        meter = get_primary_meter(self.db, self.user1.id)
+        self.db.add(
+            SmartMeterReading(
+                meter_id=meter.id,
+                timestamp=datetime(2026, 7, 20, 12, tzinfo=timezone.utc),
+                gap=1.75,
+                grp=0.1,
+                voltage=229,
+                intensity=7.6,
+                sub_metering_1=0,
+                sub_metering_2=0,
+                sub_metering_3=0,
+                source="simulation",
+                quality="simulated",
+            )
+        )
+        self.db.commit()
+
+        with client.websocket_connect("/api/v1/monitoring/live") as websocket:
+            websocket.send_json({"access_token": self.token1})
+            snapshot = websocket.receive_json()
+            self.assertEqual(snapshot["reading"]["active_power_kw"], 1.75)
+            self.assertEqual(snapshot["reading"]["source"], "simulation")
+
+    def test_live_monitoring_resumes_after_cursor_without_replaying_older_rows(self):
+        ensure_user_site(self.db, self.user1.id)
+        meter = get_primary_meter(self.db, self.user1.id)
+        first = SmartMeterReading(
+            meter_id=meter.id, timestamp=datetime(2026, 7, 20, 12, tzinfo=timezone.utc),
+            gap=1.0, grp=0.1, voltage=230, intensity=4.3, sub_metering_1=0,
+            sub_metering_2=0, sub_metering_3=0, source="push", quality="validated",
+        )
+        second = SmartMeterReading(
+            meter_id=meter.id, timestamp=datetime(2026, 7, 20, 12, 1, tzinfo=timezone.utc),
+            gap=2.0, grp=0.1, voltage=230, intensity=8.7, sub_metering_1=0,
+            sub_metering_2=0, sub_metering_3=0, source="push", quality="validated",
+        )
+        self.db.add_all([first, second])
+        self.db.commit()
+
+        with client.websocket_connect("/api/v1/monitoring/live") as websocket:
+            websocket.send_json({"access_token": self.token1, "last_reading_id": first.id})
+            snapshot = websocket.receive_json()
+            event = websocket.receive_json()
+
+            self.assertEqual(snapshot["reading"]["reading_id"], second.id)
+            self.assertEqual(event["type"], "reading")
+            self.assertEqual(event["reading"]["reading_id"], second.id)

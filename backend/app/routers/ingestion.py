@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile,
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Meter, Site, User
-from app.schemas import IngestionKeyResponse, IngestionResult, MeterSampleBatch
+from app.models import Meter, SimulationSession, Site, User
+from app.schemas import IngestionKeyResponse, IngestionResult, MeterConfiguration, MeterSampleBatch
 from app.services.auth_service import get_current_user
 from app.services.ingestion_service import ingestion_service
 from app.services.audit_service import record_audit_event
@@ -40,11 +40,44 @@ def list_meters(db: Session = Depends(get_db), current_user: User = Depends(get_
     meters = (
         db.query(Meter)
         .join(Site, Meter.site_id == Site.id)
-        .filter(Site.user_id == current_user.id)
+        .filter(Site.user_id == current_user.id, Meter.is_primary.is_(True))
         .order_by(Meter.id)
         .all()
     )
-    return [{"id": meter.id, "name": meter.name, "source_type": meter.source_type} for meter in meters]
+    return [{
+        "id": meter.id,
+        "name": meter.name,
+        "source_type": meter.source_type,
+        "is_primary": meter.is_primary,
+        "expected_interval_seconds": meter.expected_interval_seconds,
+        "last_seen_at": meter.last_seen_at,
+        "push_key_configured": meter.ingestion_key_hash is not None,
+    } for meter in meters]
+
+
+@router.patch("/meters/{meter_id}")
+def update_meter(
+    meter_id: int,
+    payload: MeterConfiguration,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    meter = _owned_meter(db, current_user.id, meter_id)
+    if not meter.is_primary:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Primary meter not found")
+    if payload.name is not None:
+        meter.name = payload.name.strip()
+    meter.expected_interval_seconds = payload.expected_interval_seconds
+    record_audit_event(
+        db,
+        "meter.configuration_updated",
+        actor_user_id=current_user.id,
+        site_id=meter.site_id,
+        target=f"meter:{meter.id}",
+        metadata={"expected_interval_seconds": meter.expected_interval_seconds},
+    )
+    db.commit()
+    return {"message": "Meter updated"}
 
 
 @router.post("/meters/{meter_id}/push-key", response_model=IngestionKeyResponse)
@@ -56,6 +89,10 @@ def rotate_push_key(
     meter = _owned_meter(db, current_user.id, meter_id)
     key = ingestion_service.create_api_key(meter)
     meter.source_type = "push"
+    meter.expected_interval_seconds = meter.expected_interval_seconds or 60
+    simulation = db.query(SimulationSession).filter(SimulationSession.site_id == meter.site_id).one_or_none()
+    if simulation is not None:
+        simulation.is_running = False
     record_audit_event(db, "ingestion.key_rotated", actor_user_id=current_user.id, site_id=meter.site_id, target=f"meter:{meter.id}")
     db.commit()
     return {"meter_id": meter.id, "api_key": key}
@@ -111,6 +148,15 @@ def push_samples(
     meter = db.query(Meter).filter(Meter.id == meter_id).first()
     if meter is None or not ingestion_service.check_api_key(meter, x_meter_key):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid meter key")
+    simulation_running = db.query(SimulationSession.id).filter(
+        SimulationSession.site_id == meter.site_id,
+        SimulationSession.is_running.is_(True),
+    ).first()
+    if simulation_running:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stop the demo simulator before sending push readings",
+        )
     result = ingestion_service.ingest(
         db, meter, payload.samples, source="push", idempotency_key=payload.idempotency_key,
     )

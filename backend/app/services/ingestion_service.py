@@ -5,6 +5,7 @@ import csv
 import hashlib
 import io
 import secrets
+import statistics
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
@@ -100,7 +101,7 @@ class IngestionService:
         return samples, errors, [name for name in column_map.values() if name]
 
     def preview_csv(self, raw_csv: bytes) -> dict[str, Any]:
-        samples, errors, mapped_columns = self.parse_csv(raw_csv, max_rows=1_000)
+        samples, errors, mapped_columns = self.parse_csv(raw_csv, max_rows=10_000)
         return {
             "mapped_columns": sorted(set(mapped_columns)),
             "valid_rows": len(samples),
@@ -213,6 +214,13 @@ class IngestionService:
                 latest_seen = timestamp
 
         meter.last_seen_at = latest_seen
+        intervals = [
+            (current.timestamp - previous.timestamp).total_seconds()
+            for previous, current in zip(sample_list, sample_list[1:])
+            if current.timestamp > previous.timestamp
+        ]
+        if intervals:
+            meter.expected_interval_seconds = int(min(86_400, max(5, statistics.median(intervals))))
         batch.accepted_rows = accepted
         batch.duplicate_rows = duplicates
         batch.rejected_rows = len(errors)

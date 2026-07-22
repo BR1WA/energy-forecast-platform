@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from app.database import get_db
 from app.models import User
 from sqlalchemy.orm import Session
 from app.services.auth_service import get_current_user
 from app.services.simulation_service import simulation_service
+from app.schemas import SimulationConfiguration
 
 router = APIRouter(prefix="/api/v1/simulation", tags=["Simulation"])
 
@@ -26,8 +27,10 @@ def reset_simulation(db: Session = Depends(get_db), current_user: User = Depends
     return simulation_service.reset_simulation(db, current_user.id)
 
 @router.post("/configure")
-async def configure_simulation(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    config = await request.json()
-    return simulation_service.configure_simulation(db, current_user.id, config)
-
+def configure_simulation(
+    config: SimulationConfiguration,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return simulation_service.configure_simulation(db, current_user.id, config.model_dump())
 

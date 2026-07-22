@@ -3,15 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { alertsApi, getAccessToken, API_BASE_URL } from '@/lib/api';
+import { alertsApi, API_BASE_URL } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { useDataMode } from '@/contexts/DataModeContext';
-import { Bell, Search, X, LayoutDashboard, LineChart, BarChart3, AlertTriangle, Shield, Settings as SettingsIcon, Activity, PlayCircle, History, Database } from 'lucide-react';
+import { Bell, Search, X, LayoutDashboard, LineChart, AlertTriangle, Shield, Settings as SettingsIcon, Menu, Zap, Sparkles, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
-import { useWebSocket } from '@/hooks/useWebSocket';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,26 +18,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User } from 'lucide-react';
 
-const globalLastToastTimes: Record<string, number> = {};
-
-export default function Navbar() {
+export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
   const { t, isRTL, language } = useI18n();
-  const { mode } = useDataMode();
-
-  const getModeBadge = () => {
-    switch(mode) {
-      case 'LIVE': return { color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20', icon: Activity, label: 'LIVE' };
-      case 'SIMULATION': return { color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20', icon: PlayCircle, label: 'SIMULATION' };
-      case 'HISTORICAL': return { color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20', icon: History, label: 'HISTORICAL' };
-      case 'TRAINING': return { color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20', icon: Database, label: 'TRAINING' };
-      default: return { color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20', icon: Database, label: 'DEMO' };
-    }
-  };
-
-  const badgeProps = getModeBadge();
 
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -60,16 +42,20 @@ export default function Navbar() {
         return t('nav.dashboard');
       case '/forecast':
         return t('forecast.title');
-      case '/analytics':
-        return t('analytics.title');
+      case '/consumption':
+        return t('nav.consumption');
+      case '/recommendations':
+        return t('nav.recommendations');
+      case '/reports':
+        return t('nav.reports');
+      case '/simulation':
+        return t('nav.simulation');
       case '/alerts':
         return t('alerts.title');
       case '/admin':
         return t('admin.title');
       case '/settings':
         return t('settings.title');
-      case '/profile':
-        return t('nav.profile');
       default:
         return 'EnergyAI';
     }
@@ -81,15 +67,19 @@ export default function Navbar() {
         return t('dashboard.subtitle');
       case '/forecast':
         return t('forecast.subtitle');
-      case '/analytics':
-        return t('analytics.subtitle');
+      case '/consumption':
+        return 'Historical periods, energy totals, and CSV imports.';
+      case '/recommendations':
+        return 'Evidence-backed actions from your recorded consumption.';
+      case '/reports':
+        return 'Owned consumption summaries and exports.';
+      case '/simulation':
+        return 'Explicitly controlled and clearly labelled demo readings.';
       case '/alerts':
         return t('alerts.subtitle');
       case '/admin':
         return t('admin.subtitle');
       case '/settings':
-        return t('settings.subtitle');
-      case '/profile':
         return t('settings.subtitle');
       default:
         return '';
@@ -102,53 +92,6 @@ export default function Navbar() {
     .join('')
     .toUpperCase() || 'U';
 
-  const [wsUrl, setWsUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user) {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
-      const host = apiBase.replace(/^https?:\/\//, '');
-      const token = getAccessToken();
-      setWsUrl(`${wsProto}://${host}/api/v1/alerts/ws/${user.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`);
-    } else {
-      setWsUrl(null);
-    }
-  }, [user]);
-
-  useWebSocket(wsUrl, {
-    onMessage: (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        
-        if (payload.type === 'alert') {
-          setAlerts((prev) => [payload, ...prev].slice(0, 8));
-          setUnreadCount((prev) => prev + 1);
-          
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('app-alert-received', { detail: payload }));
-          }
-          
-          const now = Date.now();
-          const lastTime = globalLastToastTimes[payload.message] || 0;
-          if (now - lastTime > 8000) {
-            globalLastToastTimes[payload.message] = now;
-            toast.warning(payload.title, {
-              description: payload.message,
-              duration: 8000,
-              action: {
-                label: 'View',
-                onClick: () => router.push('/alerts')
-              }
-            });
-          }
-        }
-      } catch (err) {
-        console.error('[WS] Error parsing message:', err);
-      }
-    }
-  });
-
   useEffect(() => {
     const loadAlerts = async () => {
       try {
@@ -159,7 +102,9 @@ export default function Navbar() {
         // silently fail if not authenticated
       }
     };
-    loadAlerts();
+    void loadAlerts();
+    const timer = window.setInterval(() => void loadAlerts(), 30_000);
+    return () => window.clearInterval(timer);
   }, [router]);
 
   useEffect(() => {
@@ -201,7 +146,9 @@ export default function Navbar() {
   const searchPages = [
     { name: t('nav.dashboard'), path: '/dashboard', icon: LayoutDashboard, description: language === 'ar' ? 'بيانات القياس والتحميل المباشر للعداد الذكي' : language === 'fr' ? 'Télémesures et puissances du compteur en temps réel' : 'Real-time smart meter telemetry and load rates' },
     { name: t('nav.forecasts'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
-    { name: t('nav.analytics'), path: '/analytics', icon: BarChart3, description: t('analytics.subtitle') },
+    { name: t('nav.consumption'), path: '/consumption', icon: Zap, description: 'Historical periods and CSV imports' },
+    { name: t('nav.recommendations'), path: '/recommendations', icon: Sparkles, description: 'Evidence-backed actions' },
+    { name: t('nav.reports'), path: '/reports', icon: FileText, description: 'Consumption exports' },
     { name: t('nav.alerts'), path: '/alerts', icon: AlertTriangle, description: t('alerts.subtitle') },
     { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle') },
     { name: t('nav.settings'), path: '/settings', icon: SettingsIcon, description: t('settings.subtitle') },
@@ -240,23 +187,21 @@ export default function Navbar() {
   return (
     <header
       id="navbar"
-      className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 border-b border-white/[0.06] bg-[#0A0F1C]/60 backdrop-blur-xl"
+      className="sticky top-0 z-30 h-16 flex items-center justify-between gap-3 px-4 sm:px-6 border-b border-white/[0.06] bg-[#0A0F1C]/60 backdrop-blur-xl"
     >
-      <div>
-        <h2 className="text-lg font-semibold text-white">{getPageTitle()}</h2>
+      <div className="flex min-w-0 items-center gap-3">
+        <button aria-label="Open navigation" className="rounded-md p-1.5 text-slate-400 hover:bg-white/5 hover:text-white md:hidden" onClick={onMenuClick} type="button"><Menu className="h-5 w-5" /></button>
+        <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold text-white sm:text-lg">{getPageTitle()}</h2>
         {getPageDescription() && (
-          <p className="text-xs text-slate-400 -mt-0.5">{getPageDescription()}</p>
+          <p className="hidden truncate text-xs text-slate-400 sm:block">{getPageDescription()}</p>
         )}
-      </div>
-
-      <div className="flex-1 flex justify-center">
-        <div className={cn('flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold tracking-wider uppercase', badgeProps.bg, badgeProps.color)}>
-          <badgeProps.icon className="w-3 h-3" />
-          {badgeProps.label}
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="hidden flex-1 lg:block" />
+
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className="relative" ref={searchRef}>
           <button
             id="navbar-search"
@@ -447,9 +392,9 @@ export default function Navbar() {
               id="nav-profile"
               className="text-slate-300 focus:text-white focus:bg-white/[0.06] cursor-pointer p-0"
             >
-              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/profile')}>
+              <div className="w-full h-full flex items-center px-3 py-2" onClick={() => router.push('/settings?tab=security')}>
                 <User className="w-4 h-4 mr-2" />
-                {t('nav.profile')}
+                Account security
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem

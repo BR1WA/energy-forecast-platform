@@ -2,17 +2,24 @@
 from __future__ import annotations
 
 import csv
+import base64
+import binascii
 import io
+import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from itertools import chain
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models import EnergyBudget, Meter, Site, SiteSettings, SmartMeterReading
 
 
 MAX_POWER_GAP_SECONDS = 2 * 60 * 60
+PERIOD_ALIASES = {"day": "today", "week": "7d"}
+PERIODS = {"live", "today", "7d", "month", "year", "all", "custom"}
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -43,13 +50,337 @@ class ConsumptionService:
             db.query(SmartMeterReading, Meter)
             .join(Meter, SmartMeterReading.meter_id == Meter.id)
             .join(Site, Meter.site_id == Site.id)
-            .filter(Site.user_id == user_id)
+            .filter(Site.user_id == user_id, Meter.is_primary.is_(True))
         )
         if before is not None:
             query = query.filter(SmartMeterReading.timestamp < before)
         if site_id is not None:
             query = query.filter(Site.id == site_id)
         return query.order_by(Meter.id, SmartMeterReading.timestamp).all()
+
+    @staticmethod
+    def _primary_readings_query(db: Session, user_id: int):
+        return (
+            db.query(SmartMeterReading)
+            .join(Meter, SmartMeterReading.meter_id == Meter.id)
+            .join(Site, Meter.site_id == Site.id)
+            .filter(Site.user_id == user_id, Meter.is_primary.is_(True))
+        )
+
+    @staticmethod
+    def _zone_for_site(site: Site) -> ZoneInfo:
+        try:
+            return ZoneInfo(site.timezone)
+        except (KeyError, ValueError):
+            return ZoneInfo("UTC")
+
+    def _period_bounds(
+        self,
+        db: Session,
+        user_id: int,
+        timeframe: str,
+        start: datetime | None,
+        end: datetime | None,
+        now: datetime,
+    ) -> tuple[str, Site, ZoneInfo, datetime, datetime]:
+        timeframe = PERIOD_ALIASES.get(timeframe, timeframe)
+        if timeframe not in PERIODS:
+            raise ValueError("timeframe must be live, today, 7d, month, year, all, or custom")
+        site = db.query(Site).filter(Site.user_id == user_id).one_or_none()
+        if site is None:
+            raise ValueError("No site is configured")
+        zone = self._zone_for_site(site)
+        now_utc = _as_utc(now)
+        local_now = now_utc.astimezone(zone)
+
+        if timeframe == "custom":
+            if start is None or end is None:
+                raise ValueError("custom timeframe requires start and end")
+            if start.tzinfo is None or end.tzinfo is None:
+                raise ValueError("custom start and end must include a timezone offset")
+            period_start, period_end = _as_utc(start), _as_utc(end)
+            if period_end <= period_start:
+                raise ValueError("custom end must be after start")
+            if period_end - period_start > timedelta(days=366 * 5):
+                raise ValueError("custom range cannot exceed 5 years")
+        elif timeframe == "live":
+            period_start, period_end = now_utc - timedelta(minutes=15), now_utc
+        elif timeframe == "today":
+            period_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+            period_end = now_utc
+        elif timeframe == "7d":
+            local_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
+            period_start, period_end = local_start.astimezone(timezone.utc), now_utc
+        elif timeframe == "month":
+            period_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+            period_end = now_utc
+        elif timeframe == "year":
+            period_start = local_now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+            period_end = now_utc
+        else:
+            first_timestamp = self._primary_readings_query(db, user_id).with_entities(
+                func.min(SmartMeterReading.timestamp)
+            ).scalar()
+            period_start = _as_utc(first_timestamp) if first_timestamp else now_utc
+            last_timestamp = self._primary_readings_query(db, user_id).with_entities(
+                func.max(SmartMeterReading.timestamp)
+            ).scalar()
+            period_end = max(period_start, _as_utc(last_timestamp)) if last_timestamp else now_utc
+        return timeframe, site, zone, period_start, period_end
+
+    @staticmethod
+    def _granularity(period_start: datetime, period_end: datetime) -> tuple[str, int]:
+        seconds = max(0, (period_end - period_start).total_seconds())
+        if seconds <= 2 * 3600:
+            return "minute", 60
+        if seconds <= 2 * 86400:
+            return "15_minutes", 15 * 60
+        if seconds <= 14 * 86400:
+            return "hour", 3600
+        if seconds <= 90 * 86400:
+            return "day", 86400
+        if seconds <= 2 * 366 * 86400:
+            return "week", 7 * 86400
+        return "month", 30 * 86400
+
+    @staticmethod
+    def _bucket_timestamp(timestamp: datetime, period_start: datetime, bucket_seconds: int) -> datetime:
+        offset = max(0, (_as_utc(timestamp) - period_start).total_seconds())
+        return period_start + timedelta(seconds=int(offset // bucket_seconds) * bucket_seconds)
+
+    def get_period_summary(
+        self,
+        db: Session,
+        user_id: int,
+        timeframe: str,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        now: datetime | None = None,
+    ) -> dict:
+        now_utc = _as_utc(now or datetime.now(timezone.utc))
+        timeframe, site, zone, period_start, period_end = self._period_bounds(
+            db, user_id, timeframe, start, end, now_utc
+        )
+        meter = (
+            db.query(Meter)
+            .filter(Meter.site_id == site.id, Meter.is_primary.is_(True))
+            .one_or_none()
+        )
+        granularity, bucket_seconds = self._granularity(period_start, period_end)
+        if meter is None:
+            return self._empty_period(timeframe, site, period_start, period_end, granularity)
+
+        base_query = self._primary_readings_query(db, user_id)
+        settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).one_or_none()
+        previous = base_query.filter(SmartMeterReading.timestamp < period_start).order_by(
+            SmartMeterReading.timestamp.desc()
+        ).first()
+        in_period = base_query.filter(
+            SmartMeterReading.timestamp >= period_start,
+            SmartMeterReading.timestamp <= period_end,
+        ).order_by(SmartMeterReading.timestamp.asc())
+        following = base_query.filter(SmartMeterReading.timestamp > period_end).order_by(
+            SmartMeterReading.timestamp.asc()
+        ).first()
+
+        buckets: dict[datetime, dict] = defaultdict(
+            lambda: {"sum_kw": 0.0, "count": 0, "min_kw": None, "max_kw": None, "energy_kwh": 0.0}
+        )
+        source_counts: dict[str, int] = defaultdict(int)
+        records = chain(([previous] if previous else []), in_period.yield_per(1000), ([following] if following else []))
+        last_reading = None
+        total_kwh = 0.0
+        covered_seconds = 0.0
+        peak_kw = 0.0
+        peak_at = None
+        tariff_totals = {
+            "total_kwh": 0.0, "total_cost": 0.0, "peak_kwh": 0.0,
+            "off_peak_kwh": 0.0, "daily": defaultdict(lambda: {"kwh": 0.0, "cost": 0.0}),
+        }
+
+        for reading in records:
+            timestamp = _as_utc(reading.timestamp)
+            if period_start <= timestamp <= period_end:
+                bucket = buckets[self._bucket_timestamp(timestamp, period_start, bucket_seconds)]
+                bucket["sum_kw"] += reading.gap
+                bucket["count"] += 1
+                bucket["min_kw"] = reading.gap if bucket["min_kw"] is None else min(bucket["min_kw"], reading.gap)
+                bucket["max_kw"] = reading.gap if bucket["max_kw"] is None else max(bucket["max_kw"], reading.gap)
+                source_counts[reading.source] += 1
+                if reading.gap >= peak_kw:
+                    peak_kw = reading.gap
+                    peak_at = timestamp
+
+            if last_reading is not None:
+                interval_start, interval_end = _as_utc(last_reading.timestamp), timestamp
+                elapsed = (interval_end - interval_start).total_seconds()
+                clipped_start, clipped_end = max(interval_start, period_start), min(interval_end, period_end)
+                clipped_seconds = (clipped_end - clipped_start).total_seconds()
+                if elapsed > 0 and clipped_seconds > 0:
+                    direct_energy = None
+                    if last_reading.energy_kwh is not None and reading.energy_kwh is not None:
+                        difference = reading.energy_kwh - last_reading.energy_kwh
+                        if difference >= 0:
+                            direct_energy = difference
+                    if direct_energy is not None or elapsed <= MAX_POWER_GAP_SECONDS:
+                        interval_energy = direct_energy if direct_energy is not None else (
+                            (last_reading.gap + reading.gap) / 2 * elapsed / 3600
+                        )
+                        clipped_energy = interval_energy * clipped_seconds / elapsed
+                        total_kwh += clipped_energy
+                        covered_seconds += clipped_seconds
+                        if settings is not None:
+                            self._add_interval(
+                                tariff_totals, clipped_start, clipped_end, clipped_energy, settings, zone
+                            )
+                        energy_bucket = buckets[self._bucket_timestamp(clipped_start, period_start, bucket_seconds)]
+                        energy_bucket["energy_kwh"] += clipped_energy
+            last_reading = reading
+
+        latest = base_query.order_by(SmartMeterReading.timestamp.desc()).first()
+        freshness = self._freshness(latest, meter, now_utc)
+        duration_seconds = max(0.0, (period_end - period_start).total_seconds())
+        points = [
+            {
+                "timestamp": timestamp.isoformat(),
+                "average_kw": round(values["sum_kw"] / values["count"], 4) if values["count"] else 0.0,
+                "min_kw": round(values["min_kw"], 4) if values["min_kw"] is not None else None,
+                "max_kw": round(values["max_kw"], 4) if values["max_kw"] is not None else None,
+                "energy_kwh": round(values["energy_kwh"], 5),
+                "sample_count": values["count"],
+            }
+            for timestamp, values in sorted(buckets.items())
+        ]
+        sample_count = sum(source_counts.values())
+        return {
+            "timeframe": timeframe,
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+            "site_name": site.name,
+            "timezone": site.timezone,
+            "granularity": granularity,
+            "total_kwh": round(total_kwh, 4),
+            "estimated_cost": round(tariff_totals["total_cost"], 2),
+            "currency": settings.currency if settings else "MAD",
+            "average_kw": round(total_kwh / (covered_seconds / 3600), 4) if covered_seconds else 0.0,
+            "peak_kw": round(peak_kw, 4),
+            "peak_at": peak_at.isoformat() if peak_at else None,
+            "coverage_pct": round(min(100.0, covered_seconds / duration_seconds * 100), 1) if duration_seconds else 0.0,
+            "sample_count": sample_count,
+            "sources": [{"source": source, "count": count} for source, count in sorted(source_counts.items())],
+            "freshness": freshness,
+            "points": points,
+        }
+
+    @staticmethod
+    def _encode_cursor(reading: SmartMeterReading) -> str:
+        payload = json.dumps(
+            {"timestamp": _as_utc(reading.timestamp).isoformat(), "id": reading.id},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+    @staticmethod
+    def _decode_cursor(cursor: str) -> tuple[datetime, int]:
+        try:
+            padded = cursor + "=" * (-len(cursor) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+            return _as_utc(datetime.fromisoformat(payload["timestamp"])), int(payload["id"])
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError, binascii.Error, UnicodeDecodeError) as exc:
+            raise ValueError("Invalid reading cursor") from exc
+
+    def get_readings_page(
+        self,
+        db: Session,
+        user_id: int,
+        timeframe: str,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> dict:
+        timeframe, _site, _zone, period_start, period_end = self._period_bounds(
+            db,
+            user_id,
+            timeframe,
+            start,
+            end,
+            datetime.now(timezone.utc),
+        )
+        query = self._primary_readings_query(db, user_id).filter(
+            SmartMeterReading.timestamp >= period_start,
+            SmartMeterReading.timestamp <= period_end,
+        )
+        if cursor:
+            cursor_timestamp, cursor_id = self._decode_cursor(cursor)
+            query = query.filter(
+                or_(
+                    SmartMeterReading.timestamp < cursor_timestamp,
+                    and_(
+                        SmartMeterReading.timestamp == cursor_timestamp,
+                        SmartMeterReading.id < cursor_id,
+                    ),
+                )
+            )
+        rows = query.order_by(
+            SmartMeterReading.timestamp.desc(), SmartMeterReading.id.desc()
+        ).limit(limit + 1).all()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        return {
+            "items": [
+                {
+                    "id": reading.id,
+                    "timestamp": _as_utc(reading.timestamp).isoformat(),
+                    "active_power_kw": reading.gap,
+                    "reactive_power_kvar": reading.grp,
+                    "voltage_v": reading.voltage,
+                    "current_a": reading.intensity,
+                    "energy_kwh": reading.energy_kwh,
+                    "source": reading.source,
+                    "quality": reading.quality,
+                }
+                for reading in rows
+            ],
+            "next_cursor": self._encode_cursor(rows[-1]) if has_more and rows else None,
+            "limit": limit,
+            "timeframe": timeframe,
+        }
+
+    @staticmethod
+    def _freshness(reading: SmartMeterReading | None, meter: Meter, now: datetime) -> dict:
+        expected = meter.expected_interval_seconds or 60
+        if reading is None:
+            return {
+                "status": "empty", "age_seconds": None, "expected_interval_seconds": expected,
+                "last_seen_at": None, "source": None, "quality": None,
+            }
+        timestamp = _as_utc(reading.timestamp)
+        age = int(max(0, (now - timestamp).total_seconds()))
+        if reading.source == "csv":
+            status = "historical"
+        else:
+            status = "fresh" if age <= max(expected * 3, 300) else "stale"
+        return {
+            "status": status,
+            "age_seconds": age,
+            "expected_interval_seconds": expected,
+            "last_seen_at": timestamp.isoformat(),
+            "source": reading.source,
+            "quality": reading.quality,
+        }
+
+    @staticmethod
+    def _empty_period(timeframe: str, site: Site, start: datetime, end: datetime, granularity: str) -> dict:
+        return {
+            "timeframe": timeframe, "period_start": start.isoformat(), "period_end": end.isoformat(),
+            "site_name": site.name, "timezone": site.timezone, "granularity": granularity, "total_kwh": 0.0,
+            "estimated_cost": 0.0, "currency": "MAD", "average_kw": 0.0, "peak_kw": 0.0, "peak_at": None,
+            "coverage_pct": 0.0, "sample_count": 0, "sources": [],
+            "freshness": {"status": "empty", "age_seconds": None, "expected_interval_seconds": None,
+                          "last_seen_at": None, "source": None, "quality": None},
+            "points": [],
+        }
 
     @staticmethod
     def _settings_for_user(db: Session, user_id: int, site_id: int | None = None) -> dict[int, SiteSettings]:
@@ -212,8 +543,11 @@ class ConsumptionService:
     def get_monthly_summary(
         self, db: Session, user_id: int, month: str | None = None, site_id: int | None = None,
     ) -> dict:
+        site = db.query(Site).filter(Site.user_id == user_id).one_or_none()
         now = datetime.now(timezone.utc)
-        selected_month = month or now.strftime("%Y-%m")
+        selected_month = month or (
+            now.astimezone(self._zone_for_site(site)).strftime("%Y-%m") if site else now.strftime("%Y-%m")
+        )
         current = self._month_calculation(db, user_id, selected_month, site_id)
         year, month_number = (int(part) for part in selected_month.split("-"))
         previous_month = f"{year - 1}-12" if month_number == 1 else f"{year}-{month_number - 1:02d}"
@@ -230,7 +564,9 @@ class ConsumptionService:
         return current
 
     def get_current_consumption(self, db: Session, user_id: int):
-        reading = self._readings_for_user(db, user_id)[-1][0] if self._readings_for_user(db, user_id) else None
+        reading = self._primary_readings_query(db, user_id).order_by(
+            SmartMeterReading.timestamp.desc()
+        ).first()
         if not reading:
             return {"kw": 0, "status": "empty", "source": None, "age_seconds": None}
         timestamp = _as_utc(reading.timestamp)
@@ -248,35 +584,17 @@ class ConsumptionService:
         }
 
     def get_history(self, db: Session, user_id: int, hours: int = 24):
-        readings = self._readings_for_user(db, user_id)[-hours * 60:]
-        return [{"kw": reading.gap, "timestamp": _as_utc(reading.timestamp).isoformat()} for reading, _ in reversed(readings)]
+        readings = self._primary_readings_query(db, user_id).order_by(
+            SmartMeterReading.timestamp.desc()
+        ).limit(hours * 60).all()
+        return [{"kw": reading.gap, "timestamp": _as_utc(reading.timestamp).isoformat()} for reading in reversed(readings)]
 
     def get_chart_history(self, db: Session, user_id: int, timeframe: str) -> list[dict]:
-        """Return owned meter power points grouped for a chart timeframe."""
-        windows = {"live": 2, "day": 24, "week": 24 * 7, "month": 24 * 31, "all": 24 * 365}
-        if timeframe not in windows:
-            raise ValueError("timeframe must be live, day, week, month, or all")
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=windows[timeframe])
-        records = [
-            (reading, meter) for reading, meter in self._readings_for_user(db, user_id)
-            if _as_utc(reading.timestamp) >= cutoff
-        ]
-        if timeframe == "live":
-            return [
-                {"kw": round(reading.gap, 3), "timestamp": _as_utc(reading.timestamp).isoformat()}
-                for reading, _ in records[-60:]
-            ]
-
-        bucket_hours = {"day": 1, "week": 6, "month": 24, "all": 24 * 30}[timeframe]
-        buckets: dict[datetime, list[float]] = defaultdict(list)
-        for reading, _ in records:
-            timestamp = _as_utc(reading.timestamp)
-            bucket_epoch = int(timestamp.timestamp() // (bucket_hours * 3600)) * bucket_hours * 3600
-            bucket = datetime.fromtimestamp(bucket_epoch, tz=timezone.utc)
-            buckets[bucket].append(reading.gap)
+        """Compatibility chart shape; new clients should use ``/period``."""
+        summary = self.get_period_summary(db, user_id, timeframe)
         return [
-            {"kw": round(sum(values) / len(values), 3), "timestamp": timestamp.isoformat()}
-            for timestamp, values in sorted(buckets.items())
+            {"kw": point["average_kw"], "timestamp": point["timestamp"]}
+            for point in summary["points"]
         ]
 
     def get_statistics(self, db: Session, user_id: int):
@@ -285,15 +603,36 @@ class ConsumptionService:
 
     def export_month_csv(self, db: Session, user_id: int, month: str | None = None) -> str:
         summary = self.get_monthly_summary(db, user_id, month)
+        site = db.query(Site).filter(Site.user_id == user_id).one_or_none()
+        settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).one_or_none() if site else None
+        zone = self._zone_for_site(site) if site else ZoneInfo("UTC")
+        local_start, local_end = _month_bounds(summary["month"], zone)
+        period = self.get_period_summary(
+            db,
+            user_id,
+            "custom",
+            local_start.astimezone(timezone.utc),
+            local_end.astimezone(timezone.utc),
+        ) if site else None
         output = io.StringIO()
         writer = csv.writer(output)
+        writer.writerow(["generated_at_utc", datetime.now(timezone.utc).isoformat()])
+        writer.writerow(["site", site.name if site else "Not configured"])
+        writer.writerow(["timezone", site.timezone if site else "UTC"])
         writer.writerow(["month", summary["month"]])
+        writer.writerow(["currency", settings.currency if settings else "MAD"])
+        writer.writerow(["peak_rate_per_kwh", settings.peak_rate if settings else ""])
+        writer.writerow(["off_peak_rate_per_kwh", settings.off_peak_rate if settings else ""])
+        writer.writerow(["peak_hours", f"{settings.peak_start_hour}:00-{settings.peak_end_hour}:00" if settings else ""])
+        writer.writerow(["sources", ";".join(item["source"] for item in period["sources"]) if period else ""])
+        writer.writerow(["coverage_percent", summary["coverage_pct"]])
         writer.writerow(["total_kwh", summary["total_kwh"]])
-        writer.writerow(["total_cost", summary["total_cost"]])
+        writer.writerow(["estimated_cost", summary["total_cost"]])
+        writer.writerow(["calculation", "Interval-integrated primary-meter energy using configured site tariff"])
         writer.writerow([])
-        writer.writerow(["date", "energy_kwh", "cost"])
+        writer.writerow(["date", "energy_kwh", "estimated_cost", "currency"])
         for day in summary["daily"]:
-            writer.writerow([day["date"], day["kwh"], day["cost"]])
+            writer.writerow([day["date"], day["kwh"], day["cost"], settings.currency if settings else "MAD"])
         return output.getvalue()
 
 

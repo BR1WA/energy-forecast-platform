@@ -83,6 +83,30 @@ class TestAlertRules(unittest.TestCase):
         )
         self.assertIsNone(second)
 
+        # An unresolved incident is not duplicated after the cooldown window.
+        still_open = alert_service.evaluate_reading(
+            self.db,
+            self.meter,
+            self._reading(now + timedelta(minutes=61), 2.7),
+        )
+        self.assertIsNone(still_open)
+
+        resolved = alert_service.evaluate_reading(
+            self.db,
+            self.meter,
+            self._reading(now + timedelta(minutes=62), 1.5),
+        )
+        self.assertIsNone(resolved)
+        self.assertIsNotNone(first.resolved_at)
+
+        next_incident = alert_service.evaluate_reading(
+            self.db,
+            self.meter,
+            self._reading(now + timedelta(minutes=123), 2.8),
+        )
+        self.assertIsNotNone(next_incident)
+        self.assertNotEqual(next_incident.id, first.id)
+
     def test_missing_push_data_creates_one_alert_per_cooldown(self):
         now = datetime.now(timezone.utc)
         self.meter.source_type = "push"
@@ -98,3 +122,7 @@ class TestAlertRules(unittest.TestCase):
         recommendation = self.db.query(Recommendation).filter(Recommendation.alert_id == first[0].id).one()
         self.assertEqual(recommendation.category, "data_quality")
         self.assertEqual(second, [])
+
+        recovery = self._reading(now + timedelta(minutes=2), 1.0)
+        alert_service.evaluate_reading(self.db, self.meter, recovery)
+        self.assertIsNotNone(first[0].resolved_at)

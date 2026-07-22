@@ -1,24 +1,41 @@
-"""Analytics summaries and reports backed only by persisted user data."""
+"""Owned report summaries and forecast PDF export."""
 from __future__ import annotations
 
 import io
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Alert, Forecast, ModelRegistry, Site, SiteSettings, User
-from app.schemas import AnalyticsSummary, ForecastHistoryItem
+from app.models import Alert, Forecast, Recommendation, Site, SiteSettings, User
+from app.schemas import AnalyticsSummary, ReportForecastItem
 from app.services.auth_service import get_current_user
+from app.services.product_forecast_service import FALLBACK_NAME, MODEL_NAME
+
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics"])
+PRODUCT_MODELS = (MODEL_NAME, FALLBACK_NAME)
 
 
 def _forecast_values(forecast: Forecast) -> list[float]:
-    return [float(row[0]) for row in (forecast.predictions or []) if row]
+    return [float(row[0]) for row in (forecast.predictions or []) if row and row[0] is not None]
+
+
+def _report_item(forecast: Forecast) -> ReportForecastItem:
+    values = _forecast_values(forecast)
+    snapshot = forecast.input_snapshot or {}
+    return ReportForecastItem(
+        id=forecast.id,
+        model_name=forecast.model_name,
+        method=snapshot.get("method", "unknown"),
+        created_at=forecast.created_at,
+        forecast_start=snapshot.get("forecast_origin"),
+        peak_hourly_kwh=max(values) if values else None,
+        total_kwh=sum(values) if values else None,
+    )
 
 
 @router.get("/summary", response_model=AnalyticsSummary)
@@ -26,52 +43,33 @@ def get_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return user-owned forecast and alert facts.
-
-    Historical accuracy and consumption chart series are intentionally empty
-    until forecasts are linked to their matching meter observations.
-    """
     forecasts = (
         db.query(Forecast)
-        .filter(Forecast.user_id == current_user.id)
-        .order_by(Forecast.created_at.desc())
-        .all()
-    )
-    model_counts = (
-        db.query(Forecast.model_name, func.count(Forecast.id))
-        .filter(Forecast.user_id == current_user.id)
-        .group_by(Forecast.model_name)
+        .filter(Forecast.user_id == current_user.id, Forecast.model_name.in_(PRODUCT_MODELS))
+        .order_by(Forecast.created_at.desc(), Forecast.id.desc())
         .all()
     )
     peaks = [max(values) for forecast in forecasts if (values := _forecast_values(forecast))]
-    recent_forecasts = [
-        ForecastHistoryItem(
-            id=forecast.id,
-            model_name=forecast.model_name,
-            created_at=forecast.created_at,
-            peak_power=max(values) if (values := _forecast_values(forecast)) else None,
-        )
-        for forecast in forecasts[:10]
-    ]
     total_alerts = db.query(Alert).filter(Alert.user_id == current_user.id).count()
-    unacknowledged_alerts = (
+    open_alerts = (
         db.query(Alert)
-        .filter(Alert.user_id == current_user.id, Alert.is_acknowledged.is_(False))
+        .filter(Alert.user_id == current_user.id, Alert.resolved_at.is_(None))
+        .count()
+    )
+    resolved_alerts = total_alerts - open_alerts
+    open_recommendations = (
+        db.query(Recommendation)
+        .filter(Recommendation.user_id == current_user.id, Recommendation.status == "open")
         .count()
     )
     return AnalyticsSummary(
         total_forecasts=len(forecasts),
         total_alerts=total_alerts,
-        unacknowledged_alerts=unacknowledged_alerts,
-        models_used={name: count for name, count in model_counts},
-        avg_peak_power=sum(peaks) / len(peaks) if peaks else None,
-        recent_forecasts=recent_forecasts,
-        consumption_trend=[],
-        weekly_consumption=[],
-        consumption_by_hour=[],
-        monthly_accuracy=[],
-        model_performance=[],
-        heatmap_data=[],
+        open_alerts=open_alerts,
+        resolved_alerts=resolved_alerts,
+        open_recommendations=open_recommendations,
+        avg_forecast_peak_kwh=sum(peaks) / len(peaks) if peaks else None,
+        recent_forecasts=[_report_item(forecast) for forecast in forecasts[:10]],
     )
 
 
@@ -81,78 +79,108 @@ def export_pdf_report(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Export a short report of the user's persisted forecast data."""
-    query = db.query(Forecast).filter(Forecast.user_id == current_user.id)
+    query = db.query(Forecast).filter(
+        Forecast.user_id == current_user.id,
+        Forecast.model_name.in_(PRODUCT_MODELS),
+    )
     if forecast_id is not None:
         forecast = query.filter(Forecast.id == forecast_id).first()
         if forecast is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Forecast not found")
     else:
-        forecast = query.order_by(Forecast.created_at.desc()).first()
+        forecast = query.order_by(Forecast.created_at.desc(), Forecast.id.desc()).first()
 
-    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-    from reportlab.lib import colors
 
     buffer = io.BytesIO()
-    document = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=48, leftMargin=48, topMargin=48, bottomMargin=48)
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=42,
+        leftMargin=42,
+        topMargin=42,
+        bottomMargin=42,
+        title="Energy Forecast Report",
+    )
     styles = getSampleStyleSheet()
-    story = [Paragraph("Energy Forecast Report", styles["Title"]), Spacer(1, 12)]
+    story = [Paragraph("Energy Forecast Report", styles["Title"]), Spacer(1, 10)]
     story.append(Paragraph(f"Account: {current_user.email}", styles["BodyText"]))
+    story.append(Paragraph(f"Generated: {datetime.now(timezone.utc).isoformat()}", styles["BodyText"]))
+
     if forecast is None:
-        story.append(Spacer(1, 12))
-        story.append(Paragraph("No persisted forecast is available for this account.", styles["BodyText"]))
+        story.extend([Spacer(1, 12), Paragraph("No persisted product forecast is available for this account.", styles["BodyText"])])
     else:
-        values = _forecast_values(forecast)
+        snapshot = forecast.input_snapshot or {}
         site = (
             db.query(Site)
             .filter(Site.id == forecast.site_id, Site.user_id == current_user.id)
             .first()
-            if forecast.site_id is not None
-            else None
         )
         site_settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first() if site else None
-        model = db.query(ModelRegistry).filter(ModelRegistry.id == forecast.model_registry_id).first() if forecast.model_registry_id else None
-        period = (
-            f"{forecast.input_start.isoformat()} to {forecast.input_end.isoformat()}"
-            if forecast.input_start and forecast.input_end
-            else "Input period was not recorded"
+        values = _forecast_values(forecast)
+        origin_text = snapshot.get("forecast_origin")
+        origin = datetime.fromisoformat(origin_text) if origin_text else None
+        sources = ", ".join(snapshot.get("sources", [])) or "Not recorded"
+        story.extend(
+            [
+                Spacer(1, 12),
+                Paragraph(f"Site: {site.name if site else 'Not recorded'}", styles["BodyText"]),
+                Paragraph(f"Timezone: {snapshot.get('timezone') or (site.timezone if site else 'Not recorded')}", styles["BodyText"]),
+                Paragraph(f"Input period: {forecast.input_start.isoformat() if forecast.input_start else 'Not recorded'} to {forecast.input_end.isoformat() if forecast.input_end else 'Not recorded'}", styles["BodyText"]),
+                Paragraph(f"Data source(s): {sources}", styles["BodyText"]),
+                Paragraph(f"Input coverage: {snapshot.get('coverage_percent', 'Not recorded')}%", styles["BodyText"]),
+                Paragraph(f"Forecast method: {snapshot.get('method', 'unknown')}", styles["BodyText"]),
+                Paragraph(f"Model: {forecast.model_name} version {snapshot.get('model_version', 'unknown')}", styles["BodyText"]),
+                Paragraph(f"Output: 24 hourly energy values in kWh", styles["BodyText"]),
+                Paragraph(f"Total median energy: {sum(values):.3f} kWh" if values else "No prediction values were stored.", styles["BodyText"]),
+                Paragraph(f"Peak hourly energy: {max(values):.3f} kWh" if values else "Peak hourly energy is unavailable.", styles["BodyText"]),
+                Paragraph(
+                    f"Tariff context: {site_settings.currency}; peak {site_settings.peak_rate:.3f}, off-peak {site_settings.off_peak_rate:.3f} per kWh"
+                    if site_settings
+                    else "Tariff context was not recorded.",
+                    styles["BodyText"],
+                ),
+                Paragraph(f"Uncertainty: {forecast.confidence_method or 'No uncertainty interval is available.'}", styles["BodyText"]),
+            ]
         )
-        story.extend([
-            Spacer(1, 12),
-            Paragraph(f"Site: {site.name if site else 'Not recorded'}", styles["BodyText"]),
-            Paragraph(f"Site timezone: {site.timezone if site else 'Not recorded'}", styles["BodyText"]),
-            Paragraph(f"Input source: {forecast.input_source or 'Not recorded'}", styles["BodyText"]),
-            Paragraph(f"Input period: {period}", styles["BodyText"]),
-            Paragraph(f"Model: {forecast.model_name}", styles["BodyText"]),
-            Paragraph(f"Model version: {model.version if model else 'Not recorded'}", styles["BodyText"]),
-            Paragraph(f"Created: {forecast.created_at.isoformat() if forecast.created_at else 'Unknown'}", styles["BodyText"]),
-            Paragraph(f"Forecast horizon: {len(values)} steps", styles["BodyText"]),
-            Paragraph(f"Peak predicted demand: {max(values):.3f} kW" if values else "No prediction values were stored.", styles["BodyText"]),
-            Paragraph(
-                f"Tariff context: {site_settings.currency} peak {site_settings.peak_rate:.3f}, off-peak {site_settings.off_peak_rate:.3f}"
-                if site_settings
-                else "Tariff context was not recorded for this forecast site.",
-                styles["BodyText"],
-            ),
-            Paragraph(
-                f"Uncertainty: {forecast.confidence_method or 'Point forecast without a calibrated interval.'}",
-                styles["BodyText"],
-            ),
-            Spacer(1, 12),
-        ])
-        rows = [["Step", "Predicted demand (kW)"]] + [[str(index + 1), f"{value:.3f}"] for index, value in enumerate(values)]
-        table = Table(rows, colWidths=[100, 180])
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a8a")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ]))
+        if snapshot.get("fallback_reason"):
+            story.append(Paragraph(f"Fallback reason: {snapshot['fallback_reason']}", styles["BodyText"]))
+        story.extend([Spacer(1, 10), Paragraph("Client-site forecast accuracy has not yet been established.", styles["Italic"]), Spacer(1, 12)])
+
+        rows = [["Target time", "P10 kWh", "Median kWh", "P90 kWh"]]
+        for index, row in enumerate(forecast.predictions or []):
+            timestamp = origin + timedelta(hours=index) if origin else None
+            rows.append(
+                [
+                    timestamp.isoformat() if timestamp else f"H+{index + 1}",
+                    f"{float(row[1]):.3f}" if len(row) > 1 and row[1] is not None else "-",
+                    f"{float(row[0]):.3f}",
+                    f"{float(row[2]):.3f}" if len(row) > 2 and row[2] is not None else "-",
+                ]
+            )
+        table = Table(rows, repeatRows=1, colWidths=[210, 70, 80, 70])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+                    ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+                ]
+            )
+        )
         story.append(table)
 
     document.build(story)
     buffer.seek(0)
-    filename = f"energy_report_{forecast.id if forecast else 'summary'}.pdf"
-    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}"})
+    filename = f"energy_forecast_{forecast.id if forecast else 'empty'}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
