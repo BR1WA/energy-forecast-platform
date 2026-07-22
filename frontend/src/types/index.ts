@@ -105,8 +105,13 @@ export interface PrimaryMeter {
   push_key_configured: boolean;
 }
 
+export type ForecastHorizon = 24 | 168;
+
 export interface ForecastModelStatus {
   available: boolean;
+  enabled: boolean;
+  warmed: boolean;
+  horizon_hours: ForecastHorizon;
   name: string;
   display_name: string;
   version: string;
@@ -114,7 +119,20 @@ export interface ForecastModelStatus {
   error: string | null;
 }
 
+export interface ForecastCapability {
+  horizon_hours: ForecastHorizon;
+  label: string;
+  description: string;
+  model: ForecastModelStatus;
+}
+
+export interface ForecastCapabilities {
+  default_horizon_hours: 24;
+  capabilities: ForecastCapability[];
+}
+
 export interface ForecastReadiness {
+  horizon_hours: ForecastHorizon;
   status: 'ready' | 'fallback_ready' | 'insufficient_data';
   ready_for_tft: boolean;
   fallback_available: boolean;
@@ -168,6 +186,7 @@ export interface ProductForecastHistoryItem {
   id: number;
   model_name: string;
   method: string;
+  horizon_hours: ForecastHorizon;
   forecast_start: string | null;
   created_at: string;
 }
@@ -186,6 +205,7 @@ export interface AnalyticsSummary {
     id: number;
     model_name: string;
     method: string;
+    horizon_hours: number;
     created_at: string;
     forecast_start: string | null;
     peak_hourly_kwh: number | null;
@@ -256,12 +276,18 @@ export interface AdminUser extends User {
 
 export interface ModelReadiness {
   available: boolean;
+  enabled: boolean;
   warmed: boolean;
+  horizon_hours: ForecastHorizon;
   name: string;
   display_name: string;
   version: string;
   artifact_fingerprint: string | null;
   error: string | null;
+}
+
+export interface ModelReadinessSummary {
+  artifacts: ModelReadiness[];
 }
 
 export interface SystemHealth {

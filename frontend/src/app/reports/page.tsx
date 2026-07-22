@@ -40,6 +40,7 @@ export default function ReportsPage() {
   const [month, setMonth] = useState(currentMonth());
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<'pdf' | 'csv' | null>(null);
+  const latestForecast = summary?.recent_forecasts[0];
 
   const load = async () => {
     setLoading(true);
@@ -100,7 +101,7 @@ export default function ReportsPage() {
                 <div className="divide-y divide-white/10">
                   {summary.recent_forecasts.map((forecast) => (
                     <div key={forecast.id} className="grid gap-2 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-5">
-                      <div><p className="font-medium text-white">{methodLabel(forecast.method)}</p><p className="text-xs text-slate-500">{new Date(forecast.created_at).toLocaleString()}</p></div>
+                      <div><p className="font-medium text-white">{methodLabel(forecast.method)} · {forecast.horizon_hours}h</p><p className="text-xs text-slate-500">{new Date(forecast.created_at).toLocaleString()}</p></div>
                       <span className="text-slate-300">{forecast.total_kwh == null ? 'Total unavailable' : `${forecast.total_kwh.toFixed(2)} kWh total`}</span>
                       <span className="text-slate-400">{forecast.peak_hourly_kwh == null ? 'Peak unavailable' : `${forecast.peak_hourly_kwh.toFixed(3)} kWh peak`}</span>
                     </div>
@@ -113,7 +114,7 @@ export default function ReportsPage() {
           <Card className="h-fit rounded-lg border-white/10 bg-[#111827]/80">
             <CardHeader><CardTitle className="text-base text-white">Exports</CardTitle></CardHeader>
             <CardContent className="space-y-5">
-              <div><p className="text-sm font-medium text-slate-200">Latest forecast</p><p className="mt-1 text-xs leading-5 text-slate-500">24 target timestamps, method, version, source, quantiles, tariff context, and limitations.</p><Button className="mt-3 w-full justify-between" onClick={exportPdf} disabled={exporting !== null || !summary?.total_forecasts}>Forecast PDF <Download className="h-4 w-4" /></Button></div>
+              <div><p className="text-sm font-medium text-slate-200">Latest forecast</p><p className="mt-1 text-xs leading-5 text-slate-500">{latestForecast ? `${latestForecast.horizon_hours} target timestamps` : 'Persisted target timestamps'}, method, version, source, quantiles, tariff context, and limitations.</p><Button className="mt-3 w-full justify-between" onClick={exportPdf} disabled={exporting !== null || !summary?.total_forecasts}>Forecast PDF <Download className="h-4 w-4" /></Button></div>
               <div className="border-t border-white/10 pt-4"><Label htmlFor="report-month">Consumption month</Label><Input id="report-month" className="mt-2" type="month" value={month} onChange={(event) => setMonth(event.target.value)} /><Button variant="outline" className="mt-3 w-full justify-between border-white/10 text-slate-200" onClick={exportCsv} disabled={exporting !== null || !month}>Consumption CSV <Download className="h-4 w-4" /></Button></div>
             </CardContent>
           </Card>

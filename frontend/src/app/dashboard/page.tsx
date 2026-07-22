@@ -286,7 +286,7 @@ export default function DashboardPage() {
           </div>
           <div className="min-w-0 border-t border-white/10 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
             <h2 className="flex items-center gap-2 text-sm font-medium text-white"><BrainCircuit className="h-4 w-4 text-cyan-400" />Latest forecast</h2>
-            {latestForecast ? <><p className="mt-3 text-lg font-semibold text-white">{latestForecast.points.reduce((sum, point) => sum + point.p50_kwh, 0).toFixed(2)} kWh</p><p className="mt-1 text-xs text-slate-500">{latestForecast.method === 'global_tft' ? 'Global TFT median' : 'Seasonal fallback'}, next 24 hours</p></> : <p className="mt-3 text-sm text-slate-500">No persisted forecast.</p>}
+            {latestForecast ? <><p className="mt-3 text-lg font-semibold text-white">{latestForecast.points.reduce((sum, point) => sum + point.p50_kwh, 0).toFixed(2)} kWh</p><p className="mt-1 text-xs text-slate-500">{latestForecast.method === 'global_tft' ? 'Global TFT median' : 'Seasonal fallback'}, next {latestForecast.horizon_hours} hours</p></> : <p className="mt-3 text-sm text-slate-500">No persisted forecast.</p>}
             <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/forecast">Open forecast</Link>
           </div>
           <div className="min-w-0 border-t border-white/10 pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">

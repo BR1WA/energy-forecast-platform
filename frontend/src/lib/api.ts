@@ -4,6 +4,8 @@ import type {
   RegisterPayload,
   User,
   ForecastReadiness,
+  ForecastCapabilities,
+  ForecastHorizon,
   ProductForecast,
   ProductForecastHistoryItem,
   AnalyticsSummary,
@@ -11,6 +13,7 @@ import type {
   AlertConfig,
   AdminUser,
   ModelReadiness,
+  ModelReadinessSummary,
   SystemHealth,
   EnergyBudget,
   SystemSettings,
@@ -78,6 +81,9 @@ function getApiErrorMessage(payload: unknown, status: number): string {
   }
   if (detail && typeof detail === 'object' && 'msg' in detail && typeof detail.msg === 'string') {
     return detail.msg;
+  }
+  if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') {
+    return detail.message;
   }
   return `API error: ${status}`;
 }
@@ -241,17 +247,23 @@ export const authApi = {
 // Forecast API
 // ============================================================
 export const forecastApi = {
-  getReadiness: (): Promise<ForecastReadiness> =>
-    apiFetch('/api/v1/forecast/readiness'),
+  getCapabilities: (): Promise<ForecastCapabilities> =>
+    apiFetch('/api/v1/forecast/capabilities'),
 
-  run: (): Promise<ProductForecast> =>
-    apiFetch('/api/v1/forecast/run', { method: 'POST' }),
+  getReadiness: (horizon: ForecastHorizon = 24): Promise<ForecastReadiness> =>
+    apiFetch(`/api/v1/forecast/readiness?horizon_hours=${horizon}`),
 
-  getLatest: (): Promise<ProductForecast | null> =>
-    apiFetch('/api/v1/forecast/latest'),
+  run: (horizon: ForecastHorizon = 24): Promise<ProductForecast> =>
+    apiFetch('/api/v1/forecast/run', {
+      method: 'POST',
+      body: JSON.stringify({ horizon_hours: horizon }),
+    }),
 
-  getHistory: (): Promise<ProductForecastHistoryItem[]> =>
-    apiFetch('/api/v1/forecast/history'),
+  getLatest: (horizon?: ForecastHorizon): Promise<ProductForecast | null> =>
+    apiFetch(`/api/v1/forecast/latest${horizon ? `?horizon_hours=${horizon}` : ''}`),
+
+  getHistory: (horizon?: ForecastHorizon): Promise<ProductForecastHistoryItem[]> =>
+    apiFetch(`/api/v1/forecast/history${horizon ? `?horizon_hours=${horizon}` : ''}`),
 };
 
 // ============================================================
@@ -352,6 +364,9 @@ export const adminApi = {
 
   getModelReadiness: (): Promise<ModelReadiness> =>
     apiFetch('/api/v1/admin/model-readiness'),
+
+  getAllModelReadiness: (): Promise<ModelReadinessSummary> =>
+    apiFetch('/api/v1/admin/model-readiness/all'),
 
   getHealth: (): Promise<SystemHealth> =>
     apiFetch('/api/v1/admin/health'),
