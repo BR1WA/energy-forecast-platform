@@ -45,7 +45,20 @@ def _enqueue(db, key="event:1"):
         recipient="person@example.test",
         template="critical_alert",
         template_version="v1",
-        payload={"title": "Threshold", "message": "Measured threshold exceeded", "url": "https://app.example.test/alerts"},
+        payload={
+            "alert_id": 1,
+            "title": "Threshold",
+            "message": "Measured threshold exceeded",
+            "evidence": {
+                "meter_name": "Primary meter",
+                "observed_at": "2026-07-22T10:00:00+00:00",
+                "observed_kw": 4.0,
+                "threshold_kw": 3.0,
+                "source": "push",
+            },
+            "timezone": "Africa/Casablanca",
+            "url": "https://app.example.test/alerts#alert-1",
+        },
         dedup_key=key,
     )
 
