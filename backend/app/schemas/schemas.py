@@ -129,6 +129,11 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+class RegistrationResponse(BaseModel):
+    message: str
+    verification_required: bool = True
+
+
 class VerifyTokenRequest(BaseModel):
     token: str = Field(min_length=20, max_length=512)
 
@@ -158,6 +163,27 @@ class AccountDeletionRequest(BaseModel):
 
 class GoogleCredentialRequest(BaseModel):
     credential: str = Field(min_length=20, max_length=4096)
+    state: str = Field(min_length=20, max_length=512)
+
+
+class GoogleLinkRequest(GoogleCredentialRequest):
+    current_password: str = Field(min_length=1, max_length=100)
+
+
+class GoogleUnlinkRequest(BaseModel):
+    current_password: Optional[str] = Field(default=None, max_length=100)
+
+
+class GoogleChallengeResponse(BaseModel):
+    state: str
+    nonce: str
+    expires_in_seconds: int
+
+
+class AuthCapabilitiesResponse(BaseModel):
+    email_delivery_enabled: bool
+    google_auth_enabled: bool
+    google_client_id: Optional[str] = None
 
 
 # ======================== INGESTION ========================

@@ -28,8 +28,10 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+def verify_password(plain_password: str, hashed_password: str | None) -> bool:
     """Verify a password against its hash."""
+    if not hashed_password:
+        return False
     return bcrypt.checkpw(
         plain_password.encode('utf-8'),
         hashed_password.encode('utf-8')
@@ -151,13 +153,13 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     user = db.query(User).filter(User.email == email.strip().lower()).first()
     if not user:
         return None
-    if not verify_password(password, user.password_hash):
+    if not user.password_hash or not verify_password(password, user.password_hash):
         return None
     return user
 
 
-def store_refresh_token(db: Session, token: str, user_id: int):
-    """Store the refresh token hash in the database and clean up expired tokens."""
+def store_refresh_token(db: Session, token: str, user_id: int, *, commit: bool = True):
+    """Store a refresh-token hash; callers may keep it in their transaction."""
     import hashlib
     token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
     
@@ -181,7 +183,10 @@ def store_refresh_token(db: Session, token: str, user_id: int):
         RefreshToken.expires_at < datetime.now(timezone.utc)
     ).delete()
     
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
 
 
 def verify_refresh_token(db: Session, token: str) -> bool:
@@ -196,3 +201,22 @@ def verify_refresh_token(db: Session, token: str) -> bool:
     ).first()
     
     return db_token is not None
+
+
+def consume_refresh_token(db: Session, token: str) -> bool:
+    """Atomically revoke one live refresh token to prevent concurrent replay."""
+    import hashlib
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    changed = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == token_hash,
+        RefreshToken.is_revoked.is_(False),
+        RefreshToken.expires_at > datetime.now(timezone.utc),
+    ).update({"is_revoked": True}, synchronize_session=False)
+    return changed == 1
+
+
+def revoke_user_sessions(db: Session, user_id: int) -> int:
+    return db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.is_revoked.is_(False),
+    ).update({"is_revoked": True}, synchronize_session=False)

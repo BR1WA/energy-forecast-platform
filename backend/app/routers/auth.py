@@ -1,91 +1,202 @@
-"""
-Authentication router — login, register, token refresh.
-"""
-from datetime import datetime, timezone
+"""Product authentication, verified registration, recovery, and identities."""
+
+from datetime import datetime, timedelta, timezone
+import hashlib
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, Response
-from sqlalchemy.orm import Session
 import os
 import time
+from urllib.parse import urlsplit
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.database import get_db
+from app.limiter import limiter
+from app.models import AuthIdentity, RefreshToken, User
+from app.schemas import (
+    AuthCapabilitiesResponse,
+    GoogleChallengeResponse,
+    GoogleCredentialRequest,
+    GoogleLinkRequest,
+    GoogleUnlinkRequest,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    PasswordUpdate,
+    RegistrationResponse,
+    TokenData,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+    UserUpdateMe,
+    VerifyTokenRequest,
+)
+from app.services.account_action_service import (
+    ActionPurpose,
+    consume_action_token,
+    has_recent_action_token,
+    issue_action_token,
+)
+from app.services.audit_service import record_audit_event
+from app.services.auth_service import (
+    authenticate_user,
+    consume_refresh_token,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    get_current_user,
+    hash_password,
+    revoke_user_sessions,
+    store_refresh_token,
+    verify_password,
+)
+from app.services.email_service import enqueue_email
+from app.services.oauth_challenge_service import consume_oauth_challenge, issue_oauth_challenge
+from app.services.site_service import ensure_default_site
 
 logger = logging.getLogger(__name__)
-
-from app.database import get_db
-from app.models import User, RefreshToken, AuthIdentity
-from app.schemas import (
-    UserRegister, UserLogin, UserResponse, TokenResponse,
-    TokenData, UserUpdateMe, PasswordUpdate, VerifyTokenRequest, PasswordResetRequest, PasswordResetConfirm, GoogleCredentialRequest,
-)
-from app.services.auth_service import (
-    hash_password, verify_password, authenticate_user, create_access_token,
-    create_refresh_token, decode_token, get_current_user, store_refresh_token,
-    verify_refresh_token
-)
-from app.services.site_service import ensure_default_site
-from app.services.audit_service import record_audit_event
-from app.limiter import limiter
-from app.config import get_settings
-from app.services.account_action_service import issue_action_token, consume_action_token
-from app.services.email_service import enqueue_email
-
 settings = get_settings()
-
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+
+
+def _error(code: str, message: str, status_code: int) -> HTTPException:
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def _normalize_origin(value: str) -> str:
+    parsed = urlsplit(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def _allowed_origins() -> set[str]:
+    values = {settings.FRONTEND_URL, settings.PUBLIC_FRONTEND_URL}
+    if settings.DEBUG:
+        values.update({"http://localhost:3000", "http://localhost:3001"})
+    return {normalized for value in values if (normalized := _normalize_origin(value))}
+
+
+def _require_trusted_origin(request: Request) -> None:
+    origin = _normalize_origin(request.headers.get("origin", ""))
+    if not origin or origin not in _allowed_origins():
+        raise _error("csrf_origin_rejected", "The request origin is not allowed.", status.HTTP_403_FORBIDDEN)
+
+
+def _cookie_kwargs() -> dict:
+    return {
+        "httponly": True,
+        "secure": not settings.DEBUG,
+        "samesite": "lax",
+        "path": "/api/v1/auth",
+        "domain": settings.REFRESH_COOKIE_DOMAIN or None,
+    }
 
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key="refresh_token",
         value=token,
-        httponly=True,
-        secure=not settings.DEBUG,
-        samesite="lax",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/api/v1/auth",
+        **_cookie_kwargs(),
     )
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie("refresh_token", path="/api/v1/auth", httponly=True, secure=not settings.DEBUG, samesite="lax")
+    response.delete_cookie("refresh_token", **_cookie_kwargs())
 
 
-def _verified_google_identity(credential: str) -> dict:
-    if not settings.GOOGLE_AUTH_ENABLED:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google sign-in is not enabled")
-    try:
-        from google.auth.transport.requests import Request as GoogleRequest
-        from google.oauth2 import id_token
-        claims = id_token.verify_oauth2_token(credential, GoogleRequest(), settings.GOOGLE_CLIENT_ID)
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google credential could not be verified")
-    if not claims.get("email_verified") or not claims.get("sub") or not claims.get("email"):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google account has no verified email")
-    return claims
+def _cookie_error(code: str, message: str, status_code: int) -> JSONResponse:
+    response = JSONResponse(status_code=status_code, content={"detail": {"code": code, "message": message}})
+    _clear_refresh_cookie(response)
+    return response
 
 
-def _login_response(response: Response, db: Session, user: User) -> TokenResponse:
+def _issue_session(response: Response, db: Session, user: User) -> TokenResponse:
     token_data = {"sub": str(user.id), "role": user.role}
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
-    store_refresh_token(db, refresh_token, user.id)
+    store_refresh_token(db, refresh_token, user.id, commit=False)
+    db.commit()
     _set_refresh_cookie(response, refresh_token)
     return TokenResponse(access_token=access_token, user=UserResponse.model_validate(user))
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")
-def register(request: Request, response: Response, data: UserRegister, db: Session = Depends(get_db)):
-    """Register a new user account."""
-    # Check if email already exists
-    existing = db.query(User).filter(User.email == data.email).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered"
-        )
+def _queue_action_email(db: Session, user: User, purpose: ActionPurpose) -> None:
+    issued = issue_action_token(db, user.id, purpose)
+    template = "verify_email" if purpose == "verify_email" else "password_reset"
+    row = enqueue_email(
+        db,
+        user_id=user.id,
+        recipient=user.email,
+        template=template,
+        template_version="v1",
+        dedup_key=f"{purpose}:{user.id}:{issued.record.id}",
+        payload={
+            "action_token_id": issued.record.id,
+            "sealed_token": issued.sealed_token,
+        },
+    )
+    if row is None:
+        raise RuntimeError("Could not enqueue the account action email")
 
-    # Create user
+
+def _verify_google_token(credential: str) -> dict:
+    from google.auth.transport.requests import Request as GoogleRequest
+    from google.oauth2 import id_token
+
+    return id_token.verify_oauth2_token(credential, GoogleRequest(), settings.GOOGLE_CLIENT_ID)
+
+
+def _verified_google_identity(credential: str, *, expected_nonce: str) -> dict:
+    if not settings.GOOGLE_AUTH_ENABLED:
+        raise _error("google_auth_disabled", "Google sign-in is not enabled.", status.HTTP_404_NOT_FOUND)
+    try:
+        claims = _verify_google_token(credential)
+    except Exception as exc:
+        logger.info("google_identity status=rejected reason=%s", type(exc).__name__)
+        raise _error("google_credential_invalid", "Google credential could not be verified.", status.HTTP_401_UNAUTHORIZED)
+    if claims.get("iss") not in {"accounts.google.com", "https://accounts.google.com"}:
+        raise _error("google_issuer_invalid", "Google credential issuer is invalid.", status.HTTP_401_UNAUTHORIZED)
+    if claims.get("aud") != settings.GOOGLE_CLIENT_ID:
+        raise _error("google_audience_invalid", "Google credential audience is invalid.", status.HTTP_401_UNAUTHORIZED)
+    if claims.get("nonce") != expected_nonce:
+        raise _error("google_nonce_invalid", "Google credential nonce is invalid.", status.HTTP_401_UNAUTHORIZED)
+    if not claims.get("email_verified") or not claims.get("sub") or not claims.get("email"):
+        raise _error("google_email_unverified", "Google account has no verified email.", status.HTTP_401_UNAUTHORIZED)
+    return claims
+
+
+def _unverified_google_nonce(credential: str) -> str:
+    """Read only the nonce used to locate a challenge; no identity claim is trusted."""
+    try:
+        from google.auth import jwt as google_jwt
+
+        claims = google_jwt.decode(credential, verify=False)
+        return str(claims.get("nonce", ""))
+    except Exception:
+        raise _error("google_credential_invalid", "Google credential could not be verified.", status.HTTP_401_UNAUTHORIZED)
+
+
+@router.get("/capabilities", response_model=AuthCapabilitiesResponse)
+def auth_capabilities():
+    return AuthCapabilitiesResponse(
+        email_delivery_enabled=settings.EMAIL_DELIVERY_ENABLED,
+        google_auth_enabled=settings.GOOGLE_AUTH_ENABLED,
+        google_client_id=settings.GOOGLE_CLIENT_ID if settings.GOOGLE_AUTH_ENABLED else None,
+    )
+
+
+@router.post("/register", response_model=RegistrationResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
+def register(request: Request, data: UserRegister, db: Session = Depends(get_db)):
+    if not settings.EMAIL_DELIVERY_ENABLED:
+        raise _error("email_delivery_unavailable", "Registration is unavailable until email delivery is configured.", status.HTTP_503_SERVICE_UNAVAILABLE)
+    if db.query(User.id).filter(User.email == data.email).first():
+        raise _error("email_already_registered", "Email already registered.", status.HTTP_409_CONFLICT)
+
     user = User(
         email=data.email,
         password_hash=hash_password(data.password),
@@ -93,168 +204,51 @@ def register(request: Request, response: Response, data: UserRegister, db: Sessi
         role="user",
         is_active=True,
         is_setup_complete=False,
+        email_verified_at=None,
     )
-    db.add(user)
-
-    db.flush()
-    ensure_default_site(db, user.id)
-    record_audit_event(db, "auth.registered", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
-    db.commit()
-    db.refresh(user)
-
-    return _login_response(response, db, user)
+    try:
+        db.add(user)
+        db.flush()
+        ensure_default_site(db, user.id)
+        _queue_action_email(db, user, "verify_email")
+        record_audit_event(db, "auth.registered", target_user_id=user.id, target=f"user:{user.id}")
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return RegistrationResponse(message="Check your email to verify your account.")
 
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(settings.RATE_LIMIT)
 def login(request: Request, response: Response, data: UserLogin, db: Session = Depends(get_db)):
-    """Authenticate and receive JWT tokens."""
     user = authenticate_user(db, data.email, data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
-
-    # Update last login
+    if not user or not user.is_active:
+        raise _error("invalid_credentials", "Invalid email or password.", status.HTTP_401_UNAUTHORIZED)
+    if user.email_verified_at is None:
+        raise _error("email_verification_required", "Verify your email before signing in.", status.HTTP_403_FORBIDDEN)
     user.last_login = datetime.now(timezone.utc)
     record_audit_event(db, "auth.login", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
-    db.commit()
-
-    return _login_response(response, db, user)
-
-
-@router.post("/google", response_model=TokenResponse)
-def google_login(data: GoogleCredentialRequest, response: Response, db: Session = Depends(get_db)):
-    """Sign in with a Google ID token after server-side audience verification."""
-    claims = _verified_google_identity(data.credential)
-    identity = db.query(AuthIdentity).filter(AuthIdentity.provider == "google", AuthIdentity.subject == claims["sub"]).first()
-    if identity:
-        user = db.query(User).filter(User.id == identity.user_id, User.is_active.is_(True)).first()
-        if user:
-            return _login_response(response, db, user)
-    existing = db.query(User).filter(User.email == claims["email"].lower()).first()
-    if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Sign in with your existing method, then link Google from account security")
-    user = User(email=claims["email"].lower(), full_name=claims.get("name"), role="user", is_active=True, email_verified_at=datetime.now(timezone.utc))
-    db.add(user)
-    db.flush()
-    ensure_default_site(db, user.id)
-    db.add(AuthIdentity(user_id=user.id, provider="google", subject=claims["sub"], email=user.email))
-    record_audit_event(db, "auth.google_registered", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
-    db.commit()
-    db.refresh(user)
-    return _login_response(response, db, user)
-
-
-@router.post("/google/link")
-def link_google_identity(data: GoogleCredentialRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Link only a verified Google account for the currently authenticated email."""
-    claims = _verified_google_identity(data.credential)
-    if claims["email"].lower() != current_user.email.lower():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google email must match the signed-in account")
-    conflicting = db.query(AuthIdentity).filter(AuthIdentity.provider == "google", AuthIdentity.subject == claims["sub"]).first()
-    if conflicting and conflicting.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Google account is already linked")
-    if not conflicting:
-        db.add(AuthIdentity(user_id=current_user.id, provider="google", subject=claims["sub"], email=current_user.email))
-        record_audit_event(db, "auth.google_linked", actor_user_id=current_user.id, target_user_id=current_user.id, target=f"user:{current_user.id}")
-        db.commit()
-    return {"message": "Google account linked"}
-
-
-@router.post("/refresh", response_model=TokenData)
-def refresh_token(request: Request, response: Response, db: Session = Depends(get_db)):
-    """Refresh an access token using a valid refresh token and rotate it."""
-    token = request.cookies.get("refresh_token")
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh session is missing")
-    payload = decode_token(token)
-
-    if payload.get("type") != "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-        )
-
-    # Verify refresh token exists in DB and is active
-    if not verify_refresh_token(db, token):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token is invalid, expired, or revoked",
-        )
-
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload",
-        )
-    user = db.query(User).filter(User.id == int(user_id)).first()
-    if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or deactivated",
-        )
-
-    # Invalidate old refresh token (rotation)
-    import hashlib
-    old_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
-    db.query(RefreshToken).filter(RefreshToken.token_hash == old_hash).update({"is_revoked": True})
-
-    # Issue new access token and new rotated refresh token
-    token_data = {"sub": str(user.id), "role": user.role}
-    new_access = create_access_token(token_data)
-    new_refresh = create_refresh_token(token_data)
-
-    # Store new refresh token
-    store_refresh_token(db, new_refresh, user.id)
-    _set_refresh_cookie(response, new_refresh)
-
-    return TokenData(access_token=new_access)
-
-
-@router.post("/logout")
-def logout(
-    request: Request,
-    response: Response,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Log out a user by invalidating their refresh token(s)."""
-    import hashlib
-    token = request.cookies.get("refresh_token")
-    if token:
-        # Invalidate the specific token
-        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
-        db_token = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
-        if db_token:
-            db_token.is_revoked = True
-            db.commit()
-    else:
-        # Invalidate all active tokens for this user
-        db.query(RefreshToken).filter(
-            RefreshToken.user_id == current_user.id,
-            RefreshToken.is_revoked == False
-        ).update({"is_revoked": True})
-        db.commit()
-    _clear_refresh_cookie(response)
-    return {"message": "Logged out successfully"}
+    return _issue_session(response, db, user)
 
 
 @router.post("/verification/resend", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
 def resend_verification(request: Request, data: PasswordResetRequest, db: Session = Depends(get_db)):
-    """Queue a verification email without exposing whether the address exists."""
     user = db.query(User).filter(User.email == data.email).first()
-    if user and not user.email_verified_at and settings.EMAIL_DELIVERY_ENABLED:
-        token = issue_action_token(db, user.id, "verify_email")
-        enqueue_email(
-            db, user_id=user.id, recipient=user.email, template="verify_email",
-            dedup_key=f"verify:{user.id}:{token[:12]}",
-            payload={"url": f"{settings.PUBLIC_FRONTEND_URL.rstrip('/')}/verify-email?token={token}"},
+    now = datetime.now(timezone.utc)
+    if settings.EMAIL_DELIVERY_ENABLED and user and user.is_active and user.email_verified_at is None:
+        cooling_down = has_recent_action_token(
+            db,
+            user.id,
+            "verify_email",
+            since=now - timedelta(seconds=60),
         )
-        db.commit()
+        if not cooling_down:
+            _queue_action_email(db, user, "verify_email")
+            db.commit()
+    # Keep the public response neutral for missing, verified, inactive, and cooldown cases.
+    hashlib.sha256(data.email.encode("utf-8")).digest()
     return {"message": "If an account needs verification, an email will be sent shortly."}
 
 
@@ -262,60 +256,222 @@ def resend_verification(request: Request, data: PasswordResetRequest, db: Sessio
 def confirm_verification(data: VerifyTokenRequest, db: Session = Depends(get_db)):
     action = consume_action_token(db, data.token, "verify_email")
     if action is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link is invalid or expired")
-    user = db.query(User).filter(User.id == action.user_id).first()
+        raise _error("verification_token_invalid", "Verification link is invalid, expired, or already used.", status.HTTP_400_BAD_REQUEST)
+    user = db.query(User).filter(User.id == action.user_id, User.is_active.is_(True)).first()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link is invalid or expired")
+        db.rollback()
+        raise _error("verification_token_invalid", "Verification link is invalid, expired, or already used.", status.HTTP_400_BAD_REQUEST)
     user.email_verified_at = datetime.now(timezone.utc)
     record_audit_event(db, "auth.email_verified", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
     db.commit()
-    return {"message": "Email verified"}
+    return {"message": "Email verified. You can now sign in."}
 
 
 @router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
 def request_password_reset(request: Request, data: PasswordResetRequest, db: Session = Depends(get_db)):
-    """Non-enumerating password reset request."""
-    user = db.query(User).filter(User.email == data.email, User.is_active.is_(True)).first()
-    if user and user.password_hash and settings.EMAIL_DELIVERY_ENABLED:
-        token = issue_action_token(db, user.id, "password_reset")
-        enqueue_email(
-            db, user_id=user.id, recipient=user.email, template="password_reset",
-            dedup_key=f"reset:{user.id}:{token[:12]}",
-            payload={"url": f"{settings.PUBLIC_FRONTEND_URL.rstrip('/')}/reset-password?token={token}"},
+    user = db.query(User).filter(User.email == data.email).first()
+    now = datetime.now(timezone.utc)
+    if settings.EMAIL_DELIVERY_ENABLED and user and user.is_active and user.password_hash:
+        cooling_down = has_recent_action_token(
+            db,
+            user.id,
+            "reset_password",
+            since=now - timedelta(seconds=60),
         )
-        db.commit()
+        if not cooling_down:
+            _queue_action_email(db, user, "reset_password")
+            db.commit()
+    # Perform fixed work for every path without exposing account state.
+    hashlib.pbkdf2_hmac("sha256", data.email.encode("utf-8"), b"energyforecast-reset", 20_000)
     return {"message": "If an account matches this email, reset instructions will be sent shortly."}
 
 
 @router.post("/password-reset/confirm")
 def confirm_password_reset(data: PasswordResetConfirm, db: Session = Depends(get_db)):
-    action = consume_action_token(db, data.token, "password_reset")
+    action = consume_action_token(db, data.token, "reset_password")
     if action is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset link is invalid or expired")
-    user = db.query(User).filter(User.id == action.user_id).first()
+        raise _error("reset_token_invalid", "Reset link is invalid, expired, or already used.", status.HTTP_400_BAD_REQUEST)
+    user = db.query(User).filter(User.id == action.user_id, User.is_active.is_(True)).first()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset link is invalid or expired")
+        db.rollback()
+        raise _error("reset_token_invalid", "Reset link is invalid, expired, or already used.", status.HTTP_400_BAD_REQUEST)
     user.password_hash = hash_password(data.new_password)
-    db.query(RefreshToken).filter(RefreshToken.user_id == user.id, RefreshToken.is_revoked.is_(False)).update({"is_revoked": True})
+    revoke_user_sessions(db, user.id)
     record_audit_event(db, "auth.password_reset", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
     db.commit()
     return {"message": "Password reset. Please sign in."}
 
 
+@router.post("/refresh", response_model=TokenData)
+def refresh_token(request: Request, response: Response, db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    token = request.cookies.get("refresh_token")
+    if not token:
+        return _cookie_error("refresh_session_missing", "Refresh session is missing.", status.HTTP_401_UNAUTHORIZED)
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        return _cookie_error("refresh_token_invalid", "Refresh session is invalid.", status.HTTP_401_UNAUTHORIZED)
+    if payload.get("type") != "refresh" or not consume_refresh_token(db, token):
+        db.rollback()
+        return _cookie_error("refresh_token_replayed", "Refresh session is invalid or already used.", status.HTTP_401_UNAUTHORIZED)
+    try:
+        user_id = int(payload.get("sub", ""))
+    except (TypeError, ValueError):
+        db.rollback()
+        return _cookie_error("refresh_token_invalid", "Refresh session is invalid.", status.HTTP_401_UNAUTHORIZED)
+    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+    if not user or user.email_verified_at is None:
+        db.rollback()
+        return _cookie_error("refresh_user_unavailable", "Refresh session is no longer available.", status.HTTP_401_UNAUTHORIZED)
+    new_access = create_access_token({"sub": str(user.id), "role": user.role})
+    new_refresh = create_refresh_token({"sub": str(user.id), "role": user.role})
+    store_refresh_token(db, new_refresh, user.id, commit=False)
+    db.commit()
+    _set_refresh_cookie(response, new_refresh)
+    return TokenData(access_token=new_access)
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    token = request.cookies.get("refresh_token")
+    if token:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).update({"is_revoked": True}, synchronize_session=False)
+        db.commit()
+    _clear_refresh_cookie(response)
+    return {"message": "Logged out successfully"}
+
+
+@router.post("/logout-all")
+def logout_all(request: Request, response: Response, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    revoke_user_sessions(db, current_user.id)
+    record_audit_event(db, "auth.logout_all", actor_user_id=current_user.id, target_user_id=current_user.id, target=f"user:{current_user.id}")
+    db.commit()
+    _clear_refresh_cookie(response)
+    return {"message": "Logged out on all devices"}
+
+
+@router.post("/google/challenge", response_model=GoogleChallengeResponse)
+@limiter.limit("10/minute")
+def google_login_challenge(request: Request, db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    if not settings.GOOGLE_AUTH_ENABLED:
+        raise _error("google_auth_disabled", "Google sign-in is not enabled.", status.HTTP_404_NOT_FOUND)
+    challenge = issue_oauth_challenge(db, action="login")
+    db.commit()
+    return GoogleChallengeResponse(**challenge.__dict__)
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_login(request: Request, response: Response, data: GoogleCredentialRequest, db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    # Decode only to obtain the nonce; authenticity is checked immediately after.
+    nonce = _unverified_google_nonce(data.credential)
+    claims = _verified_google_identity(data.credential, expected_nonce=nonce)
+    if not consume_oauth_challenge(db, state=data.state, nonce=nonce, action="login"):
+        db.rollback()
+        raise _error("google_state_invalid", "Google sign-in state is invalid, expired, or already used.", status.HTTP_401_UNAUTHORIZED)
+    identity = db.query(AuthIdentity).filter(AuthIdentity.provider == "google", AuthIdentity.subject == claims["sub"]).first()
+    if identity:
+        user = db.query(User).filter(User.id == identity.user_id, User.is_active.is_(True)).first()
+        if not user:
+            db.rollback()
+            raise _error("account_unavailable", "This account is unavailable.", status.HTTP_403_FORBIDDEN)
+        user.last_login = datetime.now(timezone.utc)
+        return _issue_session(response, db, user)
+    normalized_email = str(claims["email"]).strip().lower()
+    if db.query(User.id).filter(User.email == normalized_email).first():
+        db.rollback()
+        raise _error("google_link_required", "Sign in locally and explicitly link Google from account security.", status.HTTP_409_CONFLICT)
+    user = User(
+        email=normalized_email,
+        full_name=claims.get("name"),
+        role="user",
+        is_active=True,
+        email_verified_at=datetime.now(timezone.utc),
+        is_setup_complete=False,
+    )
+    db.add(user)
+    db.flush()
+    ensure_default_site(db, user.id)
+    db.add(AuthIdentity(user_id=user.id, provider="google", subject=claims["sub"], email=normalized_email))
+    record_audit_event(db, "auth.google_registered", actor_user_id=user.id, target_user_id=user.id, target=f"user:{user.id}")
+    return _issue_session(response, db, user)
+
+
+@router.post("/google/link/challenge", response_model=GoogleChallengeResponse)
+def google_link_challenge(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    if not settings.GOOGLE_AUTH_ENABLED:
+        raise _error("google_auth_disabled", "Google sign-in is not enabled.", status.HTTP_404_NOT_FOUND)
+    challenge = issue_oauth_challenge(db, action="link", user_id=current_user.id)
+    db.commit()
+    return GoogleChallengeResponse(**challenge.__dict__)
+
+
+@router.get("/google/status")
+def google_identity_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    linked = db.query(AuthIdentity.id).filter(
+        AuthIdentity.user_id == current_user.id,
+        AuthIdentity.provider == "google",
+    ).first() is not None
+    return {"linked": linked, "can_unlink": linked and bool(current_user.password_hash)}
+
+
+@router.post("/google/link")
+def link_google_identity(request: Request, data: GoogleLinkRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    if not current_user.password_hash or not verify_password(data.current_password, current_user.password_hash):
+        raise _error("recent_auth_required", "Current password confirmation is required.", status.HTTP_403_FORBIDDEN)
+    nonce = _unverified_google_nonce(data.credential)
+    claims = _verified_google_identity(data.credential, expected_nonce=nonce)
+    if not consume_oauth_challenge(db, state=data.state, nonce=nonce, action="link", user_id=current_user.id):
+        db.rollback()
+        raise _error("google_state_invalid", "Google linking state is invalid, expired, or already used.", status.HTTP_401_UNAUTHORIZED)
+    if str(claims["email"]).strip().lower() != current_user.email.lower():
+        db.rollback()
+        raise _error("google_email_mismatch", "Google email must match the signed-in account.", status.HTTP_400_BAD_REQUEST)
+    conflicting = db.query(AuthIdentity).filter(AuthIdentity.provider == "google", AuthIdentity.subject == claims["sub"]).first()
+    if conflicting and conflicting.user_id != current_user.id:
+        db.rollback()
+        raise _error("google_subject_in_use", "Google account is already linked.", status.HTTP_409_CONFLICT)
+    existing = db.query(AuthIdentity).filter(AuthIdentity.user_id == current_user.id, AuthIdentity.provider == "google").first()
+    if not existing:
+        db.add(AuthIdentity(user_id=current_user.id, provider="google", subject=claims["sub"], email=current_user.email))
+        record_audit_event(db, "auth.google_linked", actor_user_id=current_user.id, target_user_id=current_user.id, target=f"user:{current_user.id}")
+    db.commit()
+    return {"message": "Google account linked"}
+
+
+@router.delete("/google/link")
+def unlink_google_identity(request: Request, response: Response, data: GoogleUnlinkRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    identity = db.query(AuthIdentity).filter(AuthIdentity.user_id == current_user.id, AuthIdentity.provider == "google").first()
+    if identity is None:
+        raise _error("google_identity_not_linked", "No Google account is linked.", status.HTTP_404_NOT_FOUND)
+    if not current_user.password_hash:
+        raise _error("last_login_method", "Set a local password before unlinking your only sign-in method.", status.HTTP_409_CONFLICT)
+    if not data.current_password or not verify_password(data.current_password, current_user.password_hash):
+        raise _error("recent_auth_required", "Current password confirmation is required.", status.HTTP_403_FORBIDDEN)
+    db.delete(identity)
+    revoke_user_sessions(db, current_user.id)
+    record_audit_event(db, "auth.google_unlinked", actor_user_id=current_user.id, target_user_id=current_user.id, target=f"user:{current_user.id}")
+    db.commit()
+    _clear_refresh_cookie(response)
+    return {"message": "Google account unlinked. Sign in again."}
+
+
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
-    """Get current authenticated user profile."""
     return UserResponse.model_validate(current_user)
 
 
 @router.put("/me", response_model=UserResponse)
-def update_me(
-    data: UserUpdateMe,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Update current user's profile."""
+def update_me(data: UserUpdateMe, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if data.full_name is not None:
         current_user.full_name = data.full_name
     db.commit()
@@ -324,119 +480,63 @@ def update_me(
 
 
 @router.put("/password")
-def update_password(
-    data: PasswordUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Change current user's password."""
-    if not verify_password(data.current_password, current_user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect",
-        )
+def update_password(request: Request, data: PasswordUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_trusted_origin(request)
+    if not current_user.password_hash or not verify_password(data.current_password, current_user.password_hash):
+        raise _error("current_password_invalid", "Current password is incorrect.", status.HTTP_400_BAD_REQUEST)
     current_user.password_hash = hash_password(data.new_password)
-    db.query(RefreshToken).filter(
-        RefreshToken.user_id == current_user.id,
-        RefreshToken.is_revoked.is_(False),
-    ).update({"is_revoked": True})
-    record_audit_event(
-        db,
-        "auth.password_changed",
-        actor_user_id=current_user.id,
-        target_user_id=current_user.id,
-        target=f"user:{current_user.id}",
-    )
+    revoke_user_sessions(db, current_user.id)
+    record_audit_event(db, "auth.password_changed", actor_user_id=current_user.id, target_user_id=current_user.id, target=f"user:{current_user.id}")
     db.commit()
     return {"message": "Password updated. Sign in again on your other devices."}
 
 
 @router.post("/me/avatar", response_model=UserResponse)
-def upload_avatar(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Upload a new profile picture/avatar (Admin/User)."""
-    # 1. Validate file extension and MIME type
+def upload_avatar(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
     allowed_mime_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-
     filename = file.filename or "avatar"
     _, ext = os.path.splitext(filename.lower())
-    
     if ext not in allowed_extensions or file.content_type not in allowed_mime_types:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only JPG, JPEG, PNG, GIF, and WebP images are allowed.",
-        )
-
-    # 2. Validate file size (limit: 2MB)
-    max_size = 2 * 1024 * 1024 # 2MB
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only JPG, JPEG, PNG, GIF, and WebP images are allowed.")
     try:
         contents = file.file.read()
-        file_size = len(contents)
-        if file_size > max_size:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Image file size must not exceed 2MB.",
-            )
-        
-        # 3. Create static/avatars/ directory if needed
+        if len(contents) > 2 * 1024 * 1024:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image file size must not exceed 2MB.")
         os.makedirs(settings.AVATAR_STORAGE_DIR, exist_ok=True)
-        
-        # 4. Generate unique filename
-        timestamp = int(time.time())
-        new_filename = f"user_{current_user.id}_{timestamp}{ext}"
+        new_filename = f"user_{current_user.id}_{int(time.time())}{ext}"
         file_path = os.path.join(settings.AVATAR_STORAGE_DIR, new_filename)
-        
-        # 5. Write contents to file
-        with open(file_path, "wb") as f:
-            f.write(contents)
-            
-        # 6. Delete old avatar file if it exists
+        with open(file_path, "wb") as target:
+            target.write(contents)
         if current_user.avatar_url and current_user.avatar_url.startswith("/static/avatars/"):
             old_path = os.path.join(settings.AVATAR_STORAGE_DIR, os.path.basename(current_user.avatar_url))
             if os.path.exists(old_path):
                 try:
                     os.remove(old_path)
-                except Exception as ex:
-                    logger.error(f"Failed to remove old avatar: {ex}")
-                    
-        # 7. Update user's avatar_url
+                except Exception as exc:
+                    logger.error("Failed to remove old avatar: %s", type(exc).__name__)
         current_user.avatar_url = f"/static/avatars/{new_filename}"
         db.commit()
         db.refresh(current_user)
-        
         return UserResponse.model_validate(current_user)
-        
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process image upload: {str(e)}",
-        )
+    except Exception as exc:
+        logger.error("Avatar processing failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to process image upload.")
 
 
 @router.delete("/me/avatar", response_model=UserResponse)
-def delete_avatar(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Delete current user's profile picture/avatar."""
+def delete_avatar(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.avatar_url:
         if current_user.avatar_url.startswith("/static/avatars/"):
             old_path = os.path.join(settings.AVATAR_STORAGE_DIR, os.path.basename(current_user.avatar_url))
             if os.path.exists(old_path):
                 try:
                     os.remove(old_path)
-                except Exception as ex:
-                    logger.error(f"Failed to remove avatar file: {ex}")
-        
+                except Exception as exc:
+                    logger.error("Failed to remove avatar: %s", type(exc).__name__)
         current_user.avatar_url = None
         db.commit()
         db.refresh(current_user)
-        
     return UserResponse.model_validate(current_user)
