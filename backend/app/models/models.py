@@ -3,7 +3,7 @@ SQLAlchemy ORM models for the Energy Forecast platform.
 """
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, JSON, func, UniqueConstraint, Index, text
+    ForeignKey, JSON, func, UniqueConstraint, Index, CheckConstraint, text
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -55,7 +55,13 @@ class RefreshToken(Base):
 
 class AccountActionToken(Base):
     __tablename__ = "account_action_tokens"
-    __table_args__ = (Index("ix_action_tokens_user_purpose", "user_id", "purpose"),)
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('verify_email', 'reset_password')",
+            name="ck_account_action_tokens_purpose",
+        ),
+        Index("ix_action_tokens_user_purpose", "user_id", "purpose"),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -63,13 +69,17 @@ class AccountActionToken(Base):
     token_hash = Column(String(64), unique=True, nullable=False, index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     user = relationship("User", back_populates="action_tokens")
 
 
 class AuthIdentity(Base):
     __tablename__ = "auth_identities"
-    __table_args__ = (UniqueConstraint("provider", "subject", name="uq_auth_identity_provider_subject"),)
+    __table_args__ = (
+        UniqueConstraint("provider", "subject", name="uq_auth_identity_provider_subject"),
+        UniqueConstraint("user_id", "provider", name="uq_auth_identity_user_provider"),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -77,25 +87,58 @@ class AuthIdentity(Base):
     subject = Column(String(255), nullable=False)
     email = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     user = relationship("User", back_populates="identities")
+
+
+class OAuthChallenge(Base):
+    __tablename__ = "oauth_challenges"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('login', 'link')",
+            name="ck_oauth_challenges_action",
+        ),
+        Index("ix_oauth_challenges_expiry", "expires_at", "used_at"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    action = Column(String(20), nullable=False)
+    state_hash = Column(String(64), unique=True, nullable=False, index=True)
+    nonce_hash = Column(String(64), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class EmailOutbox(Base):
     __tablename__ = "email_outbox"
-    __table_args__ = (UniqueConstraint("dedup_key", name="uq_email_outbox_dedup_key"), Index("ix_email_outbox_due", "status", "next_attempt_at"))
+    __table_args__ = (
+        UniqueConstraint("dedup_key", name="uq_email_outbox_dedup_key"),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'sent', 'retry', 'dead')",
+            name="ck_email_outbox_status",
+        ),
+        Index("ix_email_outbox_due", "status", "next_attempt_at", "lease_expires_at"),
+    )
 
     id = Column(String(36), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     recipient = Column(String(255), nullable=False)
     template = Column(String(80), nullable=False)
+    template_version = Column(String(20), nullable=False, default="v1")
     payload = Column(JSON, nullable=False, default=dict)
     dedup_key = Column(String(255), nullable=False)
     status = Column(String(20), nullable=False, default="pending")
     attempts = Column(Integer, nullable=False, default=0)
     next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    lease_owner = Column(String(64), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
     sent_at = Column(DateTime(timezone=True), nullable=True)
+    provider_message_id = Column(String(255), nullable=True)
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class Site(Base):

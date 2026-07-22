@@ -23,7 +23,7 @@ def run_once() -> int:
 
 
 def main() -> None:
-    interval = get_settings().EMAIL_WORKER_INTERVAL_SECONDS
+    interval = get_settings().EMAIL_WORKER_POLL_SECONDS
     while True:
         try:
             run_once()

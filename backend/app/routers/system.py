@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.product_forecast_service import product_forecast_service
+from app.config import get_settings
+from app.models import EmailOutbox
 
 
 router = APIRouter(prefix="/api/v1/system", tags=["System"])
@@ -14,6 +16,7 @@ START_TIME = time.time()
 
 
 def build_readiness(db: Session) -> dict:
+    settings = get_settings()
     database_ready = True
     database_error = None
     try:
@@ -28,6 +31,10 @@ def build_readiness(db: Session) -> dict:
     forecast_artifacts = {"24": forecast}
     if product_forecast_service.is_enabled(168):
         forecast_artifacts["168"] = product_forecast_service.warmup(168)
+    mail_counts = {"processing": 0, "retry": 0, "dead": 0}
+    if settings.EMAIL_DELIVERY_ENABLED:
+        for state in mail_counts:
+            mail_counts[state] = db.query(EmailOutbox).filter(EmailOutbox.status == state).count()
     return {
         "status": "ready" if ready else "not_ready",
         "ready": ready,
@@ -45,6 +52,11 @@ def build_readiness(db: Session) -> dict:
             "error": forecast["error"],
         },
         "forecast_artifacts": forecast_artifacts,
+        "email": {
+            "enabled": settings.EMAIL_DELIVERY_ENABLED,
+            "status": "disabled" if not settings.EMAIL_DELIVERY_ENABLED else ("degraded" if mail_counts["dead"] else "ready"),
+            **mail_counts,
+        },
         "uptime_seconds": int(time.time() - START_TIME),
     }
 
@@ -69,6 +81,7 @@ def get_health(db: Session = Depends(get_db)):
         "backend": "healthy",
         "database": readiness["database"]["status"],
         "forecast": readiness["forecast"]["status"],
+        "email": readiness["email"],
         "ready": readiness["ready"],
         "uptime": readiness["uptime_seconds"],
     }

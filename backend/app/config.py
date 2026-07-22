@@ -74,17 +74,23 @@ class Settings(BaseSettings):
     # implemented in later gates, but G0 validates configuration atomically now.
     PUBLIC_FRONTEND_URL: str = ""
     EMAIL_FROM_ADDRESS: str = ""
+    EMAIL_FROM_NAME: str = "EnergyForecast"
+    EMAIL_REPLY_TO: str = ""
     SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_PORT: int = 587
     SMTP_USE_TLS: bool = True
-    EMAIL_REPLY_TO: str = ""
-    EMAIL_WORKER_INTERVAL_SECONDS: int = 30
+    SMTP_TIMEOUT_SECONDS: int = 20
+    EMAIL_WORKER_POLL_SECONDS: int = 30
+    EMAIL_LEASE_SECONDS: int = 120
+    EMAIL_RETRY_BASE_SECONDS: int = 60
     EMAIL_MAX_ATTEMPTS: int = 5
     AVATAR_STORAGE_DIR: str = "static/avatars"
+    REFRESH_COOKIE_DOMAIN: str = ""
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CHALLENGE_EXPIRE_MINUTES: int = 10
 
     def validate_enabled_integrations(self) -> None:
         """Reject partially configured capabilities without exposing secrets."""
