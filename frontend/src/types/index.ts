@@ -263,7 +263,9 @@ export interface AlertConfig {
   high_consumption_threshold: number;
   cooldown_minutes: number;
   missing_data_minutes: number;
-  email_enabled?: boolean;
+  email_enabled: boolean;
+  email_delivery_available: boolean;
+  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | null;
 }
 
 export interface Recommendation {
@@ -377,6 +379,8 @@ export interface AlertConfigResponse {
   cooldown_minutes: number;
   missing_data_minutes: number;
   email_enabled: boolean;
+  email_delivery_available: boolean;
+  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | null;
   created_at: string;
   updated_at: string;
 }

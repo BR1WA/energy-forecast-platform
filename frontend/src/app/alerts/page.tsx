@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock3,
   Loader2,
+  Mail,
   RotateCcw,
   Settings,
   Zap,
@@ -51,6 +52,9 @@ export default function AlertsPage() {
     high_consumption_threshold: 3,
     cooldown_minutes: 60,
     missing_data_minutes: 60,
+    email_enabled: false,
+    email_delivery_available: false,
+    email_delivery_unavailable_reason: 'mail_disabled',
   });
   const [filter, setFilter] = useState<AlertStateFilter>('all');
   const [loading, setLoading] = useState(true);
@@ -134,7 +138,7 @@ export default function AlertsPage() {
             ) : alerts.length ? (
               <div className="space-y-3">
                 {alerts.map((alert) => (
-                  <Card key={alert.id} className="rounded-lg border-white/[0.08] bg-[#111827]/80">
+                  <Card id={`alert-${alert.id}`} key={alert.id} className="scroll-mt-6 rounded-lg border-white/[0.08] bg-[#111827]/80 target:border-red-400/60">
                     <CardContent className="flex gap-3 p-4">
                       <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
                       <div className="min-w-0 flex-1 space-y-3">
@@ -165,7 +169,34 @@ export default function AlertsPage() {
               <div className="space-y-2"><Label htmlFor="threshold">High load threshold (kW)</Label><Input id="threshold" type="number" min="0.1" max="20" step="0.1" value={config.high_consumption_threshold} onChange={(event) => setConfig((value) => ({ ...value, high_consumption_threshold: Number(event.target.value) }))} /></div>
               <div className="space-y-2"><Label htmlFor="cooldown">Repeat cooldown (minutes)</Label><Input id="cooldown" type="number" min="5" max="1440" step="5" value={config.cooldown_minutes} onChange={(event) => setConfig((value) => ({ ...value, cooldown_minutes: Number(event.target.value) }))} /></div>
               <div className="space-y-2"><Label htmlFor="missing-data">Missing push data after (minutes)</Label><Input id="missing-data" type="number" min="5" max="10080" step="5" value={config.missing_data_minutes} onChange={(event) => setConfig((value) => ({ ...value, missing_data_minutes: Number(event.target.value) }))} /></div>
-              <p className="text-sm text-slate-300">Delivery: in-app only</p>
+              <div className="space-y-3 border-t border-white/10 pt-4">
+                <div className="flex items-start gap-3">
+                  <input
+                    aria-describedby="critical-email-status"
+                    checked={config.email_enabled}
+                    className="mt-1 h-4 w-4 accent-blue-500"
+                    disabled={!config.email_delivery_available}
+                    id="critical-email-enabled"
+                    onChange={(event) => setConfig((value) => ({ ...value, email_enabled: event.target.checked }))}
+                    type="checkbox"
+                  />
+                  <div>
+                    <Label className="flex items-center gap-2" htmlFor="critical-email-enabled"><Mail className="h-4 w-4 text-blue-400" />Email critical alerts</Label>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">High and medium alerts always remain in-app only.</p>
+                  </div>
+                </div>
+                <p id="critical-email-status" className={config.email_delivery_available ? 'text-xs text-slate-400' : 'text-xs text-amber-300'}>
+                  {config.email_delivery_available
+                    ? config.email_enabled
+                      ? 'Enabled for newly created critical alerts. Each alert is emailed at most once.'
+                      : 'Off. Opt in to receive newly created critical alerts by email.'
+                    : config.email_enabled
+                      ? 'Your opt-in is saved, but delivery is paused while the mail subsystem is unavailable.'
+                      : config.email_delivery_unavailable_reason === 'email_unverified'
+                        ? 'Verify your current email before enabling delivery.'
+                        : 'Email delivery is not configured. Critical alerts remain available in-app.'}
+                </p>
+              </div>
               <p className="flex gap-2 text-xs leading-5 text-slate-500"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />High load is checked on ingestion. Missing push data is checked by the alert worker.</p>
               <Button className="w-full" onClick={() => void save()} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}Save rules</Button>
             </CardContent>

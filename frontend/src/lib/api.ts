@@ -329,6 +329,8 @@ export const alertsApi = {
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
       email_enabled: raw.email_enabled,
+      email_delivery_available: raw.email_delivery_available,
+      email_delivery_unavailable_reason: raw.email_delivery_unavailable_reason,
     };
   },
 
@@ -348,6 +350,8 @@ export const alertsApi = {
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
       email_enabled: raw.email_enabled,
+      email_delivery_available: raw.email_delivery_available,
+      email_delivery_unavailable_reason: raw.email_delivery_unavailable_reason,
     };
   },
 
