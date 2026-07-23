@@ -4,7 +4,7 @@
 **Base revision:** `102f8cd` (`main`, merged PFE pull request #2)  
 **Plan date:** 2026-07-22  
 **Target:** client-ready Product V1  
-**Status:** G0-G6 complete; G7 pending
+**Status:** G0-G6 complete; G7 validation executed but release-blocked by pre-existing tracked source artifacts
 **Timebox:** approximately one focused week, followed by release review  
 **Scope owner:** this document supersedes the short Product V1 outline in
 `docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md` where details conflict.
@@ -20,7 +20,7 @@
 | G4 - Cookie sessions and Google identity | Complete | HttpOnly refresh-cookie rotation with Origin enforcement, server-verified Google challenges, password-confirmed linking, safe unlink/session revocation, capability-gated UI, and negative/race/browser tests |
 | G5 - Critical-alert email | Complete | Verified opt-in gating, transactional per-alert delivery, evidence-complete multipart templates, provider-outage isolation, and backend/browser coverage |
 | G6 - Product and operational hardening | Complete | Durable avatar lifecycle, public policy surfaces, complete owner archive/deletion, bounded PostgreSQL measurements, browser/security gates, and isolated backup/restore evidence |
-| G7 - Product V1 release validation | Pending | Clean-clone release validation and operator-backed staging journeys remain intentionally separate |
+| G7 - Product V1 release validation | Blocked | Functional clean-worktree validation passed, but the required clean-source audit found pre-existing tracked raw data, checkpoints, and notebooks; real-provider staging also remains operator-owned |
 
 ## 1. Outcome
 

@@ -176,3 +176,20 @@ volume. Jobs are created in the same transaction as the account/avatar database
 change, then objects are removed only after commit. Failures use bounded retry and
 move to `dead`; inspect the sanitized error and retry operationally after fixing the
 storage condition. Do not delete database rows to hide orphaned files.
+
+## G7 production handoff
+
+Automated Product V1 validation does not substitute for operator-owned integration
+acceptance. Before enabling production capabilities, provide legal owner/contact/
+support values, public frontend/API URLs and cookie origins, durable backup paths,
+an approved SMTP sender and credentials, and Google OAuth client credentials with
+approved staging origins. Keep email and Google authentication disabled until their
+controlled staging journeys complete. Record the real-provider result separately;
+captured mail and Google test-double results are not proof of external delivery or
+console configuration.
+
+The Product V1 release gate also requires a clean-source audit. Do not ship while
+tracked raw datasets, checkpoints, notebooks, notebook outputs, caches, or cloned
+repositories remain in the release tree. Removing or relocating legacy tracked
+research material requires a separately approved repository-hygiene change; it is
+not safe to delete it as part of deployment.

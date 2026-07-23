@@ -195,11 +195,40 @@ External SMTP and Google credentials remain operator-provisioned feature flags.
 | Full-history secret scan | 336 commits scanned; no leaks after documented exact historical test-fixture baseline |
 | Isolated PostgreSQL/avatar restore | Counts, ownership, fingerprint, outbox status, decoded image, and public SHA-256 all matched |
 
-External SMTP, Google credentials, and production legal/operator values remain
-operator-provisioned. G7 clean-clone validation and real staging journeys are still
-pending, so this branch is not yet the final Product V1 release candidate.
+## G7 - Product V1 release validation
 
-## Next gate
+**Status:** Blocked after automated clean-worktree validation.
 
-G7 performs the complete release validation from a clean clone at the proposed
-commit, including the operator-backed staging journeys and final release artifacts.
+- Validated the detached clean worktree at `6a298b6`, then repaired an
+  image-specific avatar MIME issue discovered during restored-file serving. WebP
+  avatars are now explicitly served as `image/webp` even when the base image has
+  no OS MIME database.
+- Ran the complete backend suite against isolated PostgreSQL, empty-database and
+  PFE-head upgrades, Docker CPU model-contract tests for both 24h and 168h,
+  frontend lint/typecheck/build, and the six-project browser matrix.
+- Ran captured-provider verification/reset and provider-outage/retry coverage,
+  cookie-session/revocation coverage, and controlled Google test-double coverage.
+- Built an isolated Compose stack with both forecast artifacts enabled and email
+  and Google features disabled. Liveness, readiness, frontend, alert worker,
+  email worker, avatar worker, and an in-stack provider-outage retry check passed.
+- Rehearsed custom-format database plus avatar restore again into isolated targets,
+  including public restored-avatar serving with the correct WebP MIME type.
+- Recorded exact validation scope, outcomes, and external staging limits in
+  `docs/PRODUCT_V1_G7_VALIDATION_EVIDENCE.md` and release handoff conditions in
+  `docs/PRODUCT_V1_RELEASE_NOTES.md`.
+
+No P0 product defect was found in the automated release validation. However, the
+required clean-source audit found pre-existing tracked raw data, checkpoints, and
+notebooks/output notebooks. They are outside Product V1 scope and were preserved as
+instructed, but this is a P1 release-hygiene blocker under the plan's definition of
+done. Real SMTP delivery, sender-domain acceptance, Google console/OAuth journeys,
+production legal identity, and production public URL/cookie-origin acceptance were
+also unavailable and were not simulated as real-provider evidence. Those capabilities
+remain disabled until the operator completes the documented staging checklist.
+
+## Release handoff
+
+Product V1 functional source validation is complete, but the release remains blocked
+on the tracked-source audit finding and on external operator configuration/real-
+provider staging acceptance listed in the release notes. No Product V2 work is part
+of this branch.
