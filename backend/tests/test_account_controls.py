@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import json
+import mimetypes
 from pathlib import Path
 from unittest.mock import patch
 import uuid
@@ -118,6 +119,10 @@ def test_avatar_validation_uses_decoded_type_dimensions_and_opaque_paths(tmp_pat
     assert storage.exists(key)
     with pytest.raises(ValueError, match="Invalid avatar object key"):
         storage.delete("../outside.webp")
+
+
+def test_avatar_webp_mime_type_is_explicitly_registered():
+    assert mimetypes.guess_type("opaque-avatar.webp", strict=True) == ("image/webp", None)
 
 
 def test_avatar_upload_replace_and_delete_remove_objects_after_commit(account_context):

@@ -5,6 +5,7 @@ Master's PFE: Residential Energy Consumption Forecasting Platform
 import time
 import os
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +29,11 @@ configure_logging()
 logger = logging.getLogger("app.main")
 
 settings = get_settings()
+
+# Debian slim images do not always load an OS MIME database. Register the
+# normalized avatar format explicitly so the public avatar route is usable by
+# browsers after a production restore as well as on developer machines.
+mimetypes.add_type("image/webp", ".webp", strict=True)
 
 # Ensure static directories exist before FastAPI is configured
 os.makedirs(settings.AVATAR_STORAGE_DIR, exist_ok=True)
