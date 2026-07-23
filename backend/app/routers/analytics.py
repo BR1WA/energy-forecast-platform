@@ -18,6 +18,7 @@ from app.services.product_forecast_service import PRODUCT_MODEL_NAMES
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics"])
 PRODUCT_MODELS = PRODUCT_MODEL_NAMES
+FORECAST_PEAK_SAMPLE_LIMIT = 500
 
 
 def _forecast_values(forecast: Forecast) -> list[float]:
@@ -44,10 +45,19 @@ def get_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    total_forecasts = (
+        db.query(Forecast.id)
+        .filter(Forecast.user_id == current_user.id, Forecast.model_name.in_(PRODUCT_MODELS))
+        .count()
+    )
+    # Prediction arrays can contain 168 points. Keep the report summary's memory
+    # use bounded even for long-lived accounts while retaining a representative
+    # recent peak sample and the exact all-time count.
     forecasts = (
         db.query(Forecast)
         .filter(Forecast.user_id == current_user.id, Forecast.model_name.in_(PRODUCT_MODELS))
         .order_by(Forecast.created_at.desc(), Forecast.id.desc())
+        .limit(FORECAST_PEAK_SAMPLE_LIMIT)
         .all()
     )
     peaks = [max(values) for forecast in forecasts if (values := _forecast_values(forecast))]
@@ -64,7 +74,7 @@ def get_summary(
         .count()
     )
     return AnalyticsSummary(
-        total_forecasts=len(forecasts),
+        total_forecasts=total_forecasts,
         total_alerts=total_alerts,
         open_alerts=open_alerts,
         resolved_alerts=resolved_alerts,

@@ -64,7 +64,7 @@ def test_raw_reading_keyset_pagination_is_owned_and_bounded():
         headers = {"Authorization": f"Bearer {create_access_token({'sub': str(owner.id)})}"}
         client = TestClient(app)
 
-        first = client.get("/api/v1/consumption/readings?timeframe=today&limit=2", headers=headers)
+        first = client.get("/api/v1/consumption/readings?timeframe=all&limit=2", headers=headers)
         assert first.status_code == 200
         first_payload = first.json()
         assert [item["active_power_kw"] for item in first_payload["items"]] == [5.0, 4.0]
@@ -72,7 +72,7 @@ def test_raw_reading_keyset_pagination_is_owned_and_bounded():
 
         second = client.get(
             "/api/v1/consumption/readings",
-            params={"timeframe": "today", "limit": 2, "cursor": first_payload["next_cursor"]},
+            params={"timeframe": "all", "limit": 2, "cursor": first_payload["next_cursor"]},
             headers=headers,
         )
         assert second.status_code == 200
