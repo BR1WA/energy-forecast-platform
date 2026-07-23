@@ -23,7 +23,7 @@ from app.services.site_service import ensure_default_site, get_default_meter
 
 EMAIL = "g6-restore-fixture@example.test"
 OBJECT_KEY = "0123456789abcdef0123456789abcdef.webp"
-FINGERPRINT = "g6-restore-forecast-fingerprint"
+FINGERPRINT = "g6-restore-forecast-fingerprint"  # gitleaks:allow - deterministic non-secret test marker
 
 
 def avatar_path() -> Path:

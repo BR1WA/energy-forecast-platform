@@ -192,7 +192,7 @@ External SMTP and Google credentials remain operator-provisioned feature flags.
 | Backend/frontend Docker images and HTTP smoke | Built; backend `/health` and frontend `/login` returned 200 |
 | Python dependency audit | No known vulnerabilities |
 | npm dependency audit | No vulnerabilities |
-| Full-history secret scan | 329 commits scanned; no leaks after documented exact historical test-fixture baseline |
+| Full-history secret scan | 336 commits scanned; no leaks after documented exact historical test-fixture baseline |
 | Isolated PostgreSQL/avatar restore | Counts, ownership, fingerprint, outbox status, decoded image, and public SHA-256 all matched |
 
 External SMTP, Google credentials, and production legal/operator values remain
