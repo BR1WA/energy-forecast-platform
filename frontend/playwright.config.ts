@@ -17,5 +17,12 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 180_000,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox-desktop', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit-desktop', use: { ...devices['Desktop Safari'] } },
+    { name: 'chromium-360', use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 800 } } },
+    { name: 'webkit-390', use: { ...devices['iPhone 13'] } },
+    { name: 'chromium-768', use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } } },
+  ],
 });

@@ -178,11 +178,11 @@ test('concurrent expired requests share one refresh, reload restores, and logout
   await expect(page).toHaveURL(/\/settings/);
   await expect.poll(() => refreshCalls).toBe(2);
   await page.reload();
-  expect(refreshCalls).toBe(3);
+  await expect.poll(() => refreshCalls).toBe(3);
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
 
-  await page.locator('#sidebar-user-menu').click();
-  await page.locator('#menu-logout').click();
+  await page.locator('#navbar-user-menu').click();
+  await page.locator('#nav-logout > div').click();
   await expect(page).toHaveURL(/\/login/);
   expect(logoutBody).toBe('');
 });

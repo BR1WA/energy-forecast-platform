@@ -77,8 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Failed to revoke the server session', err);
     } finally {
       clearTokens();
-      setUser(null);
-      window.location.href = '/login';
+      // Start the hard navigation before React can render the anonymous guard;
+      // otherwise WebKit can race the guard's `/` redirect against `/login`.
+      window.location.replace('/login');
     }
   }, []);
 
