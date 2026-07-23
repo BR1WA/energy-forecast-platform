@@ -1,66 +1,175 @@
-"""Privacy controls: portable export and irreversible self-service deletion."""
+"""Portable account export and securely reauthenticated self-service deletion."""
 from __future__ import annotations
 
-import json
-import os
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Response
+from datetime import datetime, timezone
+from typing import Iterator
+
+from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.models import User, Site, Meter, SmartMeterReading, Forecast, Alert, Recommendation, EnergyBudget, RefreshToken
-from app.schemas import AccountDeletionRequest
-from app.services.auth_service import get_current_user, verify_password
-from app.services.audit_service import record_audit_event
 from app.config import get_settings
+from app.database import get_db
+from app.models import AuditEvent, AuthIdentity, EmailOutbox, OAuthChallenge, Site, User
+from app.routers import auth as auth_router
+from app.schemas import AccountDeletionCapabilities, AccountDeletionRequest, GoogleChallengeResponse
+from app.services.account_export_service import build_account_archive
+from app.services.audit_service import record_audit_event
+from app.services.auth_service import get_current_user, revoke_user_sessions, verify_password
+from app.services.avatar_storage import (
+    avatar_object_key,
+    get_avatar_storage,
+    process_avatar_cleanup,
+    schedule_avatar_cleanup,
+)
+from app.services.oauth_challenge_service import consume_oauth_challenge, issue_oauth_challenge
+
 
 router = APIRouter(prefix="/api/v1/account", tags=["Account"])
 
 
-def _jsonable(value):
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return value
+def _archive_chunks(archive, chunk_size: int = 64 * 1024) -> Iterator[bytes]:
+    try:
+        while chunk := archive.read(chunk_size):
+            yield chunk
+    finally:
+        archive.close()
+
+
+def _deletion_method(db: Session, user: User) -> tuple[str, bool]:
+    if user.password_hash:
+        return "password", False
+    linked = db.query(AuthIdentity.id).filter(
+        AuthIdentity.user_id == user.id,
+        AuthIdentity.provider == "google",
+    ).first() is not None
+    return "google", bool(linked and get_settings().GOOGLE_AUTH_ENABLED)
 
 
 @router.get("/export")
 def export_account(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Return the account's owned data only; secrets and token hashes never leave the server."""
-    payload = {
-        "generated_at": datetime.utcnow().isoformat() + "Z",
-        "user": {"id": current_user.id, "email": current_user.email, "full_name": current_user.full_name, "created_at": _jsonable(current_user.created_at), "preferences": current_user.preferences},
-        "sites": [],
-        "forecasts": [],
-        "alerts": [],
-        "recommendations": [],
-        "budget": None,
-    }
-    for site in db.query(Site).filter(Site.user_id == current_user.id).all():
-        meters = []
-        for meter in db.query(Meter).filter(Meter.site_id == site.id).all():
-            readings = [{"timestamp": _jsonable(r.timestamp), "active_power_kw": r.gap, "voltage_v": r.voltage, "source": r.source} for r in db.query(SmartMeterReading).filter(SmartMeterReading.meter_id == meter.id).order_by(SmartMeterReading.timestamp).all()]
-            meters.append({"id": meter.id, "name": meter.name, "source_type": meter.source_type, "readings": readings})
-        payload["sites"].append({"id": site.id, "name": site.name, "region": site.region, "timezone": site.timezone, "meters": meters})
-    payload["forecasts"] = [{"id": x.id, "model_name": x.model_name, "predictions": x.predictions, "created_at": _jsonable(x.created_at)} for x in db.query(Forecast).filter(Forecast.user_id == current_user.id).all()]
-    payload["alerts"] = [{"id": x.id, "type": x.alert_type, "severity": x.severity, "message": x.message, "created_at": _jsonable(x.created_at)} for x in db.query(Alert).filter(Alert.user_id == current_user.id).all()]
-    payload["recommendations"] = [{"id": x.id, "title": x.title, "message": x.message, "status": x.status, "created_at": _jsonable(x.created_at)} for x in db.query(Recommendation).filter(Recommendation.user_id == current_user.id).all()]
-    budget = db.query(EnergyBudget).filter(EnergyBudget.user_id == current_user.id).first()
-    if budget:
-        payload["budget"] = {"monthly_budget_mad": budget.monthly_budget_mad, "monthly_budget_kwh": budget.monthly_budget_kwh}
-    return Response(json.dumps(payload, default=_jsonable), media_type="application/json", headers={"Content-Disposition": "attachment; filename=energyforecast-account-export.json"})
+    """Return a documented owner-scoped ZIP while excluding every credential class."""
+    record_audit_event(
+        db,
+        "account.exported",
+        actor_user_id=current_user.id,
+        target_user_id=current_user.id,
+        target=f"user:{current_user.id}",
+    )
+    db.commit()
+    archive = build_account_archive(db, current_user)
+    filename = f"energyforecast-account-{current_user.id}-{datetime.now(timezone.utc).date().isoformat()}.zip"
+    return StreamingResponse(
+        _archive_chunks(archive),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/deletion/capabilities", response_model=AccountDeletionCapabilities)
+def deletion_capabilities(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    method, google_available = _deletion_method(db, current_user)
+    return AccountDeletionCapabilities(
+        method=method,
+        google_reauthentication_available=google_available,
+    )
+
+
+@router.post("/deletion/challenge", response_model=GoogleChallengeResponse)
+def deletion_challenge(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    auth_router._require_trusted_origin(request)
+    method, google_available = _deletion_method(db, current_user)
+    if method != "google" or not google_available:
+        raise auth_router._error(
+            "google_reauthentication_unavailable",
+            "Google reauthentication is not available for this account.",
+            status.HTTP_409_CONFLICT,
+        )
+    challenge = issue_oauth_challenge(db, action="delete_account", user_id=current_user.id)
+    db.commit()
+    return GoogleChallengeResponse(**challenge.__dict__)
 
 
 @router.delete("")
-def delete_account(data: AccountDeletionRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if not current_user.password_hash or not verify_password(data.current_password, current_user.password_hash):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    avatar = current_user.avatar_url
-    record_audit_event(db, "account.deleted", actor_user_id=current_user.id, target_user_id=current_user.id, target=f"user:{current_user.id}")
-    db.query(RefreshToken).filter(RefreshToken.user_id == current_user.id).delete()
+def delete_account(
+    request: Request,
+    response: Response,
+    data: AccountDeletionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    auth_router._require_trusted_origin(request)
+    method, google_available = _deletion_method(db, current_user)
+    if method == "password":
+        if not data.current_password or not verify_password(data.current_password, current_user.password_hash):
+            raise auth_router._error(
+                "recent_auth_required",
+                "Current password confirmation is required.",
+                status.HTTP_403_FORBIDDEN,
+            )
+    else:
+        if not google_available or not data.google_credential or not data.google_state:
+            raise auth_router._error(
+                "google_reauthentication_required",
+                "Recent Google reauthentication is required.",
+                status.HTTP_403_FORBIDDEN,
+            )
+        nonce = auth_router._unverified_google_nonce(data.google_credential)
+        claims = auth_router._verified_google_identity(data.google_credential, expected_nonce=nonce)
+        if not consume_oauth_challenge(
+            db,
+            state=data.google_state,
+            nonce=nonce,
+            action="delete_account",
+            user_id=current_user.id,
+        ):
+            db.rollback()
+            raise auth_router._error(
+                "google_state_invalid",
+                "Google reauthentication state is invalid, expired, or already used.",
+                status.HTTP_401_UNAUTHORIZED,
+            )
+        identity = db.query(AuthIdentity.id).filter(
+            AuthIdentity.user_id == current_user.id,
+            AuthIdentity.provider == "google",
+            AuthIdentity.subject == claims["sub"],
+        ).first()
+        if identity is None:
+            db.rollback()
+            raise auth_router._error(
+                "google_identity_mismatch",
+                "The reauthenticated Google identity does not own this account.",
+                status.HTTP_403_FORBIDDEN,
+            )
+
+    user_id = current_user.id
+    site_ids = [row[0] for row in db.query(Site.id).filter(Site.user_id == user_id).all()]
+    old_object_key = avatar_object_key(current_user.avatar_url)
+    if old_object_key:
+        schedule_avatar_cleanup(db, old_object_key, "account_deleted")
+
+    revoke_user_sessions(db, user_id)
+    db.query(EmailOutbox).filter(EmailOutbox.user_id == user_id).delete(synchronize_session=False)
+    db.query(OAuthChallenge).filter(OAuthChallenge.user_id == user_id).delete(synchronize_session=False)
+    audit_filter = or_(AuditEvent.actor_user_id == user_id, AuditEvent.target_user_id == user_id)
+    if site_ids:
+        audit_filter = or_(audit_filter, AuditEvent.site_id.in_(site_ids))
+    db.query(AuditEvent).filter(audit_filter).delete(synchronize_session=False)
     db.delete(current_user)
+    db.flush()
+    record_audit_event(
+        db,
+        "account.deleted",
+        target="deleted-account",
+        metadata={"authentication_method": method, "retained": "anonymized_security_event"},
+    )
     db.commit()
-    if avatar and avatar.startswith("/static/avatars/"):
-        path = os.path.join(get_settings().AVATAR_STORAGE_DIR, os.path.basename(avatar))
-        if os.path.isfile(path):
-            os.remove(path)
-    return {"message": "Account deleted"}
+    auth_router._clear_refresh_cookie(response)
+    if old_object_key:
+        process_avatar_cleanup(db, storage=get_avatar_storage(), settings=get_settings())
+    return {"message": "Account and owned product data were permanently deleted."}

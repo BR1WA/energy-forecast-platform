@@ -158,7 +158,15 @@ class PasswordResetConfirm(BaseModel):
 
 
 class AccountDeletionRequest(BaseModel):
-    current_password: str
+    confirmation: Literal["DELETE"]
+    current_password: Optional[str] = Field(default=None, max_length=100)
+    google_credential: Optional[str] = Field(default=None, min_length=20, max_length=4096)
+    google_state: Optional[str] = Field(default=None, min_length=20, max_length=512)
+
+
+class AccountDeletionCapabilities(BaseModel):
+    method: Literal["password", "google"]
+    google_reauthentication_available: bool
 
 
 class GoogleCredentialRequest(BaseModel):

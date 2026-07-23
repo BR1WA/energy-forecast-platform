@@ -25,7 +25,7 @@ def _hash(value: str) -> str:
 
 
 def issue_oauth_challenge(db: Session, *, action: str, user_id: int | None = None) -> IssuedOAuthChallenge:
-    if action not in {"login", "link"}:
+    if action not in {"login", "link", "delete_account"}:
         raise ValueError("Unsupported OAuth challenge action")
     settings = get_settings()
     state = secrets.token_urlsafe(32)

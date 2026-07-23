@@ -90,3 +90,16 @@ def get_health(db: Session = Depends(get_db)):
 @router.get("/version")
 def get_version():
     return {"version": "1.0.0"}
+
+
+@router.get("/legal")
+def get_legal_configuration():
+    settings = get_settings()
+    configured = not settings.legal_configuration_errors()
+    return {
+        "configured": configured,
+        "owner_name": settings.LEGAL_OWNER_NAME if configured else None,
+        "contact_email": settings.LEGAL_CONTACT_EMAIL if configured else None,
+        "support_email": settings.SUPPORT_EMAIL if configured else None,
+        "effective_date": settings.LEGAL_EFFECTIVE_DATE if configured else None,
+    }
