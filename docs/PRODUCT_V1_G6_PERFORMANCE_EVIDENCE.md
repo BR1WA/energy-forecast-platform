@@ -1,9 +1,9 @@
 # Product V1 G6 performance evidence
 
-**Measured:** 2026-07-23  
-**Database:** isolated PostgreSQL 16 container  
+**Measured:** 2026-07-23
+**Database:** isolated PostgreSQL 16 container
 **Fixture:** 20,000 one-minute readings, 600 forecasts (half 24-point and half
-168-point), 1,000 alerts, one owned site and primary meter  
+168-point), 1,000 alerts, one owned site and primary meter
 **Method:** one warm-up followed by 12 measured executions; SQLAlchemy statement
 events counted database round trips. The repeatable harness is
 `backend/scripts/measure_g6_performance.py`.

@@ -4,7 +4,7 @@
 **Base revision:** `102f8cd` (`main`, merged PFE pull request #2)  
 **Plan date:** 2026-07-22  
 **Target:** client-ready Product V1  
-**Status:** G0-G5 complete; G6-G7 pending
+**Status:** G0-G6 complete; G7 pending
 **Timebox:** approximately one focused week, followed by release review  
 **Scope owner:** this document supersedes the short Product V1 outline in
 `docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md` where details conflict.
@@ -19,7 +19,8 @@
 | G3 - Verification and recovery | Complete | Unverified registration without a session, hashed single-use action tokens with sealed render-time delivery, neutral rate-limited journeys, session-revoking reset, and frontend/browser coverage |
 | G4 - Cookie sessions and Google identity | Complete | HttpOnly refresh-cookie rotation with Origin enforcement, server-verified Google challenges, password-confirmed linking, safe unlink/session revocation, capability-gated UI, and negative/race/browser tests |
 | G5 - Critical-alert email | Complete | Verified opt-in gating, transactional per-alert delivery, evidence-complete multipart templates, provider-outage isolation, and backend/browser coverage |
-| G6-G7 | Pending | Product hardening and clean-clone release validation remain intentionally out of scope for the G5 run |
+| G6 - Product and operational hardening | Complete | Durable avatar lifecycle, public policy surfaces, complete owner archive/deletion, bounded PostgreSQL measurements, browser/security gates, and isolated backup/restore evidence |
+| G7 - Product V1 release validation | Pending | Clean-clone release validation and operator-backed staging journeys remain intentionally separate |
 
 ## 1. Outcome
 

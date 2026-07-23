@@ -155,12 +155,51 @@ both checkpoints with Torch without starting or changing the local database stac
 | Controlled Chromium journeys | `6 passed` |
 
 External SMTP and Google credentials remain operator-provisioned feature flags.
-G6 product/operational hardening and G7 clean-clone release validation are still
-pending.
+
+## G6 - Product and operational hardening
+
+**Status:** Complete
+
+- Added decoded-image validation, WebP normalization, opaque object names, a
+  configured durable avatar volume, and retryable post-commit object cleanup.
+- Added configured public Privacy, Terms, and Support content, plus a complete
+  owner-scoped machine-readable account archive and recent-authenticated account
+  deletion with anonymized retained security evidence.
+- Bounded large reading/forecast paths and recorded repeatable PostgreSQL p50/p95,
+  query-count, and `EXPLAIN (ANALYZE, BUFFERS)` evidence without claiming an
+  unsupported latency gain.
+- Expanded the Playwright matrix to Chromium, Firefox, and WebKit across desktop
+  and 360/390/768 px viewports; covered policy, setup, monitoring, both forecast
+  horizons, account export/deletion, refresh, and logout journeys.
+- Added Python/npm dependency and full-history secret gates, strengthened generated
+  model/data ignores, and upgraded vulnerable dependencies.
+- Added repeatable PostgreSQL custom-format and avatar archive scripts. An isolated
+  restore verified ownership, counts, a forecast fingerprint, a dead outbox record,
+  avatar decoding, and the restored avatar's public response hash.
+- Expanded operations guidance for backup/restore, mail-worker lifecycle and
+  outage recovery, feature disablement, credential rotation, and avatar cleanup.
+
+### G6 validation evidence
+
+| Gate | Result |
+|---|---|
+| Backend host suite | `91 passed, 4 skipped` |
+| Torch-free backend test image against PostgreSQL | `92 passed, 3 skipped` |
+| PostgreSQL locking/ownership suite | `4 passed` |
+| Fresh and PFE-head Alembic upgrades | Both reached `c8f4a1b2d306` |
+| Frontend lint, typecheck, and production build | Passed; 23 routes generated |
+| Full browser matrix | `66 passed` across six desktop/mobile projects |
+| Backend/frontend Docker images and HTTP smoke | Built; backend `/health` and frontend `/login` returned 200 |
+| Python dependency audit | No known vulnerabilities |
+| npm dependency audit | No vulnerabilities |
+| Full-history secret scan | 329 commits scanned; no leaks after documented exact historical test-fixture baseline |
+| Isolated PostgreSQL/avatar restore | Counts, ownership, fingerprint, outbox status, decoded image, and public SHA-256 all matched |
+
+External SMTP, Google credentials, and production legal/operator values remain
+operator-provisioned. G7 clean-clone validation and real staging journeys are still
+pending, so this branch is not yet the final Product V1 release candidate.
 
 ## Next gate
 
-G6 adds durable avatar lifecycle and restore coverage, final legal/support
-content, complete owner-scoped export and deletion, measured PostgreSQL
-performance evidence, the full browser matrix, security scanning, backup/restore
-rehearsal, and operations documentation.
+G7 performs the complete release validation from a clean clone at the proposed
+commit, including the operator-backed staging journeys and final release artifacts.
