@@ -15,6 +15,8 @@ import type { PrimaryMeter } from '@/types';
 import { toast } from 'sonner';
 import { CheckCircle2, Clipboard, Database, KeyRound, Link2, PlayCircle, Radio, Settings2, Unlink, Upload, Wallet } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import type { AccountDeletionCapabilities } from '@/types';
 
 const initialSettings = {
   country: 'Morocco',
@@ -36,6 +38,10 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [deletionPassword, setDeletionPassword] = useState('');
+  const [deletionConfirmation, setDeletionConfirmation] = useState('');
+  const [deletionCapabilities, setDeletionCapabilities] = useState<AccountDeletionCapabilities | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('site');
   const [meter, setMeter] = useState<PrimaryMeter | null>(null);
   const [meterInterval, setMeterInterval] = useState('60');
@@ -49,8 +55,8 @@ export default function SettingsPage() {
   const [googleSaving, setGoogleSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([settingsApi.getSettings(), settingsApi.getBudget(), ingestionApi.getMeters()])
-      .then(([settings, savedBudget, meters]) => {
+    Promise.all([settingsApi.getSettings(), settingsApi.getBudget(), ingestionApi.getMeters(), accountApi.getDeletionCapabilities()])
+      .then(([settings, savedBudget, meters, deletion]) => {
         setSiteSettings({
           country: settings.country,
           region: settings.region,
@@ -66,6 +72,7 @@ export default function SettingsPage() {
         const primary = meters[0] ?? null;
         setMeter(primary);
         setMeterInterval(String(primary?.expected_interval_seconds ?? 60));
+        setDeletionCapabilities(deletion);
       })
       .catch(() => toast.error('Unable to load site settings.'));
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
@@ -220,7 +227,7 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'energyforecast-account-export.json';
+      link.download = `energyforecast-account-${new Date().toISOString().slice(0, 10)}.zip`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -229,12 +236,58 @@ export default function SettingsPage() {
   };
 
   const deleteAccount = async () => {
-    if (!deletionPassword || !window.confirm('Delete your account and all owned energy data? This cannot be undone.')) return;
+    if (deletionConfirmation !== 'DELETE') {
+      toast.error('Type DELETE to confirm permanent account deletion.');
+      return;
+    }
+    if (!deletionCapabilities || !window.confirm('Permanently delete this account, its readings, forecasts, alerts, and avatar? This cannot be undone.')) return;
+    setDeletingAccount(true);
     try {
-      await accountApi.deleteAccount(deletionPassword);
+      if (deletionCapabilities.method === 'password') {
+        if (!deletionPassword) throw new Error('Enter your current password.');
+        await accountApi.deleteWithPassword(deletionPassword);
+      } else {
+        const browserClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+        if (!browserClientId || !deletionCapabilities.google_reauthentication_available) {
+          throw new Error('Google reauthentication is not currently available.');
+        }
+        const challenge = await accountApi.deletionChallenge();
+        const credential = await requestGoogleCredential(browserClientId, challenge.nonce);
+        await accountApi.deleteWithGoogle(credential, challenge.state);
+      }
       window.location.href = '/login';
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to delete account.');
+      setDeletingAccount(false);
+    }
+  };
+
+  const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setAvatarSaving(true);
+    try {
+      await authApi.uploadAvatar(file);
+      await refreshUser();
+      toast.success('Avatar updated.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update avatar.');
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
+
+  const deleteAvatar = async () => {
+    setAvatarSaving(true);
+    try {
+      await authApi.deleteAvatar();
+      await refreshUser();
+      toast.success('Avatar removed.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to remove avatar.');
+    } finally {
+      setAvatarSaving(false);
     }
   };
 
@@ -301,7 +354,12 @@ export default function SettingsPage() {
             <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Monthly budget</CardTitle><CardDescription>Set the monthly limit used for your budget progress and alerts.</CardDescription></CardHeader><CardContent className="flex max-w-sm items-end gap-3"><div className="flex-1 space-y-2"><Label>Budget (MAD)</Label><Input type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></div><Button onClick={saveSiteSettings} disabled={saving}>Save</Button></CardContent></Card>
           </TabsContent>
           <TabsContent value="security" className="mt-6">
-            <div className="space-y-4"><Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card>{googleEnabled ? <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Google sign-in</CardTitle><CardDescription>{googleLinked ? 'Google is linked. Unlinking revokes every active session.' : 'Link the Google account with the same verified email.'}</CardDescription></CardHeader><CardContent className="max-w-md space-y-4"><div className="space-y-2"><Label htmlFor="google-current-password">Current password</Label><Input id="google-current-password" autoComplete="current-password" onChange={(event) => setGooglePassword(event.target.value)} type="password" value={googlePassword} /></div>{googleLinked ? <Button disabled={googleSaving || !googleCanUnlink} onClick={unlinkGoogle} variant="destructive"><Unlink />{googleSaving ? 'Unlinking...' : 'Unlink Google'}</Button> : <Button disabled={googleSaving} onClick={linkGoogle}><Link2 />{googleSaving ? 'Linking...' : 'Link Google'}</Button>}{googleLinked && !googleCanUnlink ? <p className="text-xs text-amber-300">Set a local password before removing your last usable sign-in method.</p> : null}</CardContent></Card> : null}<Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Privacy controls</CardTitle><CardDescription>Download your owned data or permanently delete your account.</CardDescription></CardHeader><CardContent className="space-y-4"><Button onClick={exportAccount} variant="outline">Download my data</Button><div className="flex max-w-md gap-2"><Input aria-label="Password to delete account" onChange={(event) => setDeletionPassword(event.target.value)} placeholder="Current password" type="password" value={deletionPassword} /><Button onClick={deleteAccount} variant="destructive">Delete account</Button></div></CardContent></Card></div>
+            <div className="space-y-4">
+              <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Profile image</CardTitle><CardDescription>JPEG, PNG, or WebP up to 2 MB and 2048 pixels per side.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center gap-4"><Avatar className="h-16 w-16">{user?.avatar_url ? <AvatarImage alt={user.full_name || 'Account avatar'} className="object-cover" src={user.avatar_url.startsWith('http') ? user.avatar_url : `${API_BASE_URL}${user.avatar_url}`} /> : null}<AvatarFallback>{user?.full_name?.slice(0, 2).toUpperCase() || 'U'}</AvatarFallback></Avatar><div className="flex flex-wrap gap-2"><Label className={buttonVariants({ variant: 'outline' })} htmlFor="avatar-upload">{avatarSaving ? 'Working…' : user?.avatar_url ? 'Replace avatar' : 'Upload avatar'}</Label><Input accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={avatarSaving} id="avatar-upload" onChange={uploadAvatar} type="file" />{user?.avatar_url ? <Button disabled={avatarSaving} onClick={deleteAvatar} type="button" variant="outline">Remove avatar</Button> : null}</div></CardContent></Card>
+              <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card>
+              {googleEnabled ? <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Google sign-in</CardTitle><CardDescription>{googleLinked ? 'Google is linked. Unlinking revokes every active session.' : 'Link the Google account with the same verified email.'}</CardDescription></CardHeader><CardContent className="max-w-md space-y-4"><div className="space-y-2"><Label htmlFor="google-current-password">Current password</Label><Input id="google-current-password" autoComplete="current-password" onChange={(event) => setGooglePassword(event.target.value)} type="password" value={googlePassword} /></div>{googleLinked ? <Button disabled={googleSaving || !googleCanUnlink} onClick={unlinkGoogle} variant="destructive"><Unlink />{googleSaving ? 'Unlinking...' : 'Unlink Google'}</Button> : <Button disabled={googleSaving} onClick={linkGoogle}><Link2 />{googleSaving ? 'Linking...' : 'Link Google'}</Button>}{googleLinked && !googleCanUnlink ? <p className="text-xs text-amber-300">Set a local password before removing your last usable sign-in method.</p> : null}</CardContent></Card> : null}
+              <Card className="border-red-500/20 bg-[#111827]/50"><CardHeader><CardTitle>Privacy controls</CardTitle><CardDescription>Download a complete machine-readable archive before permanently deleting the account.</CardDescription></CardHeader><CardContent className="space-y-5"><Button onClick={exportAccount} variant="outline">Download account archive</Button><div className="max-w-md space-y-3 border-t border-red-500/20 pt-4"><p className="text-xs leading-5 text-red-200">Deletion removes owned readings, forecasts, alerts, recommendations, configuration, sessions, and the avatar. It cannot be undone.</p>{deletionCapabilities?.method === 'password' ? <Input aria-label="Password to delete account" autoComplete="current-password" onChange={(event) => setDeletionPassword(event.target.value)} placeholder="Current password" type="password" value={deletionPassword} /> : <p className="text-xs text-slate-400">Google will ask you to reauthenticate before deletion.</p>}<Input aria-label="Type DELETE to confirm" autoComplete="off" onChange={(event) => setDeletionConfirmation(event.target.value)} placeholder="Type DELETE" value={deletionConfirmation} /><Button disabled={deletingAccount || deletionConfirmation !== 'DELETE'} onClick={deleteAccount} variant="destructive">{deletingAccount ? 'Deleting permanently…' : 'Permanently delete account'}</Button></div></CardContent></Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

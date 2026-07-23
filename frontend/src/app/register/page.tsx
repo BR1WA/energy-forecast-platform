@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth';
 import { authApi } from '@/lib/api';
+import { PolicyLinks } from '@/components/policy-links';
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
@@ -60,6 +61,7 @@ export default function RegisterPage() {
             <Button id="register-submit" type="submit" disabled={submitting || registrationAvailable !== true} className="h-11 w-full">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}{submitting ? 'Creating account' : registrationAvailable === null ? 'Checking availability' : 'Create account'}</Button>
           </form>
           <p className="mt-6 text-center text-sm text-slate-400">Already registered? <Link id="register-login-link" href="/login" className="font-medium text-cyan-300 hover:text-cyan-200">Sign in</Link></p>
+          <PolicyLinks className="mt-6 justify-center border-t border-white/10 pt-5" />
         </section>
       </div>
     </main>

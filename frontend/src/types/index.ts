@@ -390,6 +390,19 @@ export interface UserPreferences {
   language?: string;
 }
 
+export interface LegalConfiguration {
+  configured: boolean;
+  owner_name: string | null;
+  contact_email: string | null;
+  support_email: string | null;
+  effective_date: string | null;
+}
+
+export interface AccountDeletionCapabilities {
+  method: 'password' | 'google';
+  google_reauthentication_available: boolean;
+}
+
 export interface SiteCircuit {
   name: string;
   status: string;

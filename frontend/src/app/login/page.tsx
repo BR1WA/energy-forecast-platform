@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth';
 import { ApiError, authApi } from '@/lib/api';
 import { requestGoogleCredential } from '@/lib/google';
+import { PolicyLinks } from '@/components/policy-links';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -86,6 +87,7 @@ export default function LoginPage() {
           <div className="mt-4 flex justify-end"><Link href="/forgot-password" className="text-sm text-cyan-300 hover:text-cyan-200">Forgot password?</Link></div>
           {googleClientId ? <Button type="button" variant="outline" disabled={googleSubmitting} onClick={signInWithGoogle} className="mt-5 h-11 w-full">{googleSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Continue with Google</Button> : null}
           <p className="mt-6 text-center text-sm text-slate-400">No account? <Link href="/register" className="font-medium text-cyan-300 hover:text-cyan-200">Create one</Link></p>
+          <PolicyLinks className="mt-6 justify-center border-t border-white/10 pt-5" />
         </section>
       </div>
     </main>

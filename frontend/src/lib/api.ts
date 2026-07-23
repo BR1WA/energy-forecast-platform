@@ -27,9 +27,16 @@ import type {
   ConsumptionReadingPage,
   ConsumptionTimeframe,
   PrimaryMeter,
+  LegalConfiguration,
+  AccountDeletionCapabilities,
 } from '@/types';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+export const systemApi = {
+  getLegalConfiguration: (): Promise<LegalConfiguration> =>
+    apiFetch('/api/v1/system/legal', { skipAuth: true }),
+};
 
 // ============================================================
 // Token helpers
@@ -265,7 +272,16 @@ export const authApi = {
 
 export const accountApi = {
   exportData: (): Promise<Blob> => apiFetch('/api/v1/account/export', { isBlob: true }),
-  deleteAccount: (current_password: string): Promise<{ message: string }> => apiFetch('/api/v1/account', { method: 'DELETE', body: JSON.stringify({ current_password }) }),
+  getDeletionCapabilities: (): Promise<AccountDeletionCapabilities> => apiFetch('/api/v1/account/deletion/capabilities'),
+  deletionChallenge: (): Promise<{ state: string; nonce: string; expires_in_seconds: number }> => apiFetch('/api/v1/account/deletion/challenge', { method: 'POST' }),
+  deleteWithPassword: (current_password: string): Promise<{ message: string }> => apiFetch('/api/v1/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmation: 'DELETE', current_password }),
+  }),
+  deleteWithGoogle: (google_credential: string, google_state: string): Promise<{ message: string }> => apiFetch('/api/v1/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmation: 'DELETE', google_credential, google_state }),
+  }),
 };
 
 // ============================================================

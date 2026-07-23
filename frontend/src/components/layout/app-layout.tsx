@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from './sidebar';
 import Navbar from './navbar';
 import { useI18n } from '@/lib/i18n';
+import { PolicyLinks } from '@/components/policy-links';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -56,6 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               {children}
             </div>
+            <footer className="mt-10 border-t border-white/[0.06] py-5"><PolicyLinks /></footer>
           </main>
         </div>
     </div>
