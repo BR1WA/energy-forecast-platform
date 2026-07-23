@@ -3,8 +3,6 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
 import logging
-import os
-import time
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
@@ -40,6 +38,14 @@ from app.services.account_action_service import (
     issue_action_token,
 )
 from app.services.audit_service import record_audit_event
+from app.services.avatar_storage import (
+    AvatarValidationError,
+    avatar_object_key,
+    get_avatar_storage,
+    prepare_avatar,
+    process_avatar_cleanup,
+    schedule_avatar_cleanup,
+)
 from app.services.auth_service import (
     authenticate_user,
     consume_refresh_token,
@@ -493,50 +499,60 @@ def update_password(request: Request, data: PasswordUpdate, current_user: User =
 
 @router.post("/me/avatar", response_model=UserResponse)
 def upload_avatar(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-    allowed_mime_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-    filename = file.filename or "avatar"
-    _, ext = os.path.splitext(filename.lower())
-    if ext not in allowed_extensions or file.content_type not in allowed_mime_types:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only JPG, JPEG, PNG, GIF, and WebP images are allowed.")
+    storage = get_avatar_storage(settings)
+    object_key: str | None = None
+    old_object_key = avatar_object_key(current_user.avatar_url)
     try:
-        contents = file.file.read()
-        if len(contents) > 2 * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image file size must not exceed 2MB.")
-        os.makedirs(settings.AVATAR_STORAGE_DIR, exist_ok=True)
-        new_filename = f"user_{current_user.id}_{int(time.time())}{ext}"
-        file_path = os.path.join(settings.AVATAR_STORAGE_DIR, new_filename)
-        with open(file_path, "wb") as target:
-            target.write(contents)
-        if current_user.avatar_url and current_user.avatar_url.startswith("/static/avatars/"):
-            old_path = os.path.join(settings.AVATAR_STORAGE_DIR, os.path.basename(current_user.avatar_url))
-            if os.path.exists(old_path):
-                try:
-                    os.remove(old_path)
-                except Exception as exc:
-                    logger.error("Failed to remove old avatar: %s", type(exc).__name__)
-        current_user.avatar_url = f"/static/avatars/{new_filename}"
+        contents = file.file.read(settings.AVATAR_MAX_BYTES + 1)
+        prepared = prepare_avatar(contents, file.content_type, settings)
+        object_key = storage.store(prepared.content)
+        current_user.avatar_url = storage.public_url(object_key)
+        if old_object_key:
+            schedule_avatar_cleanup(db, old_object_key, "avatar_replaced")
+        record_audit_event(
+            db,
+            "account.avatar_updated",
+            actor_user_id=current_user.id,
+            target_user_id=current_user.id,
+            target=f"user:{current_user.id}",
+            metadata={"width": prepared.width, "height": prepared.height},
+        )
         db.commit()
         db.refresh(current_user)
-        return UserResponse.model_validate(current_user)
-    except HTTPException:
-        raise
+    except AvatarValidationError as exc:
+        db.rollback()
+        raise _error("avatar_invalid", str(exc), status.HTTP_400_BAD_REQUEST) from exc
     except Exception as exc:
+        db.rollback()
+        if object_key:
+            try:
+                storage.delete(object_key)
+            except Exception:
+                schedule_avatar_cleanup(db, object_key, "upload_rollback")
+                db.commit()
         logger.error("Avatar processing failed: %s", type(exc).__name__)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to process image upload.")
+        raise _error("avatar_storage_failed", "Avatar could not be stored.", status.HTTP_500_INTERNAL_SERVER_ERROR) from exc
+    if old_object_key:
+        process_avatar_cleanup(db, storage=storage, settings=settings)
+    return UserResponse.model_validate(current_user)
 
 
 @router.delete("/me/avatar", response_model=UserResponse)
 def delete_avatar(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    old_object_key = avatar_object_key(current_user.avatar_url)
     if current_user.avatar_url:
-        if current_user.avatar_url.startswith("/static/avatars/"):
-            old_path = os.path.join(settings.AVATAR_STORAGE_DIR, os.path.basename(current_user.avatar_url))
-            if os.path.exists(old_path):
-                try:
-                    os.remove(old_path)
-                except Exception as exc:
-                    logger.error("Failed to remove avatar: %s", type(exc).__name__)
         current_user.avatar_url = None
+        if old_object_key:
+            schedule_avatar_cleanup(db, old_object_key, "avatar_deleted")
+        record_audit_event(
+            db,
+            "account.avatar_deleted",
+            actor_user_id=current_user.id,
+            target_user_id=current_user.id,
+            target=f"user:{current_user.id}",
+        )
         db.commit()
         db.refresh(current_user)
+    if old_object_key:
+        process_avatar_cleanup(db, settings=settings)
     return UserResponse.model_validate(current_user)

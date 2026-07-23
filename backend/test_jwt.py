@@ -1,4 +1,4 @@
-from jose import jwt
+import jwt
 from app.config import get_settings
 settings = get_settings()
 secret = settings.JWT_SECRET_KEY

@@ -95,7 +95,7 @@ class OAuthChallenge(Base):
     __tablename__ = "oauth_challenges"
     __table_args__ = (
         CheckConstraint(
-            "action IN ('login', 'link')",
+            "action IN ('login', 'link', 'delete_account')",
             name="ck_oauth_challenges_action",
         ),
         Index("ix_oauth_challenges_expiry", "expires_at", "used_at"),
@@ -137,6 +137,28 @@ class EmailOutbox(Base):
     sent_at = Column(DateTime(timezone=True), nullable=True)
     provider_message_id = Column(String(255), nullable=True)
     last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class AvatarCleanupJob(Base):
+    __tablename__ = "avatar_cleanup_jobs"
+    __table_args__ = (
+        UniqueConstraint("object_key", name="uq_avatar_cleanup_jobs_object_key"),
+        CheckConstraint(
+            "status IN ('pending', 'retry', 'dead')",
+            name="ck_avatar_cleanup_jobs_status",
+        ),
+        Index("ix_avatar_cleanup_jobs_due", "status", "next_attempt_at"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    object_key = Column(String(255), nullable=False)
+    reason = Column(String(40), nullable=False)
+    status = Column(String(20), nullable=False, default="pending", server_default="pending")
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_error = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -259,6 +281,9 @@ class AuditEvent(Base):
 
 class Forecast(Base):
     __tablename__ = "forecasts"
+    __table_args__ = (
+        Index("ix_forecasts_user_created", "user_id", "created_at", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -299,6 +324,9 @@ class AlertConfig(Base):
 
 class Alert(Base):
     __tablename__ = "alerts"
+    __table_args__ = (
+        Index("ix_alerts_user_created", "user_id", "created_at", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)

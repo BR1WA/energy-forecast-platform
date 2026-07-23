@@ -3,6 +3,7 @@ Application configuration — environment variables and settings.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from datetime import date
 import warnings
 
 
@@ -87,10 +88,43 @@ class Settings(BaseSettings):
     EMAIL_RETRY_BASE_SECONDS: int = 60
     EMAIL_MAX_ATTEMPTS: int = 5
     AVATAR_STORAGE_DIR: str = "static/avatars"
+    AVATAR_MAX_BYTES: int = 2 * 1024 * 1024
+    AVATAR_MAX_DIMENSION: int = 2048
+    AVATAR_CLEANUP_POLL_SECONDS: int = 60
+    AVATAR_CLEANUP_MAX_ATTEMPTS: int = 8
+    AVATAR_CLEANUP_RETRY_SECONDS: int = 60
     REFRESH_COOKIE_DOMAIN: str = ""
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_CHALLENGE_EXPIRE_MINUTES: int = 10
+
+    # Public policy identity. These may be empty only in local DEBUG mode;
+    # deployed environments must identify the legal owner and contact routes.
+    LEGAL_OWNER_NAME: str = ""
+    LEGAL_CONTACT_EMAIL: str = ""
+    SUPPORT_EMAIL: str = ""
+    LEGAL_EFFECTIVE_DATE: str = ""
+
+    def legal_configuration_errors(self) -> list[str]:
+        values = {
+            "LEGAL_OWNER_NAME": self.LEGAL_OWNER_NAME,
+            "LEGAL_CONTACT_EMAIL": self.LEGAL_CONTACT_EMAIL,
+            "SUPPORT_EMAIL": self.SUPPORT_EMAIL,
+            "LEGAL_EFFECTIVE_DATE": self.LEGAL_EFFECTIVE_DATE,
+        }
+        errors = [name for name, value in values.items() if not value.strip()]
+        for name, value in (
+            ("LEGAL_CONTACT_EMAIL", self.LEGAL_CONTACT_EMAIL),
+            ("SUPPORT_EMAIL", self.SUPPORT_EMAIL),
+        ):
+            if value and ("@" not in value or value.startswith("@") or value.endswith("@")):
+                errors.append(name)
+        if self.LEGAL_EFFECTIVE_DATE:
+            try:
+                date.fromisoformat(self.LEGAL_EFFECTIVE_DATE)
+            except ValueError:
+                errors.append("LEGAL_EFFECTIVE_DATE")
+        return list(dict.fromkeys(errors))
 
     def validate_enabled_integrations(self) -> None:
         """Reject partially configured capabilities without exposing secrets."""
@@ -133,6 +167,12 @@ class Settings(BaseSettings):
         presence of a placeholder/insecure secret is fatal. See audit C3.
         """
         self.validate_enabled_integrations()
+        legal_errors = self.legal_configuration_errors()
+        if legal_errors and not self.DEBUG:
+            raise RuntimeError(
+                "Refusing to start: public legal configuration is missing or invalid ("
+                f"{', '.join(legal_errors)})."
+            )
         insecure: list[str] = []
 
         if _looks_insecure(

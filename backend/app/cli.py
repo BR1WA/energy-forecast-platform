@@ -45,6 +45,7 @@ def main() -> None:
     )
     subparsers.add_parser("run-alert-worker", help="Run periodic missing-data alert checks")
     subparsers.add_parser("run-email-worker", help="Run transactional email delivery")
+    subparsers.add_parser("run-avatar-cleanup-worker", help="Run retryable avatar cleanup")
     args = parser.parse_args()
 
     if args.command == "migrate":
@@ -58,6 +59,9 @@ def main() -> None:
     elif args.command == "run-email-worker":
         from app.email_worker import main as run_email_worker
         run_email_worker()
+    elif args.command == "run-avatar-cleanup-worker":
+        from app.avatar_cleanup_worker import main as run_avatar_cleanup_worker
+        run_avatar_cleanup_worker()
 
 
 if __name__ == "__main__":

@@ -5,7 +5,8 @@ Uses bcrypt directly (passlib has compatibility issues with bcrypt 5.x).
 from datetime import datetime, timedelta, timezone
 import logging
 from typing import Optional
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError
 import bcrypt
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
@@ -62,7 +63,7 @@ def decode_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         return payload
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",

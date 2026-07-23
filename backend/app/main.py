@@ -139,7 +139,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files (for avatars)
+# Mount the configured durable avatar root before the broader static tree so a
+# non-default local volume remains publicly addressable.
+app.mount("/static/avatars", StaticFiles(directory=settings.AVATAR_STORAGE_DIR), name="avatars")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include routers
