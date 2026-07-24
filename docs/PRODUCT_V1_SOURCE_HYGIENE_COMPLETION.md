@@ -136,3 +136,38 @@ No Git history was rewritten, pruned, rebased, or force-pushed. Removing files
 from the current tree does not immediately shrink the repository's complete
 historical storage; unreachable historical objects age out only through normal
 repository maintenance, or through a separately approved history rewrite.
+
+## Validation record
+
+- `python -m pytest -q backend/tests`: 92 passed, 4 expected skips.
+- `python -m pytest -q backend/tests/test_model_contract.py`: 10 passed.
+- Fresh SQLite Alembic upgrade reached `c8f4a1b2d306` (head).
+- Both runtime checkpoints matched their manifest hashes and warmed on CPU
+  with strict loading for 24h and 168h.
+- Frontend lint, TypeScript checking, and production build passed.
+- The complete six-project Playwright matrix passed 66/66 with one worker.
+  A parallel run had three WebKit engine allocation failures; the
+  single-worker rerun passed all WebKit projects.
+- `pip-audit -r backend/requirements.txt` reported no known vulnerabilities.
+- Gitleaks was unavailable; the manual tracked-text credential scan found no
+  credential-pattern files. The only tracked environment filenames are the
+  two committed example templates.
+- `docker compose config --quiet` passed. Docker engine/build/liveness checks
+  were not runnable because the Docker daemon was unavailable.
+- `npm audit --omit=dev --audit-level=high` reports two high PostCSS advisories
+  inherited through Next.js; fixing them requires a breaking dependency
+  upgrade and was intentionally outside this source-hygiene cleanup.
+
+## Reference audit and outcome
+
+Remaining references to removed research paths in `docs/` are historical or
+preservation records. References in `scripts/build_notebook.py`,
+`scratch/evaluate_active_models.py`, and presentation planning documents are
+research tooling/documentation that now requires the private research
+repository; none is a Product V1 runtime dependency. No broken runtime
+reference was found and no unrelated source file was changed.
+
+The cleanup commits are local and the branch was not pushed because the Docker
+validation and dependency audit blockers above remain unresolved. The
+pre-existing dirty files and 13 pre-existing untracked files were unchanged,
+unstaged, and uncommitted.
