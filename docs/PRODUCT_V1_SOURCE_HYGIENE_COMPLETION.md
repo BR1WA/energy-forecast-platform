@@ -149,11 +149,21 @@ repository maintenance, or through a separately approved history rewrite.
   A parallel run had three WebKit engine allocation failures; the
   single-worker rerun passed all WebKit projects.
 - `pip-audit -r backend/requirements.txt` reported no known vulnerabilities.
-- Gitleaks was unavailable; the manual tracked-text credential scan found no
-  credential-pattern files. The only tracked environment filenames are the
-  two committed example templates.
+- Docker-backed Gitleaks history scanning passed on the remediation commit
+  (`0ee4477`): 287 commits scanned and no leaks found.
+- Docker-backed Gitleaks directory scanning passed on a fresh clean checkout
+  of the remediation commit; no committed tracked path triggered a finding.
+  The restore-verification fixture key is now derived from a non-secret
+  deterministic value with an optional environment override, and the tracked
+  investigation text retains its research meaning with AWS-shaped substrings
+  redacted in place. No suspected credential was copied to the research
+  repository.
+- Cleanup repository secret validation: `PASSED`.
+- Product release security validation remains `BLOCKED` by the two high
+  production dependency advisories documented below; this cleanup did not
+  change dependencies.
 - `docker compose config --quiet` passed. Docker engine/build/liveness checks
-  were not runnable because the Docker daemon was unavailable.
+  were recorded separately in the Product V1 G7 evidence.
 - `npm audit --omit=dev --audit-level=high` reports two high PostCSS advisories
   inherited through Next.js; fixing them requires a breaking dependency
   upgrade and was intentionally outside this source-hygiene cleanup.
@@ -167,7 +177,6 @@ research tooling/documentation that now requires the private research
 repository; none is a Product V1 runtime dependency. No broken runtime
 reference was found and no unrelated source file was changed.
 
-The cleanup commits are local and the branch was not pushed because the Docker
-validation and dependency audit blockers above remain unresolved. The
+	The cleanup commits are local and the branch was not pushed. The
 pre-existing dirty files and 13 pre-existing untracked files were unchanged,
 unstaged, and uncommitted.
