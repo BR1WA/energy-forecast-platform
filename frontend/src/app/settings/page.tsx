@@ -346,7 +346,7 @@ export default function SettingsPage() {
             </Card>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="border-t border-white/10 pt-4"><Upload className="h-5 w-5 text-cyan-400" /><h3 className="mt-2 font-medium text-white">CSV history</h3><p className="mt-1 text-xs text-slate-400">Preview and import up to 10,000 validated historical readings.</p><Link className={buttonVariants({ size: 'sm', variant: 'outline', className: 'mt-3' })} href="/consumption">Open CSV import</Link></div>
+              <div className="border-t border-white/10 pt-4"><Upload className="h-5 w-5 text-cyan-400" /><h3 className="mt-2 font-medium text-white">CSV history</h3><p className="mt-1 text-xs text-slate-400">Preview and import up to 10,000 validated historical readings.</p><Link className={buttonVariants({ size: 'sm', variant: 'outline', className: 'mt-3' })} href="/usage">Open Usage import</Link></div>
               <div className="border-t border-white/10 pt-4"><PlayCircle className="h-5 w-5 text-emerald-400" /><h3 className="mt-2 font-medium text-white">Demo simulator</h3><p className="mt-1 text-xs text-slate-400">Start or stop clearly labelled simulated readings yourself.</p><Link className={buttonVariants({ size: 'sm', variant: 'outline', className: 'mt-3' })} href="/simulation">Open simulator</Link></div>
             </div>
           </TabsContent>

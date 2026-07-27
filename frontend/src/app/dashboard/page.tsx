@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   Activity,
   AlertCircle,
-  Bell,
   BrainCircuit,
   CalendarRange,
   CircleDollarSign,
@@ -13,9 +12,7 @@ import {
   Gauge,
   PlugZap,
   RefreshCw,
-  Settings,
   ListChecks,
-  TimerReset,
   Zap,
 } from 'lucide-react';
 
@@ -197,6 +194,9 @@ export default function DashboardPage() {
   const sourceLabel = summary?.sources.map((source) => source.source).join(', ') || 'No source';
   const freshness = summary?.freshness;
   const isEmpty = !loading && summary?.sample_count === 0 && summary.total_kwh === 0;
+  const unlinkedOpenRecommendations = recommendations.filter((item) => item.alert_id == null);
+  const attentionCount = openAlerts.length + unlinkedOpenRecommendations.length;
+  const priorityAction = openAlerts[0]?.message || recommendations[0]?.title || null;
 
   return (
     <AppLayout>
@@ -272,13 +272,15 @@ export default function DashboardPage() {
               <div className="flex h-80 flex-col items-center justify-center gap-3 px-4 text-center">
                 <PlugZap className="h-8 w-8 text-slate-500" />
                 <div><p className="font-medium text-white">No readings in this period</p><p className="mt-1 text-sm text-slate-400">Connect a meter, import a CSV, or explicitly start the demo simulator.</p></div>
-                <div className="flex gap-2"><Link className={buttonVariants({ size: 'sm' })} href="/settings">Set up data</Link><Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/simulation">Open simulator</Link></div>
+                <div className="flex gap-2"><Link className={buttonVariants({ size: 'sm' })} href="/usage">Import history</Link><Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/settings?tab=data">Connect a meter</Link></div>
               </div>
             ) : summary ? <ConsumptionChart summary={summary} /> : null}
           </CardContent>
         </Card>
 
-        <section className="grid gap-5 border-y border-white/10 py-5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Operational summary">
+        <p className="text-xs leading-5 text-slate-500">Estimated costs use the peak and off-peak tariff rates configured in Settings and may not match taxes, fixed fees, or tiered utility billing.</p>
+
+        <section className="grid gap-5 border-y border-white/10 py-5 lg:grid-cols-3" aria-label="Operational summary">
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-sm font-medium text-white"><CircleDollarSign className="h-4 w-4 text-emerald-400" />Monthly budget</h2>
             {monthly?.budget.target_mad == null ? <p className="mt-3 text-sm text-slate-500">No monthly budget configured.</p> : <><p className="mt-3 text-lg font-semibold text-white">{monthly.tariff.currency} {monthly.budget.spent_mad.toFixed(2)} / {monthly.budget.target_mad.toFixed(2)}</p><p className="mt-1 text-xs text-slate-500">Projected {monthly.tariff.currency} {monthly.budget.projected_mad.toFixed(2)} at {monthly.coverage_pct.toFixed(1)}% coverage</p></>}
@@ -286,25 +288,19 @@ export default function DashboardPage() {
           </div>
           <div className="min-w-0 border-t border-white/10 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
             <h2 className="flex items-center gap-2 text-sm font-medium text-white"><BrainCircuit className="h-4 w-4 text-cyan-400" />Latest forecast</h2>
-            {latestForecast ? <><p className="mt-3 text-lg font-semibold text-white">{latestForecast.points.reduce((sum, point) => sum + point.p50_kwh, 0).toFixed(2)} kWh</p><p className="mt-1 text-xs text-slate-500">{latestForecast.method === 'global_tft' ? 'Global TFT median' : 'Seasonal fallback'}, next {latestForecast.horizon_hours} hours</p></> : <p className="mt-3 text-sm text-slate-500">No persisted forecast.</p>}
+            {latestForecast ? <><p className="mt-3 text-lg font-semibold text-white">{latestForecast.points.reduce((sum, point) => sum + point.p50_kwh, 0).toFixed(2)} kWh</p><p className="mt-1 text-xs text-slate-500">{latestForecast.method === 'global_tft' ? 'Global TFT median' : 'Seasonal fallback'}, {latestForecast.horizon_hours === 168 ? 'next 7 days / 168 hours' : 'next 24 hours'}</p></> : <p className="mt-3 text-sm text-slate-500">No persisted forecast.</p>}
             <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/forecast">Open forecast</Link>
           </div>
-          <div className="min-w-0 border-t border-white/10 pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><Bell className="h-4 w-4 text-amber-400" />Open alerts</h2>
-            <p className="mt-3 text-lg font-semibold text-white">{openAlerts.length}</p>
-            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{openAlerts[0]?.message || 'No active meter-rule incident.'}</p>
-            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/alerts">Review alerts</Link>
-          </div>
-          <div className="min-w-0 border-t border-white/10 pt-4 sm:border-l sm:pl-5 xl:border-t-0 xl:pt-0">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><ListChecks className="h-4 w-4 text-indigo-400" />Open actions</h2>
-            <p className="mt-3 text-lg font-semibold text-white">{recommendations.length}</p>
-            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{recommendations[0]?.title || 'No evidence-backed action is open.'}</p>
-            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/recommendations">Review actions</Link>
+          <div className="min-w-0 border-t border-white/10 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><ListChecks className="h-4 w-4 text-amber-400" />Needs attention</h2>
+            <p className="mt-3 text-lg font-semibold text-white">{attentionCount ? `${attentionCount} open` : 'All clear'}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{priorityAction || 'No measured incident or evidence-backed follow-up action needs attention.'}</p>
+            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/actions">Open Actions</Link>
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          <div className="border-t border-white/10 pt-4 lg:col-span-2">
+        <section className="border-t border-white/10 pt-4">
+          <div>
             <h2 className="text-sm font-medium text-white">Data quality</h2>
             <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
               <div><p className="text-xs text-slate-500">Coverage</p><p className="mt-1 text-base text-white">{(summary?.coverage_pct ?? 0).toFixed(1)}%</p></div>
@@ -313,14 +309,7 @@ export default function DashboardPage() {
               <div><p className="text-xs text-slate-500">Expected interval</p><p className="mt-1 text-base text-white">{freshness?.expected_interval_seconds ? `${freshness.expected_interval_seconds}s` : 'Unknown'}</p></div>
             </div>
             {(summary?.coverage_pct ?? 0) < 95 && (summary?.sample_count ?? 0) > 0 && <p className="mt-4 text-xs text-amber-300">Some intervals are missing or too far apart. Totals exclude unsupported gaps.</p>}
-          </div>
-          <div className="border-t border-white/10 pt-4">
-            <h2 className="text-sm font-medium text-white">Data controls</h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/settings"><Settings />Meter settings</Link>
-              <Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/consumption"><Database />Import history</Link>
-              <Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/simulation"><TimerReset />Demo simulator</Link>
-            </div>
+            <Link className="mt-4 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/usage">Inspect Usage and raw readings</Link>
           </div>
         </section>
       </div>
