@@ -163,6 +163,20 @@ export interface ForecastReadiness {
   model: ForecastModelStatus;
 }
 
+export interface ForecastDemoHistoryResult {
+  status: 'ready' | 'insufficient_data';
+  meter_id: number;
+  synthetic_source: 'forecast_demo';
+  required_hours: number;
+  accepted_rows: number;
+  duplicate_rows: number;
+  coverage_percent: number;
+  observed_hours: number;
+  maximum_gap_hours: number;
+  forecast_origin: string | null;
+  message: string;
+}
+
 export interface ProductForecastPoint {
   timestamp: string;
   p10_kwh: number | null;
@@ -270,6 +284,7 @@ export interface AlertConfig {
 
 export interface Recommendation {
   id: number;
+  alert_id?: number | null;
   category: 'peak_load' | 'data_quality';
   title: string;
   message: string;

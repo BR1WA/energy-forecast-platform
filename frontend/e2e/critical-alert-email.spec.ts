@@ -28,6 +28,7 @@ async function mockAlertSettings(page: Page) {
     if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
     if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
     if (pathname === '/api/v1/alerts' && request.method() === 'GET') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/recommendations' && request.method() === 'GET') return route.fulfill({ json: [] });
     if (pathname === '/api/v1/alerts/config' && request.method() === 'GET') {
       return route.fulfill({
         json: {
@@ -68,11 +69,11 @@ async function mockAlertSettings(page: Page) {
 
 test('critical-alert email opt-in is capability-gated and explicit', async ({ page }) => {
   const mock = await mockAlertSettings(page);
-  await page.goto('/alerts');
+  await page.goto('/actions');
 
-  const preference = page.getByLabel('Email critical alerts');
+  const preference = page.getByLabel('Email critical incidents');
   await expect(preference).toBeDisabled();
-  await expect(page.getByText('Email delivery is not configured. Critical alerts remain available in-app.')).toBeVisible();
+  await expect(page.getByText('Email delivery is unavailable; incidents remain in the app.')).toBeVisible();
 
   mock.enableMail();
   await page.reload();
@@ -82,7 +83,7 @@ test('critical-alert email opt-in is capability-gated and explicit', async ({ pa
   await page.getByRole('button', { name: 'Save rules' }).click();
 
   await expect(preference).toBeChecked();
-  await expect(page.getByText('Enabled for newly created critical alerts. Each alert is emailed at most once.')).toBeVisible();
+  await expect(page.getByText('Enabled for newly created critical incidents.')).toBeVisible();
   await expect.poll(() => mock.savedPayload()).toMatchObject({
     threshold_kw: 3,
     cooldown_minutes: 60,

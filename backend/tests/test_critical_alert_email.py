@@ -138,7 +138,7 @@ def test_one_critical_incident_enqueues_one_evidence_backed_email(db, monkeypatc
     row = db.query(EmailOutbox).one()
     assert row.dedup_key == f"critical-alert:{first.id}:{user.id}"
     assert row.payload["evidence"] == first.evidence_json
-    assert row.payload["url"] == f"https://app.example.test/alerts#alert-{first.id}"
+    assert row.payload["url"] == f"https://app.example.test/actions#action-{first.id}"
 
     rendered = render_email(row, settings)
     assert "Observed load: 2.600 kW" in rendered.text_body

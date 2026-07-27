@@ -134,7 +134,7 @@ class AlertService:
                         "message": message,
                         "evidence": dict(alert.evidence_json or {}),
                         "timezone": site.timezone,
-                        "url": f"{public_url}/alerts#alert-{alert.id}",
+                        "url": f"{public_url}/actions#action-{alert.id}",
                     },
                 )
         return alert

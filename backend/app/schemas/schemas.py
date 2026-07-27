@@ -304,6 +304,20 @@ class ForecastRunRequest(BaseModel):
     horizon_hours: Literal[24, 168] = 24
 
 
+class ForecastDemoHistoryResponse(BaseModel):
+    status: Literal["ready", "insufficient_data"]
+    meter_id: int
+    synthetic_source: Literal["forecast_demo"]
+    required_hours: int
+    accepted_rows: int
+    duplicate_rows: int
+    coverage_percent: float
+    observed_hours: int
+    maximum_gap_hours: int
+    forecast_origin: Optional[datetime] = None
+    message: str
+
+
 class ForecastReadiness(BaseModel):
     horizon_hours: Literal[24, 168] = 24
     status: Literal["ready", "fallback_ready", "insufficient_data"]
@@ -411,6 +425,7 @@ class RecommendationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    alert_id: Optional[int] = None
     category: str
     title: str
     message: str
