@@ -140,17 +140,16 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
     { name: t('nav.forecasts'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
     { name: t('nav.consumption'), path: '/usage', icon: Zap, description: 'Historical energy, tariff estimates, and CSV imports' },
     { name: t('nav.recommendations'), path: '/actions', icon: CircleAlert, description: 'Incidents and evidence-backed follow-up actions' },
-    { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle'), adminOnly: true },
     { name: t('nav.settings'), path: '/settings', icon: SettingsIcon, description: t('settings.subtitle') },
+    ...(user?.role === 'admin'
+      ? [{ name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle') }]
+      : []),
   ];
 
   const filteredPages = searchPages.filter(
     (p) =>
-      (!p.adminOnly || user?.role === 'admin') &&
-      (
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleNavigate = (path: string) => {
