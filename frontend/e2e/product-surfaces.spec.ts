@@ -15,6 +15,7 @@ const USER = {
 
 test('setup completes through the explicit simulator path', async ({ page }) => {
   let setupSaved = false;
+  let setupPayload: Record<string, unknown> | null = null;
   let simulatorStarted = false;
   await page.route(`${API}/**`, async (route) => {
     const request = route.request();
@@ -22,7 +23,7 @@ test('setup completes through the explicit simulator path', async ({ page }) => 
     if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'setup-token', token_type: 'bearer' } });
     if (pathname === '/api/v1/auth/me') return route.fulfill({ json: { ...USER, is_setup_complete: setupSaved } });
     if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [{ id: 1, name: 'Primary meter', source_type: 'simulation', is_primary: true, expected_interval_seconds: 60, last_seen_at: null, push_key_configured: false }] });
-    if (pathname === '/api/v1/settings/setup' && request.method() === 'POST') { setupSaved = true; return route.fulfill({ json: { is_setup_complete: true } }); }
+    if (pathname === '/api/v1/settings/setup' && request.method() === 'POST') { setupPayload = request.postDataJSON() as Record<string, unknown>; setupSaved = true; return route.fulfill({ json: { is_setup_complete: true } }); }
     if (pathname === '/api/v1/settings/budget' && request.method() === 'POST') return route.fulfill({ json: { monthly_budget_mad: 400 } });
     if (pathname === '/api/v1/simulation/start') { simulatorStarted = true; return route.fulfill({ json: { is_running: true } }); }
     if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: setupSaved } });
@@ -32,12 +33,18 @@ test('setup completes through the explicit simulator path', async ({ page }) => 
 
   await page.goto('/setup');
   await expect(page.getByRole('heading', { name: 'Set up your energy workspace' })).toBeVisible();
+  await expect(page.getByLabel('Electricity provider')).toHaveCount(0);
+  await page.getByLabel('Region').selectOption('Marrakech-Safi');
   await page.getByRole('button', { name: /Next/ }).click();
   await page.getByRole('button', { name: /Next/ }).click();
   await page.getByRole('button', { name: 'Simulator' }).click();
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   expect(setupSaved).toBe(true);
+  expect(setupPayload).toMatchObject({ region: 'Marrakech-Safi' });
+  expect(setupPayload).not.toHaveProperty('country');
+  expect(setupPayload).not.toHaveProperty('currency');
+  expect(setupPayload).not.toHaveProperty('electricity_provider');
   expect(simulatorStarted).toBe(true);
 });
 
