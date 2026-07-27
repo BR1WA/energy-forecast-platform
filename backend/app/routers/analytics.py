@@ -117,7 +117,15 @@ def export_pdf_report(
         title="Energy Forecast Report",
     )
     styles = getSampleStyleSheet()
-    story = [Paragraph("Energy Forecast Report", styles["Title"]), Spacer(1, 10)]
+    report_title = "Energy Forecast Report"
+    if forecast is not None:
+        report_horizon = forecast.horizon or len(forecast.predictions or []) or 24
+        report_title = (
+            "7-Day / 168-Hour Energy Forecast Report"
+            if report_horizon == 168
+            else "Next 24 Hours Energy Forecast Report"
+        )
+    story = [Paragraph(report_title, styles["Title"]), Spacer(1, 10)]
     story.append(Paragraph(f"Account: {current_user.email}", styles["BodyText"]))
     story.append(Paragraph(f"Generated: {datetime.now(timezone.utc).isoformat()}", styles["BodyText"]))
 
@@ -190,7 +198,11 @@ def export_pdf_report(
 
     document.build(story)
     buffer.seek(0)
-    filename = f"energy_forecast_{forecast.id if forecast else 'empty'}.pdf"
+    filename = (
+        f"energy_forecast_{forecast.horizon or 24}h_{forecast.id}.pdf"
+        if forecast
+        else "energy_forecast_empty.pdf"
+    )
     return StreamingResponse(
         buffer,
         media_type="application/pdf",

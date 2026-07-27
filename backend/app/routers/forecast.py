@@ -9,12 +9,15 @@ from app.database import get_db
 from app.models import Forecast, User
 from app.schemas import (
     ForecastCapabilitiesResponse,
+    ForecastDemoHistoryResponse,
     ForecastReadiness,
     ForecastRunRequest,
     ProductForecastHistoryItem,
     ProductForecastResponse,
 )
 from app.services.auth_service import get_current_user
+from app.services.audit_service import record_audit_event
+from app.services.forecast_demo_service import forecast_demo_service
 from app.services.product_forecast_service import (
     LOOKBACK_HOURS,
     PRODUCT_MODEL_NAMES,
@@ -91,6 +94,27 @@ def get_readiness(
         return product_forecast_service.readiness(db, current_user.id, horizon_hours)
     except ForecastCapabilityError as exc:
         raise _capability_error(exc) from exc
+
+
+@router.post("/prepare-demo-history", response_model=ForecastDemoHistoryResponse)
+def prepare_demo_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = forecast_demo_service.prepare_history(db, current_user.id)
+    record_audit_event(
+        db,
+        "forecast.demo_history_prepared",
+        actor_user_id=current_user.id,
+        target=f"meter:{result['meter_id']}",
+        metadata={
+            "accepted_rows": result["accepted_rows"],
+            "duplicate_rows": result["duplicate_rows"],
+            "coverage_percent": result["coverage_percent"],
+        },
+    )
+    db.commit()
+    return result
 
 
 @router.post("/run", response_model=ProductForecastResponse, status_code=status.HTTP_201_CREATED)

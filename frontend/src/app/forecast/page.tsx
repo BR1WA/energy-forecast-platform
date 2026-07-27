@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   BrainCircuit,
@@ -9,9 +10,11 @@ import {
   CheckCircle2,
   Clock3,
   Database,
+  Download,
   Gauge,
   Play,
   RefreshCw,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react';
 import {
@@ -29,7 +32,7 @@ import { toast } from 'sonner';
 import AppLayout from '@/components/layout/app-layout';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { forecastApi } from '@/lib/api';
+import { analyticsApi, forecastApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type {
   ForecastCapability,
@@ -82,6 +85,15 @@ function Fact({ label, value, detail }: { label: string; value: string; detail?:
   );
 }
 
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 type ChartPoint = {
   timestamp: string;
   p50_kwh: number;
@@ -117,27 +129,40 @@ function dailyChartData(points: ProductForecastPoint[], timezone: string): Chart
   });
 }
 
-export default function ForecastPage() {
+function ForecastContent() {
+  const searchParams = useSearchParams();
+  const horizon: ForecastHorizon = searchParams.get('horizon') === '168' ? 168 : 24;
   const [capabilities, setCapabilities] = useState<ForecastCapability[]>([]);
-  const [horizon, setHorizon] = useState<ForecastHorizon>(24);
   const [readiness, setReadiness] = useState<ForecastReadiness | null>(null);
   const [forecast, setForecast] = useState<ProductForecast | null>(null);
   const [history, setHistory] = useState<ProductForecastHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [preparingDemo, setPreparingDemo] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     setError(null);
     try {
-      const [capabilityResult, nextReadiness, latest, nextHistory] = await Promise.all([
-        forecastApi.getCapabilities(),
+      const capabilityResult = await forecastApi.getCapabilities();
+      setCapabilities(capabilityResult.capabilities);
+      if (!capabilityResult.capabilities.some((capability) => capability.horizon_hours === horizon)) {
+        setReadiness(null);
+        setForecast(null);
+        setHistory([]);
+        throw new Error(
+          horizon === 168
+            ? 'The 7-day / 168-hour forecast is unavailable in this runtime. Ask the operator to enable the packaged weekly model.'
+            : 'The 24-hour forecast is unavailable in this runtime.',
+        );
+      }
+      const [nextReadiness, latest, nextHistory] = await Promise.all([
         forecastApi.getReadiness(horizon),
         forecastApi.getLatest(horizon),
         forecastApi.getHistory(horizon),
       ]);
-      setCapabilities(capabilityResult.capabilities);
       setReadiness(nextReadiness);
       setForecast(latest);
       setHistory(nextHistory);
@@ -175,6 +200,35 @@ export default function ForecastPage() {
     }
   };
 
+  const prepareDemoHistory = async () => {
+    setPreparingDemo(true);
+    try {
+      const result = await forecastApi.prepareDemoHistory();
+      await load(true);
+      if (result.status === 'ready') {
+        toast.success(`Demo history ready: ${result.coverage_percent.toFixed(1)}% coverage.`);
+      } else {
+        toast.warning(result.message);
+      }
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Demo history preparation failed.');
+    } finally {
+      setPreparingDemo(false);
+    }
+  };
+
+  const exportForecast = async () => {
+    if (!forecast) return;
+    setExporting(true);
+    try {
+      saveBlob(await analyticsApi.downloadReportPDF(forecast.id), `energy-forecast-${forecast.horizon_hours}h-${forecast.id}.pdf`);
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Forecast PDF export failed.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const chartData = useMemo<ChartPoint[]>(() => {
     if (!forecast) return [];
     if (forecast.horizon_hours === 168) return dailyChartData(forecast.points, forecast.timezone);
@@ -194,7 +248,10 @@ export default function ForecastPage() {
     const peak = forecast.points.reduce((highest, point) => (
       point.p50_kwh > highest.p50_kwh ? point : highest
     ));
-    return { total, peak };
+    const minimum = forecast.points.reduce((lowest, point) => (
+      point.p50_kwh < lowest.p50_kwh ? point : lowest
+    ));
+    return { total, average: total / forecast.points.length, peak, minimum };
   }, [forecast]);
 
   const canRun = readiness?.ready_for_tft || readiness?.fallback_available;
@@ -208,7 +265,7 @@ export default function ForecastPage() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
               <BrainCircuit className="h-6 w-6 text-cyan-400" />
-              {horizon}-hour energy forecast
+              {isWeek ? 'Next 7 days · 168-hour energy forecast' : 'Next 24 hours energy forecast'}
             </h1>
             <p className="mt-1 text-sm text-slate-400">Primary meter forecast in hourly kWh</p>
           </div>
@@ -216,16 +273,24 @@ export default function ForecastPage() {
             {capabilities.length > 1 ? (
               <div className="flex rounded-md border border-white/10 bg-slate-950/50 p-1" aria-label="Forecast horizon">
                 {capabilities.map((capability) => (
-                  <Button
+                  <Link
                     key={capability.horizon_hours}
-                    size="sm"
-                    variant={horizon === capability.horizon_hours ? 'default' : 'ghost'}
-                    onClick={() => setHorizon(capability.horizon_hours)}
-                    disabled={loading || running}
+                    aria-current={horizon === capability.horizon_hours ? 'page' : undefined}
+                    aria-disabled={loading || running}
+                    className={cn(
+                      buttonVariants({
+                        size: 'sm',
+                        variant: horizon === capability.horizon_hours ? 'default' : 'ghost',
+                      }),
+                      (loading || running) && 'pointer-events-none opacity-50',
+                    )}
+                    href={`/forecast?horizon=${capability.horizon_hours}`}
+                    replace
+                    scroll={false}
                     title={capability.description}
                   >
-                    {capability.label} · {capability.horizon_hours}h
-                  </Button>
+                    {capability.label}{capability.horizon_hours === 168 ? ' · 168h' : ''}
+                  </Link>
                 ))}
               </div>
             ) : null}
@@ -243,6 +308,9 @@ export default function ForecastPage() {
               <Button onClick={runForecast} disabled={!canRun || running || loading}>
                 {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 {running ? 'Generating' : readiness?.status === 'fallback_ready' ? 'Run fallback' : 'Generate forecast'}
+              </Button>
+              <Button variant="outline" onClick={() => void exportForecast()} disabled={!forecast || exporting || loading || running}>
+                <Download className="h-4 w-4" />{exporting ? 'Exporting' : 'Forecast PDF'}
               </Button>
             </div>
           </div>
@@ -274,7 +342,19 @@ export default function ForecastPage() {
               <ul className="space-y-2 text-sm text-amber-100/80">
                 {readiness.reasons.map((reason) => <li key={reason}>{reason}</li>)}
               </ul>
-              <Link href="/consumption" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}>Open data workspace</Link>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  className="bg-amber-300 text-slate-950 hover:bg-amber-200"
+                  onClick={() => void prepareDemoHistory()}
+                  disabled={preparingDemo || loading || running}
+                >
+                  {preparingDemo ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {preparingDemo ? 'Preparing history' : 'Prepare demo history'}
+                </Button>
+                <Link href="/usage" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}>Open Usage</Link>
+                <a download href="/samples/forecast-ready" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}><Download className="h-4 w-4" />Download forecast-ready CSV</a>
+              </div>
+              <p className="text-xs leading-5 text-amber-100/60">For demos and tests, one-click preparation adds clearly labelled synthetic hourly readings to the current primary meter. It preserves existing readings and is safe to run again. The CSV remains available for testing the manual import journey.</p>
             </CardContent>
           </Card>
         ) : null}
@@ -289,10 +369,10 @@ export default function ForecastPage() {
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Expected energy" value={`${summary.total.toFixed(2)} kWh`} detail={`Median, next ${forecast.horizon_hours}h`} /></CardContent></Card>
+              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Expected energy" value={`${summary.total.toFixed(2)} kWh`} detail={forecast.horizon_hours === 168 ? 'Median total, next 7 days' : 'Median total, next 24 hours'} /></CardContent></Card>
+              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Average hour" value={`${summary.average.toFixed(2)} kWh`} detail={`${forecast.points.length} hourly targets`} /></CardContent></Card>
               <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Peak hour" value={`${summary.peak.p50_kwh.toFixed(2)} kWh`} detail={formatDate(summary.peak.timestamp, forecast.timezone)} /></CardContent></Card>
-              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Method" value={methodLabel(forecast.method)} detail={`Version ${forecast.model_version}`} /></CardContent></Card>
-              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Input quality" value={`${forecast.coverage_percent.toFixed(1)}%`} detail={forecast.sources.join(', ') || 'Unknown source'} /></CardContent></Card>
+              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Minimum hour" value={`${summary.minimum.p50_kwh.toFixed(2)} kWh`} detail={formatDate(summary.minimum.timestamp, forecast.timezone)} /></CardContent></Card>
             </div>
 
             <Card className="rounded-lg border-white/10 bg-[#111827]/80">
@@ -365,5 +445,13 @@ export default function ForecastPage() {
         ) : null}
       </div>
     </AppLayout>
+  );
+}
+
+export default function ForecastPage() {
+  return (
+    <Suspense fallback={<AppLayout><div className="mx-auto max-w-7xl py-16 text-center text-sm text-slate-400">Loading forecast horizon…</div></AppLayout>}>
+      <ForecastContent />
+    </Suspense>
   );
 }

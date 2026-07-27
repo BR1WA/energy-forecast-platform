@@ -5,6 +5,7 @@ import type {
   AuthCapabilities,
   RegisterPayload,
   User,
+  ForecastDemoHistoryResult,
   ForecastReadiness,
   ForecastCapabilities,
   ForecastHorizon,
@@ -294,6 +295,9 @@ export const forecastApi = {
   getReadiness: (horizon: ForecastHorizon = 24): Promise<ForecastReadiness> =>
     apiFetch(`/api/v1/forecast/readiness?horizon_hours=${horizon}`),
 
+  prepareDemoHistory: (): Promise<ForecastDemoHistoryResult> =>
+    apiFetch('/api/v1/forecast/prepare-demo-history', { method: 'POST' }),
+
   run: (horizon: ForecastHorizon = 24): Promise<ProductForecast> =>
     apiFetch('/api/v1/forecast/run', {
       method: 'POST',
@@ -314,8 +318,8 @@ export const analyticsApi = {
   getSummary: (): Promise<AnalyticsSummary> =>
     apiFetch('/api/v1/analytics/summary'),
 
-  downloadReportPDF: (): Promise<Blob> =>
-    apiFetch('/api/v1/analytics/report/pdf', { isBlob: true }),
+  downloadReportPDF: (forecastId?: number): Promise<Blob> =>
+    apiFetch(`/api/v1/analytics/report/pdf${forecastId ? `?forecast_id=${forecastId}` : ''}`, { isBlob: true }),
 };
 
 // ============================================================

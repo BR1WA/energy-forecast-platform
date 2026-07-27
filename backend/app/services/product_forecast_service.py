@@ -159,7 +159,12 @@ class ProductForecastService:
         if not self.is_enabled(horizon_hours):
             raise ForecastCapabilityError(
                 "FORECAST_CAPABILITY_DISABLED",
-                "The requested forecast capability is not enabled.",
+                (
+                    "The 7-day / 168-hour forecast is disabled in this runtime. "
+                    "Enable FORECAST_168H_ENABLED only when the packaged weekly artifact is available."
+                    if horizon_hours == 168
+                    else "The requested forecast capability is not enabled."
+                ),
                 404,
             )
         return spec
@@ -370,7 +375,7 @@ class ProductForecastService:
         advertised = [
             {
                 "horizon_hours": 24,
-                "label": "Day",
+                "label": "Next 24 hours",
                 "description": "Next 24 hourly energy values",
                 "model": day,
             }
@@ -381,7 +386,7 @@ class ProductForecastService:
                 advertised.append(
                     {
                         "horizon_hours": 168,
-                        "label": "Week",
+                        "label": "Next 7 days",
                         "description": "Next 168 hourly energy values",
                         "model": week,
                     }
@@ -395,7 +400,10 @@ class ProductForecastService:
             if not status["available"] or not status.get("warmed"):
                 raise ForecastCapabilityError(
                     "FORECAST_ARTIFACT_NOT_READY",
-                    "The requested forecast artifact is not ready.",
+                    (
+                        "The 7-day / 168-hour model artifact is unavailable or could not be loaded. "
+                        f"{status.get('error') or 'Check the packaged weekly model and restart the backend.'}"
+                    ),
                     503,
                 )
         return spec
