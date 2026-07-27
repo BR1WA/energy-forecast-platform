@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { alertsApi, API_BASE_URL } from '@/lib/api';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { Bell, Search, X, LayoutDashboard, LineChart, AlertTriangle, Shield, Settings as SettingsIcon, Menu, Zap, Sparkles, FileText } from 'lucide-react';
+import { Bell, Search, X, LayoutDashboard, LineChart, AlertTriangle, Shield, Settings as SettingsIcon, Menu, Zap, CircleAlert } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -42,16 +42,12 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
         return t('nav.dashboard');
       case '/forecast':
         return t('forecast.title');
-      case '/consumption':
+      case '/usage':
         return t('nav.consumption');
-      case '/recommendations':
+      case '/actions':
         return t('nav.recommendations');
-      case '/reports':
-        return t('nav.reports');
       case '/simulation':
         return t('nav.simulation');
-      case '/alerts':
-        return t('alerts.title');
       case '/admin':
         return t('admin.title');
       case '/settings':
@@ -67,16 +63,12 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
         return t('dashboard.subtitle');
       case '/forecast':
         return t('forecast.subtitle');
-      case '/consumption':
-        return 'Historical periods, energy totals, and CSV imports.';
-      case '/recommendations':
-        return 'Evidence-backed actions from your recorded consumption.';
-      case '/reports':
-        return 'Owned consumption summaries and exports.';
+      case '/usage':
+        return 'Historical energy, estimated tariff cost, data quality, and CSV imports.';
+      case '/actions':
+        return 'Measured incidents and evidence-backed follow-up actions.';
       case '/simulation':
         return 'Explicitly controlled and clearly labelled demo readings.';
-      case '/alerts':
-        return t('alerts.subtitle');
       case '/admin':
         return t('admin.subtitle');
       case '/settings':
@@ -146,18 +138,19 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const searchPages = [
     { name: t('nav.dashboard'), path: '/dashboard', icon: LayoutDashboard, description: language === 'ar' ? 'بيانات القياس والتحميل المباشر للعداد الذكي' : language === 'fr' ? 'Télémesures et puissances du compteur en temps réel' : 'Real-time smart meter telemetry and load rates' },
     { name: t('nav.forecasts'), path: '/forecast', icon: LineChart, description: t('forecast.subtitle') },
-    { name: t('nav.consumption'), path: '/consumption', icon: Zap, description: 'Historical periods and CSV imports' },
-    { name: t('nav.recommendations'), path: '/recommendations', icon: Sparkles, description: 'Evidence-backed actions' },
-    { name: t('nav.reports'), path: '/reports', icon: FileText, description: 'Consumption exports' },
-    { name: t('nav.alerts'), path: '/alerts', icon: AlertTriangle, description: t('alerts.subtitle') },
-    { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle') },
+    { name: t('nav.consumption'), path: '/usage', icon: Zap, description: 'Historical energy, tariff estimates, and CSV imports' },
+    { name: t('nav.recommendations'), path: '/actions', icon: CircleAlert, description: 'Incidents and evidence-backed follow-up actions' },
+    { name: t('nav.admin'), path: '/admin', icon: Shield, description: t('admin.subtitle'), adminOnly: true },
     { name: t('nav.settings'), path: '/settings', icon: SettingsIcon, description: t('settings.subtitle') },
   ];
 
   const filteredPages = searchPages.filter(
     (p) =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase())
+      (!p.adminOnly || user?.role === 'admin') &&
+      (
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description.toLowerCase().includes(searchQuery.toLowerCase())
+      )
   );
 
   const handleNavigate = (path: string) => {
@@ -337,10 +330,10 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                 )}
               </div>
               <button
-                onClick={() => { router.push('/alerts'); setSearchOpen(false); setNotifOpen(false); }}
+                onClick={() => { router.push('/actions'); setSearchOpen(false); setNotifOpen(false); }}
                 className="w-full px-4 py-2.5 text-xs text-center text-blue-400 hover:text-blue-300 hover:bg-white/[0.02] border-t border-white/[0.06] font-medium transition-colors"
               >
-                {isRTL ? 'عرض جميع التنبيهات ←' : 'View all alerts →'}
+                {isRTL ? 'عرض جميع الإجراءات ←' : 'View all actions →'}
               </button>
             </div>
           )}
