@@ -440,11 +440,7 @@ export const settingsApi = {
 
   postSetup: (data: {
     site_name?: string;
-    timezone?: string;
-    country: string;
     region: string;
-    electricity_provider: string;
-    currency: string;
     peak_rate: number;
     off_peak_rate: number;
     peak_start_hour: number;

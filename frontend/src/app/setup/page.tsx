@@ -6,6 +6,12 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Download, MapPin, Radio, Upload, W
 import { toast } from 'sonner';
 import { ingestionApi, settingsApi, simulationApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import {
+  MOROCCO_COUNTRY,
+  MOROCCO_CURRENCY,
+  MOROCCO_REGIONS,
+  type MoroccoRegion,
+} from '@/lib/morocco';
 
 type DataPath = 'csv' | 'simulator' | 'push';
 
@@ -15,8 +21,7 @@ export default function SetupWizard() {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [siteName, setSiteName] = useState('My site');
-  const [region, setRegion] = useState('Casablanca-Settat');
-  const [provider, setProvider] = useState('ONEE');
+  const [region, setRegion] = useState<MoroccoRegion>('Casablanca-Settat');
   const [budget, setBudget] = useState('400');
   const [dataPath, setDataPath] = useState<DataPath>('csv');
   const [meterId, setMeterId] = useState<number | null>(null);
@@ -52,8 +57,8 @@ export default function SetupWizard() {
     setSaving(true);
     try {
       await settingsApi.postSetup({
-        site_name: siteName.trim() || 'My site', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Casablanca',
-        country: 'Morocco', region, electricity_provider: provider, currency: 'MAD',
+        site_name: siteName.trim() || 'My site',
+        region,
         peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22,
         sensor_type: dataPath,
       });
@@ -79,7 +84,7 @@ export default function SetupWizard() {
         </header>
         <div className="mb-8 flex gap-2 text-xs text-slate-400"><span className={step >= 1 ? 'text-blue-300' : ''}>1 Site</span><span>/</span><span className={step >= 2 ? 'text-blue-300' : ''}>2 Budget</span><span>/</span><span className={step >= 3 ? 'text-blue-300' : ''}>3 Data</span></div>
 
-        {step === 1 && <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><MapPin className="h-5 w-5" /><h2 className="font-semibold">Site and tariff</h2></div><label className="block text-sm">Site name<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={siteName} onChange={(event) => setSiteName(event.target.value)} /></label><label className="block text-sm">Region<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={region} onChange={(event) => setRegion(event.target.value)} /></label><label className="block text-sm">Electricity provider<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={provider} onChange={(event) => setProvider(event.target.value)} /></label><p className="rounded-md border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs leading-5 text-amber-100/80">Setup starts with editable demonstration rates of 1.10 MAD/kWh peak and 0.80 MAD/kWh off-peak. Confirm your actual rates later in Settings; displayed costs are estimates, not utility bills.</p><button className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setStep(2)}>Next <ArrowRight className="h-4 w-4" /></button></section>}
+        {step === 1 && <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><MapPin className="h-5 w-5" /><h2 className="font-semibold">Moroccan site and tariff</h2></div><label className="block text-sm">Site name<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={siteName} onChange={(event) => setSiteName(event.target.value)} /></label><label className="block text-sm">Region<select aria-label="Region" className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" value={region} onChange={(event) => setRegion(event.target.value as MoroccoRegion)}>{MOROCCO_REGIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-md border border-white/10 bg-[#111827] p-3"><p className="text-xs text-slate-500">Country</p><p className="mt-1 text-sm font-medium text-white">{MOROCCO_COUNTRY}</p></div><div className="rounded-md border border-white/10 bg-[#111827] p-3"><p className="text-xs text-slate-500">Currency and timezone</p><p className="mt-1 text-sm font-medium text-white">{MOROCCO_CURRENCY} · Africa/Casablanca</p></div></div><p className="rounded-md border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs leading-5 text-amber-100/80">Provider is not collected because it does not change this app&apos;s calculation. Setup uses editable demonstration rates of 1.10 MAD/kWh peak and 0.80 MAD/kWh off-peak; displayed costs are estimates, not utility bills.</p><button className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setStep(2)}>Next <ArrowRight className="h-4 w-4" /></button></section>}
 
         {step === 2 && <section className="space-y-5"><div className="flex items-center gap-2 text-blue-300"><Wallet className="h-5 w-5" /><h2 className="font-semibold">Monthly budget</h2></div><label className="block text-sm">Budget in MAD<input className="mt-2 w-full rounded-md border border-white/10 bg-[#111827] px-3 py-2" type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></label><div className="flex gap-3"><button className="flex items-center gap-2 rounded-md border border-white/10 px-4 py-2 text-sm" onClick={() => setStep(1)}><ArrowLeft className="h-4 w-4" /> Back</button><button className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={() => setStep(3)}>Next <ArrowRight className="h-4 w-4" /></button></div></section>}
 

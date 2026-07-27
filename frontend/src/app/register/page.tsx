@@ -50,7 +50,7 @@ export default function RegisterPage() {
       <header className="mx-auto flex h-16 max-w-7xl items-center justify-between border-b border-white/[0.08] px-5 sm:px-8"><Link href="/" className="flex items-center gap-2 text-white"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-600"><Zap className="h-5 w-5" /></span><span className="font-bold">EnergyAI</span></Link><Link href="/login" className="text-sm text-slate-400 hover:text-white">Sign in</Link></header>
       <div className="mx-auto flex min-h-[calc(100vh-64px)] max-w-md items-center px-5 py-10">
         <section className="w-full border border-white/[0.1] bg-[#0d1420] p-6 sm:p-8">
-          <h1 className="text-2xl font-bold text-white">Create your account</h1><p className="mt-2 text-sm text-slate-400">Your private site and primary meter are created automatically.</p>
+          <h1 className="text-2xl font-bold text-white">Create your account</h1><p className="mt-2 text-sm text-slate-400">Create your identity first. After email verification, setup creates a Morocco-based private site and asks you to select its region.</p>
           {registrationAvailable === false ? <div className="mt-5 border border-amber-400/25 bg-amber-400/5 p-3 text-sm text-amber-200">Registration is temporarily unavailable while email delivery is disabled.</div> : null}
           {error ? <div className="mt-5 flex items-center gap-2 border border-red-400/25 bg-red-400/5 p-3 text-sm text-red-300"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div> : null}
           <form onSubmit={submit} className="mt-6 space-y-4">

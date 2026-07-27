@@ -17,11 +17,18 @@ import { CheckCircle2, Clipboard, Database, KeyRound, Link2, PlayCircle, Radio, 
 import { buttonVariants } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { AccountDeletionCapabilities } from '@/types';
+import {
+  MOROCCO_COUNTRY,
+  MOROCCO_CURRENCY,
+  MOROCCO_REGIONS,
+  isMoroccoRegion,
+  type MoroccoRegion,
+} from '@/lib/morocco';
 
 const initialSettings = {
   country: 'Morocco',
   region: 'Casablanca-Settat',
-  electricity_provider: 'ONEE',
+  electricity_provider: null as string | null,
   currency: 'MAD',
   peak_rate: 1.1,
   off_peak_rate: 0.8,
@@ -58,10 +65,10 @@ export default function SettingsPage() {
     Promise.all([settingsApi.getSettings(), settingsApi.getBudget(), ingestionApi.getMeters(), accountApi.getDeletionCapabilities()])
       .then(([settings, savedBudget, meters, deletion]) => {
         setSiteSettings({
-          country: settings.country,
-          region: settings.region,
-          electricity_provider: settings.electricity_provider,
-          currency: settings.currency,
+          country: MOROCCO_COUNTRY,
+          region: isMoroccoRegion(settings.region) ? settings.region : 'Casablanca-Settat',
+          electricity_provider: null,
+          currency: MOROCCO_CURRENCY,
           peak_rate: settings.peak_rate,
           off_peak_rate: settings.off_peak_rate,
           peak_start_hour: settings.peak_start_hour,
@@ -156,7 +163,14 @@ export default function SettingsPage() {
   const saveSiteSettings = async () => {
     setSaving(true);
     try {
-      await settingsApi.postSetup(siteSettings);
+      await settingsApi.postSetup({
+        region: siteSettings.region,
+        peak_rate: siteSettings.peak_rate,
+        off_peak_rate: siteSettings.off_peak_rate,
+        peak_start_hour: siteSettings.peak_start_hour,
+        peak_end_hour: siteSettings.peak_end_hour,
+        sensor_type: siteSettings.sensor_type,
+      });
       await settingsApi.setBudget({ monthly_budget_mad: Number(budget) || 0 });
       await refreshUser();
       toast.success('Settings saved.');
@@ -309,13 +323,14 @@ export default function SettingsPage() {
             <Card className="border-white/[0.06] bg-[#111827]/50">
               <CardHeader><CardTitle>Site configuration</CardTitle><CardDescription>These values are stored for your own site only.</CardDescription></CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
-                {([
-                  ['country', 'Country'], ['region', 'Region'], ['electricity_provider', 'Provider'], ['currency', 'Currency'],
-                ] as const).map(([field, label]) => (
-                  <div key={field} className="space-y-2"><Label htmlFor={`site-${field}`}>{label}</Label><Input id={`site-${field}`} value={siteSettings[field]} onChange={(event) => setSiteSettings({ ...siteSettings, [field]: event.target.value })} /></div>
-                ))}
+                <div className="space-y-2"><Label htmlFor="site-region">Region</Label><select id="site-region" className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm text-white outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" value={siteSettings.region} onChange={(event) => setSiteSettings({ ...siteSettings, region: event.target.value as MoroccoRegion })}>{MOROCCO_REGIONS.map((option) => <option className="bg-[#111827]" key={option} value={option}>{option}</option>)}</select></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-white/10 bg-slate-950/30 p-3"><p className="text-xs text-slate-500">Country</p><p className="mt-1 text-sm font-medium text-white">{MOROCCO_COUNTRY}</p></div>
+                  <div className="rounded-lg border border-white/10 bg-slate-950/30 p-3"><p className="text-xs text-slate-500">Currency</p><p className="mt-1 text-sm font-medium text-white">{MOROCCO_CURRENCY}</p></div>
+                </div>
                 <div className="space-y-2"><Label htmlFor="site-peak-rate">Peak rate (MAD/kWh)</Label><Input id="site-peak-rate" type="number" value={siteSettings.peak_rate} onChange={(event) => setSiteSettings({ ...siteSettings, peak_rate: Number(event.target.value) })} /></div>
                 <div className="space-y-2"><Label htmlFor="site-off-peak-rate">Off-peak rate (MAD/kWh)</Label><Input id="site-off-peak-rate" type="number" value={siteSettings.off_peak_rate} onChange={(event) => setSiteSettings({ ...siteSettings, off_peak_rate: Number(event.target.value) })} /></div>
+                <p className="text-xs leading-5 text-slate-500 md:col-span-2">This Morocco-focused workspace uses Africa/Casablanca and MAD. Provider is not requested because it does not affect the configurable tariff estimate; region is retained as site metadata and is not currently sent to a weather API.</p>
                 <div className="md:col-span-2 flex justify-end"><Button onClick={saveSiteSettings} disabled={saving}>{saving ? 'Saving...' : 'Save site settings'}</Button></div>
               </CardContent>
             </Card>

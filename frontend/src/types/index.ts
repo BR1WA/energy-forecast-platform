@@ -362,7 +362,7 @@ export interface SystemSettings {
   is_setup_complete: boolean;
   country: string;
   region: string;
-  electricity_provider: string;
+  electricity_provider: string | null;
   currency: string;
   peak_rate: number;
   off_peak_rate: number;
