@@ -18,6 +18,7 @@ from app.services.auth_service import hash_password
 from app.services.product_forecast_service import (
     ARTIFACT_DIR,
     ARTIFACT_SPECS,
+    ForecastCapabilityError,
     LOOKBACK_HOURS,
     ProductForecastService,
 )
@@ -88,6 +89,31 @@ def test_packaged_week_checkpoint_matches_its_independent_manifest():
 def test_week_capability_is_hidden_by_default():
     capabilities = ProductForecastService(forecast_168h_enabled=False).capabilities()
     assert [item["horizon_hours"] for item in capabilities["capabilities"]] == [24]
+
+
+def test_week_artifact_failure_is_actionable_and_never_substitutes_the_day_model(monkeypatch):
+    service = ProductForecastService(forecast_168h_enabled=True)
+    monkeypatch.setattr(
+        service,
+        "warmup",
+        lambda horizon_hours=24: {
+            "available": horizon_hours == 24,
+            "enabled": True,
+            "warmed": horizon_hours == 24,
+            "horizon_hours": horizon_hours,
+            "name": ARTIFACT_SPECS[horizon_hours].model_name,
+            "display_name": ARTIFACT_SPECS[horizon_hours].display_name,
+            "version": "1.0.0",
+            "artifact_fingerprint": None,
+            "error": None if horizon_hours == 24 else "Weekly checkpoint integrity failed.",
+        },
+    )
+
+    with pytest.raises(ForecastCapabilityError) as caught:
+        service._require_advertised(168)
+
+    assert getattr(caught.value, "code", None) == "FORECAST_ARTIFACT_NOT_READY"
+    assert "Weekly checkpoint integrity failed" in str(caught.value)
 
 
 def test_readiness_accepts_a_complete_primary_meter_window():

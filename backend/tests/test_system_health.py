@@ -37,7 +37,7 @@ def test_readiness_requires_the_packaged_runtime(monkeypatch):
         monkeypatch.setattr(
             product_forecast_service,
             "warmup",
-            lambda: model_status(available=False, warmed=False, error="PyTorch unavailable"),
+            lambda horizon_hours=24: model_status(available=False, warmed=False, error="PyTorch unavailable"),
         )
         result = build_readiness(db)
         assert result["ready"] is False
@@ -54,7 +54,7 @@ def test_readiness_reports_a_warmed_fixed_artifact(monkeypatch):
         monkeypatch.setattr(
             product_forecast_service,
             "warmup",
-            lambda: model_status(available=True, warmed=True),
+            lambda horizon_hours=24: model_status(available=True, warmed=True),
         )
         result = build_readiness(db)
         assert result["ready"] is True
@@ -71,7 +71,7 @@ def test_readiness_rejects_an_artifact_that_cannot_warm(monkeypatch):
         monkeypatch.setattr(
             product_forecast_service,
             "warmup",
-            lambda: model_status(available=False, warmed=False, error="State dict mismatch"),
+            lambda horizon_hours=24: model_status(available=False, warmed=False, error="State dict mismatch"),
         )
         result = build_readiness(db)
         assert result["ready"] is False
@@ -133,7 +133,7 @@ def test_dead_mail_is_reported_as_optional_degradation(monkeypatch):
                 SMTP_PASSWORD="password",
             ),
         )
-        monkeypatch.setattr(product_forecast_service, "warmup", lambda: model_status(available=True, warmed=True))
+        monkeypatch.setattr(product_forecast_service, "warmup", lambda horizon_hours=24: model_status(available=True, warmed=True))
         result = build_readiness(db)
         assert result["ready"] is True
         assert result["email"] == {"enabled": True, "status": "degraded", "processing": 0, "retry": 0, "dead": 1}

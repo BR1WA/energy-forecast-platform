@@ -1,6 +1,8 @@
+import io
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -111,8 +113,40 @@ def test_owned_report_summary_pdf_and_consumption_csv():
         assert pdf.status_code == 200
         assert pdf.headers["content-type"] == "application/pdf"
         assert pdf.content.startswith(b"%PDF")
-        assert "energy_forecast_" in pdf.headers["content-disposition"]
+        assert f"energy_forecast_24h_{forecast.id}.pdf" in pdf.headers["content-disposition"]
+        day_pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf.content)).pages)
+        assert "Next 24 Hours Energy Forecast Report" in day_pdf_text
+        assert "Output: 24 hourly energy values in kWh" in day_pdf_text
         assert client.get(f"/api/v1/analytics/report/pdf?forecast_id={forecast.id}", headers=other_headers).status_code == 404
+
+        weekly = Forecast(
+            user_id=owner.id,
+            site_id=site.id,
+            model_name="global_tft_168h",
+            horizon=168,
+            input_source="meter",
+            input_start=start - timedelta(hours=336),
+            input_end=start,
+            predictions=[[1.7, 1.2, 2.2] for _ in range(168)],
+            confidence_method="Native model quantiles; not calibrated for this site.",
+            input_snapshot={
+                "method": "global_tft",
+                "model_version": "1.0.0",
+                "forecast_origin": start.isoformat(),
+                "timezone": "UTC",
+                "sources": ["csv"],
+                "coverage_percent": 100,
+            },
+        )
+        db.add(weekly)
+        db.commit()
+        weekly_pdf = client.get(f"/api/v1/analytics/report/pdf?forecast_id={weekly.id}", headers=owner_headers)
+        assert weekly_pdf.status_code == 200
+        assert f"energy_forecast_168h_{weekly.id}.pdf" in weekly_pdf.headers["content-disposition"]
+        weekly_pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(weekly_pdf.content)).pages)
+        assert "7-Day / 168-Hour Energy Forecast Report" in weekly_pdf_text
+        assert "Output: 168 hourly energy values in kWh" in weekly_pdf_text
+        assert client.get(f"/api/v1/analytics/report/pdf?forecast_id={weekly.id}", headers=other_headers).status_code == 404
 
         csv_response = client.get("/api/v1/consumption/export?month=2026-07", headers=owner_headers)
         assert csv_response.status_code == 200
