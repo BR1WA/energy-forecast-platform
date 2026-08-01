@@ -1,0 +1,19 @@
+notebook,location,purpose,status,methodological_note
+DEPM_Implementation.ipynb,legacy-pfe/notebooks,Initial DEPM replication,invalidated,Target and proxy leakage plus non-causal preprocessing
+DEPM_Deep_Energy_Predictor_Model.ipynb,legacy-pfe/notebooks,DEPM architecture reconstruction,invalidated,Historical classification score is not forecasting evidence
+DEPM_Feature_Ablation.ipynb,legacy-pfe/notebooks,Feature ablation,diagnostic,Useful for locating leakage but not a final benchmark
+depm-proposed.ipynb,legacy-pfe/notebooks,Hybrid DEPM experiment,invalidated,Retained Global_active_power and derived information
+depm-variants-comparison.ipynb,legacy-pfe/notebooks,Compare DEPM variants,historical,Must be labelled by leakage status
+LSTM_Energy_Predictor.ipynb,legacy-pfe/notebooks,LSTM classifier comparison,non_comparable,Random sequence split and classification objective
+EDA_Exploration.ipynb,legacy-pfe/notebooks,IHEPC exploratory analysis,usable,Descriptive evidence only
+depm_final.ipynb,Git tag v0.1.0:notebooks,Later DEPM pipeline,invalidated,Excluded raw target but retained derived/current target information and pre-split transformations
+depm_final_noleak.ipynb,Git tag v0.1.0:notebooks,No-direct-leak classification,partially_corrected,Random split and pre-split scaler/PCA remain concerns
+fair_comparison.ipynb,Git tag v0.1.0:notebooks,Leakage-controlled comparison,diagnostic,Train-only transformation but still random classification
+proper_regression_forecasting.ipynb,Git tag v0.1.0:notebooks,Continuous causal forecasting,usable,Shifted features chronological masks and original-scale metrics
+EECP_CBL_Replication.ipynb,Git tag v0.1.0:notebooks,CNN-BiLSTM replication,usable,Chronological split and train-only scaling
+PatchTST_Forecasting.ipynb,Git tag v0.1.0:notebooks,PatchTST 24-hour forecasting,usable,Chronological split and original-unit metrics
+sota-time-series-forecasting.ipynb,Git tag v0.1.0:notebooks,iTransformer/CNN-BiLSTM experiments,usable_with_caveat,Use only metrics backed by stored outputs
+state-of-the-art-long-term-time-series-forecasting.ipynb,Git tag v0.1.0:notebooks,Long-horizon PatchTST/iTransformer,usable_with_caveat,Historic checkpoints belong to research archive
+weather_sota_forecasting.ipynb,Git tag v0.1.0:notebooks,Weather and TSMixer/iTransformer exploration,incomplete,Do not claim successful TSMixer reproduction without final metric file
+ecl_deep_models_dual_t4_benchmark.ipynb,notebooks,ECL benchmark across modern architectures,completed_partial,Completed evidence exists for iTransformer PatchTST xPatch and CNN-BiLSTM; TimePro/TimeMixer++ lack proven successful metrics
+lcl-global-household-forecasting-full-selected-pro.ipynb,notebooks,Full-profile production-candidate training,completed,Source for Global TFT/N-BEATS/MultiCycleNet selection

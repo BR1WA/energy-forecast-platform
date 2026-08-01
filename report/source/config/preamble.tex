@@ -1,0 +1,86 @@
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english,french]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,top=2.6cm,bottom=2.6cm,left=2.8cm,right=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{graphicx}
+\usepackage{eso-pic}
+\graphicspath{{../assets/figures/}{../assets/diagrams/}{../assets/screenshots/}{../assets/logos/}}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{threeparttable}
+\usepackage{siunitx}
+\sisetup{detect-all,group-separator={,},group-minimum-digits=4}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\definecolor{UMIBlue}{HTML}{17324D}
+\definecolor{FSMTeal}{HTML}{0783A4}
+\definecolor{FSMOrange}{HTML}{F7941D}
+\definecolor{EnergyBlue}{HTML}{2474B5}
+\definecolor{EnergyGreen}{HTML}{3B8C6E}
+\definecolor{EvidenceRed}{HTML}{A63E3E}
+\definecolor{SoftGray}{HTML}{F2F5F7}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+\usepackage{csquotes}
+\usepackage{caption}
+\usepackage{subcaption}
+\captionsetup{font=small,labelfont=bf}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{pdflscape}
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{SoftGray},
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false
+}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\nouppercase{\leftmark}}
+\fancyhead[R]{\small\nouppercase{\rightmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{15pt}
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\color{UMIBlue}}
+  {\filleft\Large\chaptername\ \thechapter}
+  {1ex}
+  {\titlerule\vspace{1.2ex}\Huge\raggedright\hyphenpenalty=10000\exhyphenpenalty=10000}
+\titlespacing*{\chapter}{0pt}{-15pt}{28pt}
+\usepackage[backend=biber,style=ieee,sorting=none,maxbibnames=99]{biblatex}
+\addbibresource{bibliography.bib}
+\usepackage[hidelinks,bookmarksopen=true,bookmarksnumbered=true]{hyperref}
+\usepackage{xurl}
+\hypersetup{
+  pdftitle={Multi-Horizon Electricity Consumption Forecasting: Methodological Audit, Deep Learning Benchmarking, and Operationalization in a Reliable Platform},
+  pdfauthor={Zouitni Salah Eddine},
+  pdfsubject={Master PFE Report - EnergyAI},
+  pdfkeywords={electricity forecasting, data leakage, TFT, time series, EnergyAI}
+}
+\usepackage[nameinlink,noabbrev]{cleveref}
+\usepackage{acro}
+\input{glossary}
+
+\newcommand{\adminplaceholder}[1]{\textcolor{red}{\textbf{[TO BE CONFIRMED: #1]}}}
+\newcommand{\evidence}[1]{\texttt{#1}}
+\newcommand{\breakcode}[1]{\nolinkurl{#1}}
+\newcommand{\metric}[1]{\textbf{#1}}
+\newcommand{\HRule}{\rule{\linewidth}{0.7pt}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+\AtBeginDocument{\selectlanguage{english}}

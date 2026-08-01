@@ -1,0 +1,37 @@
+\documentclass[12pt,oneside,openany]{book}
+\input{config/preamble}
+
+\begin{document}
+\let\cleardoublepage\clearpage
+\hypersetup{pageanchor=false}
+\input{frontmatter/cover}
+\frontmatter
+\hypersetup{pageanchor=true}
+\input{frontmatter/dedication}
+\input{frontmatter/acknowledgements}
+\input{frontmatter/abstracts}
+\tableofcontents
+\listoffigures
+\listoftables
+\chapter*{List of Acronyms}
+\addcontentsline{toc}{chapter}{List of Acronyms}
+\input{frontmatter/acronym_list}
+
+\mainmatter
+\input{chapters/general_introduction}
+\input{chapters/chapter1}
+\input{chapters/chapter2}
+\input{chapters/chapter3}
+\input{chapters/chapter4}
+\input{chapters/chapter5}
+\input{chapters/chapter6}
+\input{chapters/chapter7}
+\input{chapters/general_conclusion}
+
+\printbibliography[heading=bibintoc,title={References}]
+\appendix
+\input{appendices/appendix_a_traceability}
+\input{appendices/appendix_b_research_assets}
+\input{appendices/appendix_c_technical}
+\input{appendices/appendix_d_declaration}
+\end{document}

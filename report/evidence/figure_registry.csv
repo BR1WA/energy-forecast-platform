@@ -1,0 +1,27 @@
+figure_id,file,caption,source,commit_or_date,generation_method,status
+fig_timeline,report/assets/figures/project_timeline.pdf,Research-to-product project timeline,report/evidence/commit_timeline.csv,2026-07-31,Matplotlib script,generated
+fig_leakage,report/assets/figures/leaky_vs_causal.pdf,Leaky and causal experimental pipelines,Historical notebooks and leakage investigation,2026-07-31,Matplotlib script,generated
+fig_physics,report/assets/figures/physical_proxy.pdf,Physical target-proxy mechanism P approximately V times I,IHEPC variable definitions and local diagnostic,2026-07-31,Matplotlib script,generated
+fig_split,report/assets/figures/chronological_split.pdf,Exact shared 2013 LCL chronology and household cohorts,LCL prepared metadata and worker,2026-08-01,Matplotlib script,generated
+fig_depm,report/assets/figures/depm_architecture.pdf,Simplified reproduced DEPM architecture,DEPM article and historical notebooks,2026-07-31,Matplotlib script,generated
+fig_cnnbilstm,report/assets/figures/cnn_bilstm_architecture.pdf,Simplified CNN-BiLSTM architecture,EECP-CBL article and local replication notebook,2026-07-31,Matplotlib script,generated
+fig_transformers,report/assets/figures/transformer_comparison.pdf,PatchTST and iTransformer conceptual comparison,Primary papers and benchmark notebook,2026-07-31,Matplotlib script,generated
+fig_tft_flow,report/assets/figures/global_tft_flow.pdf,Packaged TFT serving flow and research-normalization boundary,Product manifests service source and research worker,2026-08-01,Matplotlib script,generated
+fig_model_selection,report/assets/figures/model_selection_flow.pdf,Evidence-gated production model selection,Production candidates and manifests,2026-07-31,Matplotlib script,generated
+fig_baseline,report/assets/figures/tft_baseline_comparison.pdf,Frozen LCL TFT MAE versus seasonal baseline,24h and 168h frozen metrics,2026-08-01,Matplotlib script,generated
+fig_ecl,report/assets/figures/ecl_benchmark.pdf,ECL normalized MAE by architecture and horizon,models/ecl_deep_benchmark/leaderboard.csv,2026-07-31,Matplotlib script,generated
+fig_tft_training,report/assets/figures/tft_training_curves.pdf,Frozen TFT training and validation pinball-loss histories,models/lcl_global_forecasting/full_selected_v1/runs/global_tft/*/history.json,2026-08-01,Matplotlib script,generated
+fig_tft_diagnostics,report/assets/figures/tft_checkpoint_diagnostics.pdf,Lead-time household and UTC-hour checkpoint diagnostics,report/evidence/lcl_tft_* CSV files,2026-08-01,Matplotlib script,generated
+fig_tft_representative,report/assets/figures/tft_representative_forecasts.pdf,Representative fixed-origin 24-hour cold-start forecasts,report/evidence/lcl_tft_day_24h_representative_windows.csv,2026-08-01,Matplotlib script,generated
+uml_usecase,report/assets/diagrams/use_case.pdf,EnergyAI use-case diagram,Frontend routes and backend routers,1e67921,Matplotlib text-source diagram,generated
+uml_class,report/assets/diagrams/class_domain.pdf,Core domain class diagram,backend/app/models/models.py,1e67921,Matplotlib text-source diagram,generated
+uml_auth_seq,report/assets/diagrams/sequence_authentication.pdf,Authentication sequence,backend/app/routers/auth.py,1e67921,Matplotlib text-source diagram,generated
+uml_import_seq,report/assets/diagrams/sequence_csv_import.pdf,CSV preview and import sequence,backend/app/routers/ingestion.py,1e67921,Matplotlib text-source diagram,generated
+uml_forecast_seq,report/assets/diagrams/sequence_forecast.pdf,Forecast generation sequence,backend/app/routers/forecast.py and forecast service,1e67921,Matplotlib text-source diagram,generated
+fig_layered_arch,report/assets/figures/energyai_layered_architecture.pdf,EnergyAI layered architecture without unconfigured queue infrastructure,Docker Compose and application source,1e67921,Matplotlib script,generated
+fig_request_lifecycle,report/assets/figures/forecast_request_lifecycle.pdf,Forecast request lifecycle,Forecast router and service source,1e67921,Matplotlib script,generated
+screen_dashboard,report/assets/screenshots/dashboard.png,Normal-user energy overview dashboard,Live local application at /dashboard,1e67921,In-app browser 1280x720 viewport capture from non-administrative demonstration account on 2026-08-01,generated
+screen_usage,report/assets/screenshots/usage.png,Normal-user monthly consumption and quality view,Live local application at /usage,1e67921,In-app browser 1280x720 viewport capture from non-administrative demonstration account on 2026-08-01,generated
+screen_forecast_24,report/assets/screenshots/forecast_24h.png,Ready normal-user 24-hour Global TFT forecast,Live local application at /forecast?horizon=24,1e67921,In-app browser 1280x720 viewport capture from non-administrative demonstration account on 2026-08-01,generated
+screen_forecast_168,report/assets/screenshots/forecast_168h.png,Ready normal-user 168-hour Global TFT forecast,Live local application at /forecast?horizon=168,1e67921,In-app browser 1280x720 viewport capture from non-administrative demonstration account on 2026-08-01,generated
+screen_actions,report/assets/screenshots/actions.png,Evidence-backed normal-user incident action and rules,Live local application at /actions,1e67921,In-app browser 1280x720 viewport capture after a labelled 0.500 kW push sample crossed a configured 0.400 kW threshold on 2026-08-01,generated

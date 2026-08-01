@@ -1,0 +1,56 @@
+\chapter{Evidence and Requirement Traceability}
+\label{app:traceability}
+
+\section{Evidence policy}
+
+Every central claim in the report must resolve to a source file, manifest, CSV, notebook output, test log, or Git checkpoint. The machine-readable registries are stored under \evidence{report/evidence}. Their purpose is to prevent accidental promotion of an old presentation value, failed experiment, or unverified administrative detail.
+
+\begin{table}[H]
+\centering
+\caption{Report evidence registries.}
+\begin{tabularx}{\textwidth}{p{0.34\textwidth}Y}
+\toprule
+Registry & Content \\
+\midrule
+\breakcode{model_registry.csv} & Model task, split, scaler scope, seed, artifact, metrics, status, and limitation \\
+\breakcode{artifact_hash_inventory.csv} & File sizes and SHA-256 digests for packaged and selected historical artifacts \\
+\breakcode{figure_registry.csv} & Figure source, generation method, evidence date, and status \\
+\breakcode{commit_timeline.csv} & Research and product checkpoints used in the narrative \\
+\breakcode{notebook_catalog.csv} & Notebook purpose, status, and methodological caveat \\
+\breakcode{test_evidence_summary.csv} & Current quality gates and limitations \\
+\breakcode{requirements_traceability.csv} & Requirement-to-code-to-test mapping \\
+\breakcode{lcl_tft_reanalysis_manifest.json} & Checkpoint/data/script hashes, reproduced cohort checks, and post-hoc quantile diagnostics \\
+\breakcode{openapi_inventory_summary.json} & Exact current OpenAPI path and operation counts \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Condensed requirement matrix}
+
+\begin{longtable}{p{0.25\textwidth}p{0.35\textwidth}p{0.30\textwidth}}
+\caption{Condensed requirement-to-evidence matrix.}\\
+\toprule
+Requirement & Implementation evidence & Validation evidence \\
+\midrule
+\endfirsthead
+\toprule
+Requirement & Implementation evidence & Validation evidence \\
+\midrule
+\endhead
+Secure sign-in & Auth router, bcrypt service, access token, refresh-cookie flow & Authentication unit/integration tests and browser journey \\
+Administrative RBAC & Admin router and role dependencies & Authorization tests \\
+Per-user isolation & User-Site-Meter relationships and scoped queries & PostgreSQL integration suite \\
+CSV import safety & Meter ownership, preview, bounded import, batch record & Ingestion tests and browser journey \\
+24-hour forecasting & Active Global TFT 24 h manifest and checkpoint & Artifact contract and dual-horizon tests \\
+168-hour forecasting & Active Global TFT 168 h manifest and checkpoint & Artifact contract and dual-horizon tests \\
+Forecast provenance & Persisted Forecast entity and history endpoint & Forecast API tests and UI coverage \\
+Alerts and actions & AlertConfig, Alert, Recommendation, workers & Alert state tests and worker health \\
+Analytics PDF export & Forecast UI and analytics PDF endpoint; legacy reports route redirects to Usage & Horizon-specific PDF tests \\
+Health/readiness & System live, ready, health, version endpoints & Docker health checks \\
+Public deployment & Reserved report section only & Not implemented \\
+\bottomrule
+\end{longtable}
+
+\section{Administrative information still required}
+
+The official combined UMI/FSM logo, Faculty of Sciences identity, Department of Computer Science, Master SDIA wording, supervisor title, and scheduled defense date have been incorporated. Before final submission, the following still require confirmation: an official Master PFE cover template, because the public faculty model is specific to doctoral theses; the jury names, grades, institutions, and roles; any required supervisor-laboratory or host-organization line; the scheduled defense date of 9 September 2026; the current formatting and citation rules; and the required AI-tool disclosure wording.

@@ -1,0 +1,121 @@
+\chapter{Validation, Quality, Discussion, and Limitations}
+\label{chap:validation}
+
+\section{Validation scope and evidence date}
+
+The software-validation evidence in this chapter is frozen to the full application audit performed on 31 July 2026 and the Product V1 commit identified in the appendices. Historical validation reports are used only for chronology because test counts, routes, and capabilities changed over time. That audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis was generated on 1 August 2026 and is separately identified by script, input, and output hashes.
+
+\section{Backend validation}
+
+The backend suite passed 96 tests with four expected PostgreSQL-only skips under SQLite. A uniquely named disposable PostgreSQL database was then created on the running server, migrated from an empty schema through all 17 Alembic revisions, tested, and removed in cleanup. The complete result was 100 passed and zero skipped in 42.78 seconds, with one warning.
+
+The PostgreSQL run is the stronger result because it exercises locking and database behavior that SQLite cannot reproduce. It also confirms that migrations can construct the schema from empty state. The audit did not mutate the live product database.
+
+No coverage percentage is claimed. The audit reports that \texttt{pytest-cov} was not installed in the active environment even though it was declared in the development requirements. Test count and coverage are different measures; 100 passing tests do not prove that every path is exercised.
+
+\section{Frontend and browser validation}
+
+ESLint passed, TypeScript type checking passed, and the production build completed with 25 routes. The Playwright matrix executed across desktop Chromium, Firefox, WebKit, and three responsive projects. It recorded 107 passing tests and one WebKit failure in a reload/session scenario. The same failing case passed in isolation, 1/1. The evidence therefore indicates a flaky browser gate rather than a reproduced application defect, but the release gate remains conditional because CI has zero retries.
+
+\begin{table}[H]
+\centering
+\caption{Current software validation summary.}
+\label{tab:testsummary}
+\begin{tabularx}{\textwidth}{p{0.27\textwidth}p{0.25\textwidth}Y}
+\toprule
+Area & Result & Interpretation \\
+\midrule
+Backend on SQLite & 96 passed, 4 skipped & Fast local suite; PostgreSQL-only behavior excluded \\
+Backend on isolated PostgreSQL & 100 passed, 0 skipped & Complete current backend evidence \\
+Frontend lint and type checking & Passed & Static quality gates are green \\
+Frontend production build & Passed, 25 routes & Current route tree compiles for production \\
+Playwright six-project matrix & 107 passed, 1 WebKit interruption & Isolated rerun passed; matrix still contains a flaky gate \\
+Docker Compose & Core health checks green, workers running & Validated local deployment, not public production \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Model-contract and artifact validation}
+
+The product does not rely only on a database model name. Artifact tests verify manifest parsing, supported horizon, checksum, strict state-dict load, CPU inference, finite output, expected shape, and reference points where recorded. Both 24-hour and 168-hour capabilities are packaged. The checkpoints share a file size of 5,600,105 bytes but have distinct SHA-256 hashes, confirming that the weekly artifact is not merely a renamed daily file.
+
+The manifests also preserve limitations. London-cohort metrics are not a guarantee for a client site. More importantly, new sites use their recent 336-hour window for normalization, while the frozen research metrics use each evaluation household's pre-validation training-segment statistics. Hash and shape tests prove which neural weights are loaded; they do not prove accuracy after changing the input/output transform. Quantile outputs have not been recalibrated per site. Week-ahead uncertainty grows with the horizon and must be displayed with provenance.
+
+\section{Security validation}
+
+The audit reviewed password hashing, JWT and refresh-token behavior, account-action tokens, Google identity gating, role checks, ownership filters, upload bounds, request validation, SSRF controls, and secret configuration. CI includes a full-history gitleaks job. No P0 authentication bypass or data-loss defect was identified.
+
+Two current security-quality concerns remain. First, the frontend application does not define security headers such as CSP, HSTS, frame policy, content-type options, or referrer policy; a future reverse proxy could provide some of them, but none is part of the verified Compose scope. Second, dependency policy is conditionally red: production npm dependencies report zero known vulnerabilities, while the full development graph reports nine high-severity advisories rooted in tooling. The development Python audit also identifies an advisory affecting pytest 8.4.2, with a fix in 9.0.3 while the project currently constrains pytest below 9.
+
+These findings do not imply that nine high-severity packages are shipped to the browser. They do mean the configured CI dependency gate cannot be described as fully green.
+
+\section{Docker and service health}
+
+After Docker Desktop was started, the six-service Compose stack built and ran. PostgreSQL, backend, and frontend reported healthy; alert, email, and avatar-cleanup workers remained running. Health endpoints returned successful responses and both forecasting artifacts were available. External SMTP authentication, inbox delivery, Google OAuth, public TLS, backup restoration, and cloud ingress were not retested.
+
+Local operational readiness is therefore demonstrated for a controlled PFE presentation. Immutable public-release readiness remains conditional on dependency-gate resolution, browser-test stabilization, environment hardening, backup evidence, and external smoke tests.
+
+\section{Requirement-to-test traceability}
+
+The report's traceability registry maps each major requirement to code and validation evidence. Examples include JWT authentication to authentication tests, RBAC to admin authorization tests, per-user data isolation to PostgreSQL integration tests, CSV preview/import to ingestion tests, and each forecast horizon to model-contract and dual-horizon browser tests. The complete machine-readable matrix is stored in \evidence{report/evidence/requirements\_traceability.csv}.
+
+Traceability does not remove the need for judgment. For example, a route and test can show that account deletion works, but legal compliance requires institutional and jurisdiction-specific review. Likewise, an artifact test proves file identity and output shape, not real-world forecast calibration.
+
+\section{Scientific limitations}
+
+\subsection{Geographic transfer}
+
+The final model evidence comes from Low Carbon London. Climate, building characteristics, tariffs, appliance ownership, and daily routines can differ materially in Morocco. Cold-start evaluation within London is stronger than random household windows, but it is not cross-country validation. A Moroccan pilot cohort is required before making local performance guarantees.
+
+\subsection{Input scope}
+
+The product contract uses timestamp and energy. This lowers onboarding friction but excludes weather, occupancy, tariff events, and building metadata that may explain regime changes. Calendar features are deterministic, not measurements. Future work should compare the marginal value of weather forecasts and static site attributes under a strictly causal protocol.
+
+\subsection{Uncertainty calibration}
+
+The TFT produces 0.1, 0.5, and 0.9 quantiles, but the manifests state that they are not recalibrated for each client. Reanalysis under the original research scaler finds 80.7963\% empirical coverage for the nominal central 80\% interval at 24 hours and 78.3518\% at 168 hours, with mean widths of 0.559770 and 0.585659 kWh. This closes the report-level checkpoint diagnostic, but not site-level calibration or the serving-normalization gap. Conformal time-series methods are a candidate extension if their assumptions, calibration cohort, and deployment contract are stated explicitly \cite{stankeviciute2021conformal}.
+
+\subsection{Research-to-serving preprocessing}
+
+The principal unresolved scientific risk is no longer hidden. The cold-start experiment gives every held-out London household a mean and standard deviation fitted on its own historical training segment; the application instead estimates both statistics from the current 336-hour request window. This difference can change the distribution presented to the fixed network and the inverse scale applied to every output. Until the frozen test cohort is rerun through the exact product preparation code, the LCL MAE and coverage values support checkpoint selection under the research protocol, not expected end-to-end EnergyAI accuracy.
+
+\subsection{Monthly horizon}
+
+Monthly candidates beat the seasonal baseline in average MAE by 5-8\%, but their cold-start macro $R^2$ values are negative. This conflict demonstrates why a single favorable metric is insufficient. Monthly forecasting remains experimental until household-level consistency improves.
+
+\subsection{Experiment completeness}
+
+TimePro and TimeMixer++ were attempted but lack completed leaderboard evidence. TSMixer appears in an exploratory weather notebook without a frozen successful metric artifact. MultiCycleNet was adapted locally and requires final primary-reference verification before any claim of exact reproduction. These gaps are reported rather than filled with inferred results.
+
+\section{Product limitations}
+
+The current release needs a configured local environment and does not have a verified public URL. Security headers are absent from the application configuration. Browser-matrix flakiness and development dependency advisories need resolution. Formal accessibility, load, disaster-recovery, and multi-tenant penetration testing remain incomplete. The research tree also contains historical assets that should remain separated from the deployable product snapshot.
+
+\section{Threats to validity}
+
+\begin{table}[H]
+\centering
+\caption{Threats to validity and mitigation.}
+\label{tab:validity}
+\begin{tabularx}{\textwidth}{p{0.19\textwidth}YY}
+\toprule
+Validity type & Threat & Mitigation and remaining gap \\
+\midrule
+Internal & Leakage, preprocessing scope, repeated test use & Causal windows, chronological split, train-only transforms, evidence registries; historic notebooks remain separately labelled \\
+Research--serve & Research scaler differs from 336-hour serving scaler & Gap documented and serving path contract-tested; exact end-to-end cold-start re-evaluation remains required \\
+Construct & Accuracy/classification confused with forecasting value & Continuous target, physical-unit errors, seasonal baselines, household distribution \\
+External & London/IHEPC results transferred to Moroccan users & Cold-start household split; local-country evaluation still required \\
+Conclusion & Single seed, clock-influenced dynamic sampling, aggregation choice & Frozen seed and common protocol, macro/median/p90/win rate; bitwise retraining and multi-seed finalist study remain desirable \\
+Implementation & Third-party repository/version differences & Isolated workers and source notes; incomplete models excluded from rankings \\
+Operational & Healthy local stack interpreted as public production & Deployment section explicitly incomplete and external checks not claimed \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Discussion}
+
+The project demonstrates a change in what counts as success. At the beginning, success meant matching a 98\% article result. After the audit, success meant constructing a task that could fail honestly. That shift led to lower and more interpretable metrics, stronger baselines, broader household analysis, and explicit artifact limitations.
+
+The final TFT research results are credible because they satisfy several independent conditions: the target is continuous and future-indexed; all households share one causal chronology; households are evaluated in a cold-start cohort; the model beats a seasonal baseline for nearly all evaluated households; median, p90, bias, and interval diagnostics are reported; and the original checkpoints are hash-identified. The application adds strict loading and refuses unsupported horizons. These facts support a controlled demonstration and a defensible PFE contribution, but they do not transfer the frozen MAE to the rolling-normalized serving path without a further end-to-end test.
+
+The remaining conditional findings also improve rather than weaken the report. They separate current evidence from future work and prevent a local academic prototype from being misrepresented as a globally deployed service.

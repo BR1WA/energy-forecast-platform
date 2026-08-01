@@ -1,0 +1,126 @@
+\chapter{Research Assets and Checkpoints}
+\label{app:researchassets}
+
+\section{Git chronology}
+
+\begin{longtable}{p{0.16\textwidth}p{0.15\textwidth}p{0.57\textwidth}}
+\caption{Key research and product checkpoints.}\\
+\toprule
+Date & Commit/tag & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Date & Commit/tag & Meaning \\
+\midrule
+\endhead
+2026-04-10 & \texttt{43f5cab} & Project initialization \\
+2026-04-12 & \texttt{ed3c48e} & Initial paper text added \\
+2026-04-15 & \texttt{b96fef0} & First DEPM implementation \\
+2026-05-02 & \texttt{8daf16c} & Fair-comparison notebook and leakage investigation \\
+2026-05-05 & \texttt{ea4e8de} & Full six-experiment DEPM replication \\
+2026-05-06 & \texttt{c40b120} & No-leakage variant \\
+2026-05-09 & \texttt{71ca537} & Ten DEPM variants \\
+2026-05-10 & \texttt{6f50535} & Steel Industry cross-dataset experiment \\
+2026-05-17 & \texttt{87a70c1} & Continuous regression and critical findings \\
+2026-05-17 & \texttt{a653dcf} & CNN-BiLSTM continuous regression \\
+2026-05-22 & \texttt{5999ecc} & Forecasting application and baselines \\
+2026-05-31 & \texttt{8813aca} & PatchTST forecasting \\
+2026-06-30 & \texttt{v0.1.0} & Research checkpoint with notebooks and archived models \\
+2026-06-30 & \texttt{c61cb66} & Dynamic model registry \\
+2026-07-08 & \breakcode{phase2-forecast-stable} & Stable registry forecasting \\
+2026-07-20 & \texttt{a6d1683} & Truthful 24-hour TFT integration \\
+2026-07-20 & \texttt{07b43b5} & Fixed artifact-readiness contracts \\
+2026-07-20 & \texttt{9525d3f} & PFE release checkpoint \\
+2026-07-22 & \texttt{9226b56} & Gated 168-hour capability \\
+2026-07-27 & \texttt{baacbf2} & Both supported horizons shipped \\
+2026-07-27 & \texttt{1e67921} & Product V1 checkpoint \\
+\bottomrule
+\end{longtable}
+
+\section{Notebook status}
+
+\begin{longtable}{p{0.35\textwidth}p{0.17\textwidth}p{0.37\textwidth}}
+\caption{Selected notebook status.}\\
+\toprule
+Notebook & Status & Interpretation \\
+\midrule
+\endfirsthead
+\toprule
+Notebook & Status & Interpretation \\
+\midrule
+\endhead
+\breakcode{DEPM_Implementation.ipynb} & Invalidated & Direct/proxy leakage and non-causal validation \\
+\breakcode{DEPM_Feature_Ablation.ipynb} & Diagnostic & Useful for identifying answer channels \\
+\breakcode{LSTM_Energy_Predictor.ipynb} & Non-comparable & Historical random-split classification \\
+\breakcode{depm_final.ipynb} & Invalidated & Derived/current target information remained \\
+\breakcode{depm_final_noleak.ipynb} & Partially corrected & Direct features removed; split/preprocessing caveats remained \\
+\breakcode{fair_comparison.ipynb} & Diagnostic & Train-only transform but classification task \\
+\breakcode{proper_regression_forecasting.ipynb} & Usable & Shifted features, chronological split, physical metrics \\
+\breakcode{EECP_CBL_Replication.ipynb} & Usable & Continuous chronological CNN-BiLSTM work \\
+\breakcode{PatchTST_Forecasting.ipynb} & Usable & Direct causal forecasting \\
+\breakcode{weather_sota_forecasting.ipynb} & Incomplete & TSMixer success not proven by frozen metrics \\
+\breakcode{ecl_deep_models_dual_t4_benchmark.ipynb} & Partially complete & Four model families have completed rows; TimePro/TimeMixer++ do not \\
+\breakcode{lcl-global-household-forecasting-full-selected-pro.ipynb} & Complete & Source for final household candidates and production selection \\
+\bottomrule
+\end{longtable}
+
+\section{Checkpoint classification}
+
+\begin{itemize}
+  \item \textbf{Historical invalidated:} old DEPM DNN, ResNet, PCA, scaler, XGBoost, and classification LSTM assets.
+  \item \textbf{Research archive:} PatchTST, advanced PatchTST, iTransformer, CNN-BiLSTM, and multi-horizon checkpoints available at historical Git tags.
+  \item \textbf{Benchmark evidence:} ECL and Low Carbon London leaderboards and their run metadata.
+  \item \textbf{Candidates:} Global N-BEATS and MultiCycleNet-adapted experimental outputs.
+  \item \textbf{Packaged Product V1 checkpoints:} \texttt{global\_tft\_24h} and \texttt{global\_tft\_168h}; their frozen LCL metrics use a different normalization contract from serving.
+\end{itemize}
+
+\section{Production hyperparameters and contracts}
+
+\begin{table}[H]
+\centering
+\caption{Active artifact contract summary.}
+\begin{tabular}{p{0.25\textwidth}p{0.33\textwidth}p{0.33\textwidth}}
+\toprule
+\textbf{Property} & \textbf{24-hour artifact} & \textbf{168-hour artifact} \\
+\midrule
+Lookback & 336 h & 336 h \\
+Horizon & 24 h & 168 h \\
+Quantiles & 0.1, 0.5, 0.9 & 0.1, 0.5, 0.9 \\
+Trainable parameters & 1,386,262 & 1,386,262 \\
+Checkpoint bytes & 5,600,105 & 5,600,105 \\
+Minimum coverage & 95\% & 95\% \\
+Maximum consecutive gap & 3 h & 3 h \\
+Research-evaluation normalization & Per-household training-segment z-score & Per-household training-segment z-score \\
+Serving normalization & Latest-window 336-hour z-score & Latest-window 336-hour z-score \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The weekly manifest records hidden size 128, four attention heads, dropout 0.1, and 186 state-dict tensors. The original worker and strict checkpoint load confirm the same architecture for the two frozen runs. File compatibility does not establish metric equivalence under the different serving normalization.
+
+\section{Checkpoint reanalysis provenance}
+
+\begin{landscape}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{p{3.4cm}p{9.0cm}p{10.0cm}}
+\caption{Full hashes and sources for the post-hoc TFT diagnostics.}\\
+\toprule
+Item & Repository path & SHA-256 \\
+\midrule
+\endfirsthead
+\toprule
+Item & Repository path & SHA-256 \\
+\midrule
+\endhead
+24-hour checkpoint & \breakcode{models/lcl_global_forecasting/full_selected_v1/runs/global_tft/day_24h/best.pt} & \breakcode{60fedcdee375dc0b2973e55b9f4ec752da69c2a7e390e1f951ed5cbb7bc5a04d} \\
+168-hour checkpoint & \breakcode{models/lcl_global_forecasting/full_selected_v1/runs/global_tft/week_168h/best.pt} & \breakcode{80af16b25af9b912019c6e40cfdc491e2cf5173e5743144596801e28df695f93} \\
+Hourly values & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/hourly_raw.npy} & \breakcode{353d5e21355ada4dd662b74474f021afabcb2300cd1f3cf934a3792bc6487646} \\
+Hourly calendar & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/hourly_calendar.npy} & \breakcode{32ac697bf3890b924572fca92b029b9b64cce9957f693d5c3aa985fc375a4b41} \\
+Hourly scalers & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/hourly_scalers.npz} & \breakcode{401e2b889fd7f94fe4091c891e4a20c0ce1447c730f81d0be5a71eb53e88a16a} \\
+Reanalysis script & \breakcode{report/source/analyze_lcl_tft.py} & \breakcode{4bce1b95797f82fe2672e3b82d607599a0eca1ba06d99147564dd9129ac67cb4} \\
+\bottomrule
+\end{longtable}
+
+The diagnostic manifest was generated on 1 August 2026 at repository commit \breakcode{1e67921624c7dd7bd1b1ef9b93fc00ddcb28e09f}. It records 11,871 windows from 500 households for 24 hours and 11,830 windows from 499 households for 168 hours. The script validates its recomputed macro MAE and exact household win counts against the frozen metrics before writing any report evidence.
+\end{landscape}

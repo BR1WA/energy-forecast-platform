@@ -1,0 +1,22 @@
+date,commit_or_tag,stage,evidence_use
+2026-04-10,43f5cab,Project initialization,Research starting point
+2026-04-12,ed3c48e,Initial paper text extracted,DEPM source review
+2026-04-15,b96fef0,Initial DEPM implementation,First replication attempt
+2026-05-02,8daf16c,Fair-comparison notebook and leakage investigation,Methodological turning point
+2026-05-05,ea4e8de,Full six-experiment paper replication,Historical experiment inventory
+2026-05-06,c40b120,No-leakage variant,Correction attempt
+2026-05-09,71ca537,Ten DEPM variants,Ablation evidence
+2026-05-10,6f50535,Cross-dataset Steel Industry experiment,External generalization attempt
+2026-05-17,87a70c1,Continuous regression and critical findings,Scientific pivot
+2026-05-17,a653dcf,CNN-BiLSTM continuous regression,Forecasting baseline
+2026-05-22,5999ecc,Forecasting app baselines and SOTA notebook,Transition toward product
+2026-05-31,8813aca,PatchTST forecasting,Transformer benchmark
+2026-06-30,v0.1.0,Research checkpoint,Historical notebook and checkpoint inventory
+2026-06-30,c61cb66,Dynamic model registry,Product ML integration
+2026-07-08,phase2-forecast-stable,Stable registry forecasting,Operational checkpoint
+2026-07-20,a6d1683,Truthful 24-hour TFT,First production model
+2026-07-20,07b43b5,Fixed artifact readiness,Artifact contract stabilization
+2026-07-20,9525d3f,PFE release checkpoint,Packaged 24-hour artifact
+2026-07-22,9226b56,Gated 168-hour forecast,Weekly capability introduction
+2026-07-27,baacbf2,24-hour and 168-hour horizons shipped,Dual-horizon product evidence
+2026-07-27,1e67921,Product V1 checkpoint,Current product narrative baseline

@@ -1,0 +1,12 @@
+requirement,implementation,evidence,test_or_check,status
+Secure sign-in,JWT access token plus rotating refresh-cookie sessions,backend/app/routers/auth.py,backend authentication tests and Playwright auth suite,implemented
+Role separation,Admin dependency and RBAC checks,backend/app/routers/admin.py,admin and authorization tests,implemented
+Per-user data isolation,User-owned Site and Meter domain relations,backend/app/models/models.py,PostgreSQL integration suite,implemented
+CSV validation,Preview then bounded import endpoints,backend/app/routers/ingestion.py,ingestion tests and browser journey,implemented
+24-hour forecast,Global TFT 24h artifact contract,backend/model_artifacts/global_tft_24h/manifest.json,model-contract and dual-horizon tests,implemented
+168-hour forecast,Global TFT 168h artifact contract,backend/model_artifacts/global_tft_168h/manifest.json,model-contract and dual-horizon tests,implemented
+Forecast history,Persisted Forecast records and history endpoint,backend/app/routers/forecast.py,forecast API and browser tests,implemented
+Alerts,AlertConfig Alert entities and worker,backend/app/routers/alerts.py,alert tests and worker health,implemented
+Reports,Analytics PDF endpoint and reports route,backend/app/routers/analytics.py,report and horizon-specific PDF tests,implemented
+Health monitoring,Liveness readiness health and version endpoints,backend/app/routers/system.py,Docker health checks,implemented
+Public cloud deployment,Reserved report section,report/source/chapters/chapter6.tex,None,not_implemented

@@ -1,0 +1,228 @@
+\chapter{Experiments, Benchmarks, and Final Model Selection}
+\label{chap:experiments}
+
+\section{Experimental narrative and evidence status}
+
+The experimental history is broader than the final product. This chapter preserves that breadth while separating scientific status. Historical DEPM and LSTM classifications explain the audit; corrected IHEPC and Steel Industry notebooks show the pivot; ECL provides a common modern-architecture benchmark; and Low Carbon London supports product selection. A model is described as completed only when a notebook output, leaderboard row, manifest, or checkpoint-backed metric file exists.
+
+\section{Corrected DEPM and Steel Industry experiments}
+
+The DEPM phase evaluated standalone DNN, LSTM, BiLSTM, GRU, and BiGRU models and corresponding XGBoost hybrids. After removal of the most direct target channels, classification accuracy fell to approximately 0.885-0.896, as reported in \cref{tab:depmvariants}. This result is interpreted as evidence that the historical 99\% score depended on target reconstruction. It does not establish a useful continuous forecaster.
+
+The Steel Industry notebook tested whether the DEPM-style pipeline transferred to a different energy dataset. This was a valuable external-generalization attempt because a method tied to IHEPC variable identities would be fragile. However, the dataset represents industrial rather than household demand, and any class-based result remains methodologically different from the product target. The experiment is retained in the notebook and Git catalog without promoting unsupported numbers into the report body.
+
+\section{CNN-BiLSTM and the regression pivot}
+
+The EECP-CBL work of Le et al. motivated a continuous CNN-BiLSTM replication \cite{le2019eecpcbl}. The local protocol used chronological splitting, fit its scaler on training data, evaluated without shuffling, and converted errors to the original scale. This experiment established the mechanics that the DEPM work lacked: sequence-to-future mapping, physical-unit error, and explicit horizon handling.
+
+The exact architecture and dataset variants in the paper were not treated as automatically reproduced. A local model can belong to the same family without matching the authors' code, preprocessing, and data subsets. The report therefore uses ``CNN-BiLSTM baseline'' for the later ECL implementation and ``EECP-CBL replication attempt'' only for the corresponding dedicated notebook.
+
+\section{PatchTST and long-horizon research}
+
+PatchTST experiments introduced direct multi-step forecasting with patch tokens, channel independence, and reversible normalization. Research checkpoints existed for 24, 168, and 720-hour model families at the \texttt{v0.1.0} tag, alongside advanced PatchTST and iTransformer artifacts. These assets document the evolution of the modeling work. They are now classified as research archive because the Product V1 tree intentionally packages only active Global TFT artifacts.
+
+\section{ECL deep-model benchmark}
+
+The ECL benchmark used a common data matrix, chronological split, train-only per-client standardization, fixed seed 2026, early stopping, and horizon-specific batch sizes. Completed leaderboard rows exist for iTransformer, PatchTST, xPatch, and CNN-BiLSTM at 24, 96, 192, 336, and 720 hours. The notebook planned TimePro and TimeMixer++, but no successful leaderboard rows exist for them.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.88\textwidth]{ecl_benchmark.pdf}
+  \caption{Normalized MAE from the stored ECL leaderboard. The chart includes completed runs only.}
+  \label{fig:eclbenchmark}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Selected ECL results from the completed local benchmark.}
+\label{tab:eclresults}
+\begin{tabular}{lrrrrr}
+\toprule
+Horizon & Model & Norm. MSE & Norm. MAE & Macro $R^2$ & Parameters \\
+\midrule
+24 & iTransformer & 0.1076 & 0.2023 & 0.8723 & 6,374,936 \\
+24 & PatchTST & 0.1467 & 0.2451 & 0.8304 & 436,632 \\
+24 & xPatch & 0.1543 & 0.2457 & 0.8223 & 32,074 \\
+24 & CNN-BiLSTM & 0.2782 & 0.3623 & 0.4971 & 454,129 \\
+720 & iTransformer & 0.2034 & 0.2964 & 0.7575 & 6,731,984 \\
+720 & PatchTST & 0.2390 & 0.3259 & 0.7191 & 1,506,384 \\
+720 & xPatch & 0.2309 & 0.3142 & 0.7255 & 3,942,898 \\
+720 & CNN-BiLSTM & 0.2883 & 0.3730 & 0.4099 & 4,763,761 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+iTransformer has the lowest normalized MAE among the completed models at every stored horizon. At 24 hours it obtains 0.2023, compared with 0.2451 for PatchTST, 0.2457 for xPatch, and 0.3623 for CNN-BiLSTM. At 720 hours, its normalized MAE is 0.2964. The performance gap does not alone make iTransformer the product model: ECL is a simultaneous 321-client benchmark, whereas EnergyAI accepts a single site's timestamp-energy history and must generalize to a new household.
+
+The physical-unit MAE column in the ECL leaderboard is aggregated across the reconstructed client matrix and reaches tens of kWh. It must not be compared directly with per-household LCL MAE. Normalized ECL metrics are used for within-benchmark model comparison only.
+
+\section{Incomplete recent-model attempts}
+
+The benchmark worker isolated each third-party repository in a separate process because several projects use conflicting top-level module names such as \texttt{models} and \texttt{layers}. TimePro additionally required compiled CUDA extensions against versions different from the current Kaggle image. TimeMixer++ used a PyPOTS implementation because a stable author-maintained training repository was not available in the reviewed sources.
+
+The absence of successful rows is a result in itself: modern-paper reproduction depends on environment, dependency, and implementation provenance. These attempts are documented in the notebook catalog and state of the art, but excluded from rankings and conclusions.
+
+\section{Low Carbon London global forecasting}
+
+The final selection problem used a global univariate household formulation. Each sample contains one household's historical energy and target, while batches mix windows from many households. Calendar features are derived from timestamps. The full-profile experiment used 2,500 eligible 2013 households: 2,000 known households and 500 cold-start households. With 48 sampled windows per known household, one nominal training epoch contains 96,000 dynamically selected windows. Validation and test use 24 fixed, evenly spaced candidate origins per household; windows containing non-finite required values are omitted. The selected candidates were Global TFT and Global N-BEATS for day and week horizons, plus Global N-BEATS and MultiCycleNet-adapted for monthly daily totals.
+
+\subsection{Frozen TFT configuration}
+
+\begin{table}[H]
+\centering
+\caption{Global TFT configuration recorded by the full-profile worker and notebook.}
+\label{tab:tftconfiguration}
+\begin{tabularx}{\textwidth}{p{0.28\textwidth}YY}
+\toprule
+Property & 24-hour run & 168-hour run \\
+\midrule
+Lookback / horizon & 336 / 24 hourly values & 336 / 168 hourly values \\
+Quantiles & 0.1, 0.5, 0.9 & 0.1, 0.5, 0.9 \\
+Hidden size / heads / dropout & 128 / 4 / 0.1 & 128 / 4 / 0.1 \\
+Optimizer & AdamW, initial learning rate $3\times10^{-4}$, weight decay $10^{-4}$ & Same \\
+Schedule and stabilization & Linear warm-up then cosine decay; gradient-norm clip 1.0; float16 automatic mixed precision & Same \\
+Batch / nominal windows per epoch & 128 / 96,000 & 128 / 96,000 \\
+Early stopping & Maximum 15 epochs, patience 5 & Maximum 15 epochs, patience 5 \\
+Completed epochs / best validation loss & 15 / 0.141531 & 14 / 0.148559 \\
+Trainable parameters & 1,386,262 & 1,386,262 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The notebook records Python 3.12.13, PyTorch 2.10.0 with CUDA 12.8, and two Tesla T4 GPUs with approximately 14.6 GiB each. Selected runs were scheduled in parallel across the two devices. The 24-hour TFT recorded 1,356.70 seconds of training and 1,372.01 seconds of total wall time; the corresponding 168-hour values were 1,666.74 and 1,681.47 seconds. The experiment seed is 2026, but the dynamic training dataset mixes that seed with a clock-derived term and enables cuDNN benchmarking. The frozen files are reproducible artifacts, while exact bit-for-bit retraining is not claimed.
+
+\subsection{Day-ahead results}
+
+On 500 cold-start households and 11,871 valid evaluation windows, Global TFT achieves macro MAE 0.184928 kWh per hourly interval, median household MAE 0.142566, p90 household MAE 0.362807, macro RMSE 0.328317, macro $R^2=0.2704$, and global $R^2=0.6094$. The seasonal-naive macro MAE is 0.251540. The improvement is 26.48\%, and 495 of 500 households (99.0\%) beat the baseline.
+
+Global N-BEATS achieves macro MAE 0.195531, a 22.27\% improvement, with 97.4\% of households beating seasonal naive. Although its macro RMSE is slightly lower than TFT's, TFT has better primary macro MAE, median, p90, macro $R^2$, and household win rate. It was selected as primary, with N-BEATS retained as a research fallback.
+
+\subsection{Week-ahead results}
+
+At 168 hours, 499 cold-start households contribute 11,830 valid evaluation windows; one cold household has no complete eligible window. Global TFT cold-start macro MAE is 0.197322 kWh per hourly interval, median 0.149232, p90 0.389872, and macro RMSE 0.341090. It improves on the 0.249055 seasonal baseline by 20.77\%, and 491 of 499 households (98.40\%) win. Global N-BEATS obtains macro MAE 0.218623, a 12.22\% improvement, and an 88.98\% household win rate. TFT again provides the stronger primary-error and distributional evidence.
+
+\begin{table}[H]
+\centering
+\caption{Frozen LCL cold-start candidate comparison (MAE in kWh per hourly interval).}
+\label{tab:lclresults}
+\small
+\begin{tabular}{llrrrr}
+\toprule
+Horizon & Model & Macro MAE & Seasonal MAE & Improvement & Win rate \\
+\midrule
+24 h & Global TFT & 0.184928 & 0.251540 & 26.48\% & 99.00\% \\
+24 h & Global N-BEATS & 0.195531 & 0.251540 & 22.27\% & 97.40\% \\
+168 h & Global TFT & 0.197322 & 0.249055 & 20.77\% & 98.40\% \\
+168 h & Global N-BEATS & 0.218623 & 0.249055 & 12.22\% & 88.98\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Exact frozen cold-start TFT metrics by horizon.}
+\label{tab:tftcoldmetrics}
+\begin{tabular}{lrr}
+\toprule
+Metric & 24 h & 168 h \\
+\midrule
+Evaluated households & 500 & 499 \\
+Evaluation windows & 11,871 & 11,830 \\
+Macro MAE (kWh) & 0.184928 & 0.197322 \\
+Median household MAE (kWh) & 0.142566 & 0.149232 \\
+p75 household MAE (kWh) & 0.234253 & 0.240102 \\
+p90 household MAE (kWh) & 0.362807 & 0.389872 \\
+Macro RMSE (kWh) & 0.328317 & 0.341090 \\
+Macro sMAPE (\%) & 38.4987 & 40.8779 \\
+Macro bias (kWh) & -0.074996 & -0.076080 \\
+Macro $R^2$ & 0.270362 & 0.216235 \\
+Median $R^2$ & 0.262786 & 0.230578 \\
+Global $R^2$ & 0.609431 & 0.548724 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.80\textwidth]{tft_baseline_comparison.pdf}
+  \caption{Cold-start Global TFT MAE compared with the active manifests' seasonal baselines.}
+  \label{fig:tftbaseline}
+\end{figure}
+
+\subsection{Known versus cold-start households}
+
+The day-ahead TFT known-household macro MAE is 0.183386, close to the 0.184928 cold-start value. At 168 hours the known value is 0.194966 versus 0.197322 for cold-start. The small gaps are encouraging because the model does not appear to depend strongly on household identities seen during training. They do not establish universal transfer: both cohorts come from the same London research source.
+
+\subsection{Post-hoc checkpoint diagnostics}
+
+The original run metrics retain the authoritative headline values. To examine the quantile outputs that those JSON summaries did not aggregate, a reproducible script reloaded the two frozen \texttt{best.pt} checkpoints, rebuilt exactly the cold-start fixed-origin samples, used the original per-household training-segment scalers, and ran float16 inference. The recomputed macro MAE differs from the frozen value by only $3.50\times10^{-7}$ kWh at 24 hours and $1.35\times10^{-7}$ kWh at 168 hours; it also reproduces the exact 495/500 and 491/499 household win counts. These checks guard against accidentally analysing a different cohort or transform.
+
+\begin{table}[H]
+\centering
+\caption{Post-hoc quantile diagnostics from the frozen TFT checkpoints.}
+\label{tab:tftquantiles}
+\begin{tabular}{lrr}
+\toprule
+Diagnostic & 24 h & 168 h \\
+\midrule
+Nominal central-interval coverage & 80.00\% & 80.00\% \\
+Empirical central-interval coverage & 80.7963\% & 78.3518\% \\
+Mean central-interval width (kWh) & 0.559770 & 0.585659 \\
+q10 pinball loss (kWh) & 0.029654 & 0.031180 \\
+q50 pinball loss (kWh) & 0.092568 & 0.098576 \\
+q90 pinball loss (kWh) & 0.064440 & 0.068650 \\
+Mean pinball loss (kWh) & 0.062221 & 0.066135 \\
+Quantile-crossing rate & 0.01895\% & 0.02742\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The 24-hour central interval is close to its nominal coverage on the frozen London cohort; the 168-hour interval undercovers by approximately 1.65 percentage points and is wider. The asymmetric q10 and q90 pinball losses are consistent with the negative median-forecast bias in \cref{tab:tftcoldmetrics}. These are descriptive test-cohort diagnostics, not a calibrated guarantee for a new site.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{tft_checkpoint_diagnostics.pdf}
+  \caption{Lead-time, household, and UTC-hour diagnostics recomputed from the frozen cold-start checkpoints. Overall metrics remain those in the original run files.}
+  \label{fig:tftdiagnostics}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{tft_representative_forecasts.pdf}
+  \caption{One fixed 24-hour test origin for households nearest the p10, median, and p90 household-MAE profiles. These examples illustrate behavior and are not selected as best cases.}
+  \label{fig:tftrepresentative}
+\end{figure}
+
+The diagnostic manifest records the two checkpoint hashes, raw-array and scaler hashes, script hash, Git commit, execution environment, cohort sizes, and generated CSV files under \evidence{report/evidence}. The reanalysis used an RTX 3070 Laptop GPU with PyTorch 2.6.0; it did not retrain or overwrite either checkpoint.
+
+\subsection{Monthly experiments}
+
+For 30 daily totals, MultiCycleNet-adapted records cold-start macro MAE 2.840813 kWh, 8.50\% lower than seasonal naive, while Global N-BEATS records 2.939712 kWh and 5.31\% improvement. However, their cold-start macro $R^2$ values are -0.6078 and -0.7170 respectively. The negative macro coefficients indicate that many household-level series are not modeled reliably. The monthly capability remains experimental and is not presented as an active EnergyAI promise.
+
+\section{Training and inference considerations}
+
+The full-profile Global TFT training times recorded in the leaderboard are approximately 1,356.7 seconds for 24 hours and 1,666.7 seconds for 168 hours. Their optimization histories are shown in \cref{fig:tfttraining}. N-BEATS training is shorter in the stored runs. Training time was not the primary selection metric because it is an offline cost, but checkpoint size and CPU inference compatibility matter for deployment. Both packaged TFT artifacts are approximately 5.6 MB and use the same 1,386,262-parameter architecture.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.94\textwidth]{tft_training_curves.pdf}
+  \caption{Training and validation pinball-loss histories stored by the frozen 24-hour and 168-hour Global TFT runs.}
+  \label{fig:tfttraining}
+\end{figure}
+
+The run files report 3.864 seconds for the complete batched 24-hour cold-start evaluation and 5.578 seconds for the complete batched 168-hour evaluation on the recorded training environment. These totals cover thousands of windows and must not be read as single-request web latency. No controlled concurrency or percentile-latency benchmark is claimed for the API.
+
+The product loads fixed artifacts and verifies their contracts. It does not retrain on user request. This reduces latency and prevents accidental replacement of a validated model by an untracked run.
+
+\section{Final selection}
+
+Global TFT was selected and packaged for both supported horizons because it provides the best cold-start macro MAE among the final candidates, broad household win rates, native quantile outputs, acceptable artifact size, and reproducible checkpoint identity. \Cref{fig:tftflow} separates the operational transformation from the research evidence boundary.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{global_tft_flow.pdf}
+  \caption{Global TFT flow from a site's recent history to quantile forecasts.}
+  \label{fig:tftflow}
+\end{figure}
+
+The final selection is narrower than the research history by design. iTransformer leads the stored ECL benchmark; Global TFT leads the LCL household cold-start comparison under the original per-household training-segment normalization. TimePro and TimeMixer++ remain attempted. Monthly N-BEATS and MultiCycleNet remain experimental. Historical DEPM scores remain invalidated. The packaged 24-hour and 168-hour capabilities remain scientifically conditional until the rolling 336-hour serving normalization is tested on the frozen cold-start cohort or replaced by a validated equivalent contract.

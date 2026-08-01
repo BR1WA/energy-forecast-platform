@@ -1,0 +1,10 @@
+path,bytes,sha256,status,source
+backend/model_artifacts/global_tft_24h/model.pt,5600105,60fedcdee375dc0b2973e55b9f4ec752da69c2a7e390e1f951ed5cbb7bc5a04d,production,local file hash 2026-07-31
+backend/model_artifacts/global_tft_24h/manifest.json,1591,533b3890aeba01968891bf76a425d0011a0ebbd524d9d74060084892e4763cef,production manifest,local file hash 2026-07-31
+backend/model_artifacts/global_tft_168h/model.pt,5600105,80af16b25af9b912019c6e40cfdc491e2cf5173e5743144596801e28df695f93,production,local file hash 2026-07-31
+backend/model_artifacts/global_tft_168h/manifest.json,2635,0c102cc4ec4954dae4330fa6fc140abc5865a188acba8541a1d80180d5840884,production manifest,local file hash 2026-07-31
+models/lcl_global_forecasting/full_selected_v1/leaderboard.csv,3327,6e39992f1edabc840b21884770a28c8c2caa45c0873415b48cf7da6a3dea8076,benchmark evidence,local file hash 2026-07-31
+models/ecl_deep_benchmark/leaderboard.csv,5788,a05e06387dc2fc20a79046b043d603992df26ae1a90308e1dbe663de68f436df,benchmark evidence,local file hash 2026-07-31
+legacy-pfe/models/models_depm/dnn.pth,550664,64e51048abcf87950d413adfc442bd9c539a6307e277b82eabc1f242ec2b224e,historical invalidated,local file hash 2026-07-31
+legacy-pfe/models/models_depm/resnet.pth,7060109,cedb710c518d3d8f5a78f33e07eba9324238096f286b5798469ec8baa177b56c,historical invalidated,local file hash 2026-07-31
+legacy-pfe/models/models_lstm/lstm.pth,913229,e80c14ed2d355b78b3de0e023cbda69abe30300e914d47209d4db3fc04dbfcb3,historical non-comparable,local file hash 2026-07-31
