@@ -92,6 +92,10 @@ def test_production_rejects_missing_legal_identity():
         DEBUG=False,
         JWT_SECRET_KEY="fP7m2zQ9vN4cR8xL6kT3wY1sH5jD0bG7eA2uC9iM",  # gitleaks:allow -- deterministic test-only value
         ADMIN_PASSWORD="initial-admin-V8f2qW7p",
+        LEGAL_OWNER_NAME="",
+        LEGAL_CONTACT_EMAIL="",
+        SUPPORT_EMAIL="",
+        LEGAL_EFFECTIVE_DATE="",
     )
 
     with pytest.raises(RuntimeError, match="public legal configuration"):
