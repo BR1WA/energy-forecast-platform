@@ -1,272 +1,419 @@
-# EnergyAI
+<div align="center">
 
-EnergyAI is a Master's PFE platform for monitoring and forecasting electricity
-consumption for one household or small site. It gives each user one private
-site and primary meter, then turns validated meter readings into live and
-historical monitoring, tariff-aware cost tracking, alerts, recommendations,
-reports, a truthful 24-hour forecast, and an independently gated 168-hour
-Product V1 forecast when the week artifact is enabled and ready.
+<h1>EnergyAI</h1>
+<h3>Evidence-aware electricity monitoring and multi-horizon forecasting</h3>
+<p><strong>Product V1 · FastAPI · Next.js 16 · PostgreSQL 16 · Global TFT</strong></p>
+<p>
+EnergyAI turns owned smart-meter readings into live monitoring, tariff-aware<br>
+analytics, operational alerts, and probabilistic 24-hour or 168-hour energy<br>
+forecasts—without hiding missing data, model fallbacks, or deployment limits.
+</p>
 
-The product is deliberately focused: it is free to use, has two roles
-(admin and user), and exposes only workflows that are implemented and backed
-by persisted data.
+</div>
 
-## Product Workflow
+![EnergyAI dashboard](report/assets/screenshots/dashboard.png)
 
-~~~text
-Register -> configure one site -> import/connect/simulate readings
-         -> monitor Live and historical periods
-         -> understand energy, cost, freshness, and coverage
-         -> generate a gated day forecast (or advertised week forecast)
-         -> review alerts and recommendations -> export reports
-~~~
+> **Release status:** Product V1 is ready for controlled academic demonstration
+> and supervisor/jury review. The application has been validated locally with
+> Docker Compose, PostgreSQL, both packaged forecasting artifacts, and automated
+> browser coverage. It is not presented as a publicly hosted production service.
 
-### Client features
+## Contents
 
-- One private site and one primary meter per user.
-- CSV import with preview, validation, bounded file/row limits, and owned data.
-- Authenticated push API with one-time key reveal, key rotation, test samples,
-  idempotency support, and last-seen status.
-- Explicitly labelled simulator for demonstrations and development.
-- Live monitoring for committed push and simulator readings.
-- Historical tracking for Live, Today, 7 days, Month, Year, All, and Custom
-  periods, with source, freshness, coverage, and quality indicators.
-- Tariff-aware energy cost, peak load, monthly budget, and period summaries.
-- High-load and missing-push-data alerts with evidence, cooldown, and lifecycle
-  actions.
-- Deterministic recommendations based on recorded alert evidence.
-- CSV and PDF exports containing ownership, source, coverage, tariff, and method
-  context.
-- Independently packaged Global TFT models for the next 24 or 168 hourly kWh
-  values. Day remains the stable default; Week appears only when its feature
-  flag, manifest, checkpoint, runtime, and warm-up gates pass. Forecasts run only
-  when the 336-hour history, 95% coverage, maximum-gap, and finite-value gates
-  pass; otherwise the UI explains the missing-data state or shows a labelled
-  seasonal-naive fallback.
+- [Why EnergyAI](#why-energyai)
+- [Product capabilities](#product-capabilities)
+- [Forecasting contract and evidence](#forecasting-contract-and-evidence)
+- [Architecture](#architecture)
+- [Quick start with Docker Compose](#quick-start-with-docker-compose)
+- [Local development](#local-development)
+- [Data ingestion](#data-ingestion)
+- [Security and ownership](#security-and-ownership)
+- [Quality evidence](#quality-evidence)
+- [Repository structure](#repository-structure)
+- [Known boundaries](#known-boundaries)
+- [Documentation](#documentation)
 
-### Administrator features
+## Why EnergyAI
 
-- View users and account status.
-- Change user roles and activation status while protecting the final active
-  administrator.
-- Inspect database, process, and packaged forecast readiness.
-- Review audit events and release-facing system health.
+Energy dashboards often stop at attractive charts or display forecasts without
+showing whether the input was complete, which model ran, or whether a fallback
+was substituted. EnergyAI treats those details as part of the product contract.
+
+The V1 workflow is intentionally focused:
+
+```text
+Register or sign in
+        ↓
+Configure one owned site and its primary meter
+        ↓
+Import CSV data, push readings, or use the labelled demo simulator
+        ↓
+Inspect consumption, cost, freshness, gaps, and coverage
+        ↓
+Run a gated 24-hour or 168-hour forecast
+        ↓
+Review uncertainty, provenance, alerts, and evidence-backed actions
+        ↓
+Export owned data and reports
+```
+
+The platform never exposes a research notebook as a production model selector.
+Only fixed, hash-verified artifacts that pass their manifest and warm-up checks
+can be advertised by the API.
+
+## Product capabilities
+
+### Monitoring and analytics
+
+- Live authenticated monitoring over WebSocket plus historical REST views.
+- Live, Today, 7 days, Month, Year, All, and Custom time ranges.
+- Energy, peak load, estimated tariff cost, freshness, coverage, and gap context.
+- Source-aware readings for CSV, push API, simulator, and forecast-demo data.
+- Bounded raw-reading pagination and monthly CSV/PDF exports.
+
+### Data acquisition
+
+- CSV preview and confirmed import with schema, size, row, ownership, and
+  timestamp validation.
+- Per-meter push API keys with one-time reveal, rotation, idempotency, and
+  last-seen state.
+- An explicitly labelled simulator for demonstrations and development.
+- One private site and one primary meter per normal user in Product V1.
+
+### Forecasting
+
+- Independently packaged Global TFT models for the next 24 and 168 hourly kWh
+  values.
+- q10, q50, and q90 predictions with clear uncertainty visualization.
+- Coverage, missing-gap, lookback, artifact-integrity, and runtime-readiness gates.
+- Labelled seasonal-naive fallback if an accepted input cannot complete TFT
+  inference.
+- Persisted model name, version, horizon, preprocessing provenance, target
+  timestamps, fallback reason, and quantiles.
+- Forecast PDF export; the week view aggregates the 168 hourly medians into
+  readable local-day totals while retaining all hourly targets.
+
+### Alerts and actions
+
+- Evidence-backed high-load and missing-push-data alerts.
+- Configurable thresholds, cooldowns, acknowledgement, and resolution lifecycle.
+- Deterministic recommendations tied to the alert that generated them.
+- Optional critical-alert email delivery through the transactional outbox.
+
+### Accounts and administration
+
+- Access-token plus rotating HttpOnly refresh-cookie sessions.
+- Email verification and password recovery when delivery is configured.
+- Server-verified Google identity/link/unlink flow behind an operator gate.
+- Profile and normalized WebP avatar management with durable cleanup jobs.
+- Owner archive/export and reauthenticated irreversible account deletion.
+- Admin-only user access control, aggregate statistics, audit visibility, and
+  read-only model/system readiness.
+
+## Forecasting contract and evidence
+
+Every Product V1 forecast requires:
+
+| Gate | Requirement |
+|---|---|
+| History | Latest 336 hourly energy values from the authenticated user's primary meter |
+| Coverage | At least 95% observed coverage |
+| Missing data | No unresolved gap longer than 3 hours |
+| Numeric validity | Finite values after bounded interpolation |
+| Artifact | Manifest, byte size, SHA-256, strict state loading, and warm-up must pass |
+| Normalization | Rolling 336-hour per-site z-score used by the serving pipeline |
+
+The deployed checkpoints were evaluated without retraining on the preserved
+Low Carbon London cold-start cohort using the exact production normalization
+and inverse-transformation path:
+
+| Serving-normalization result | 24 hours | 168 hours |
+|---|---:|---:|
+| Evaluated households | 500 | 499 |
+| Evaluation windows | 11,871 | 11,830 |
+| Macro MAE | 0.181945 kWh | 0.194138 kWh |
+| Seasonal-naive macro MAE | 0.251540 kWh | 0.249055 kWh |
+| Households beating seasonal naive | 498/500 (99.60%) | 496/499 (99.40%) |
+| Central-80% empirical coverage | 81.011% | 78.056% |
+
+These are frozen-cohort evaluation results, not a guarantee for a new client
+site. Site-specific accuracy and calibration require actual post-deployment
+outcomes. The exact origins, hashes, environment, parity checks, and
+per-household outputs are recorded in the
+[serving-normalization manifest](report/evidence/lcl_tft_serving_normalization_manifest.json).
+
+Artifact contracts:
+
+- [24-hour Global TFT](docs/FORECAST_ARTIFACT.md)
+- [168-hour Global TFT](docs/FORECAST_168H_ARTIFACT.md)
 
 ## Architecture
 
-~~~text
-Next.js frontend (port 3000)
-          |
-          | REST / WebSocket live monitoring
-          v
-FastAPI backend (port 8000)
-          |
-          +-- SQLAlchemy + Alembic -> SQLite locally or PostgreSQL in Compose
-          +-- fixed Global TFT artifacts -> gated 24h / optional 168h inference
-          +-- alert/recommendation/report services
-          +-- background missing-data alert worker
-~~~
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Next.js 16 / React 19                                       │
+│ Dashboard · Usage · Forecasts · Actions · Settings · Admin  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ REST + authenticated WebSocket
+┌──────────────────────────────▼──────────────────────────────┐
+│ EnergyAI API v1.0 / FastAPI                                 │
+│ Auth · ownership · ingestion · analytics · reports · policy │
+├──────────────────┬───────────────────────┬──────────────────┤
+│ PostgreSQL 16    │ Global TFT artifacts  │ Durable workers  │
+│ SQLAlchemy       │ 24h + gated 168h      │ alerts · email   │
+│ Alembic          │ manifests + hashes    │ avatar cleanup   │
+└──────────────────┴───────────────────────┴──────────────────┘
+```
 
-Important ownership rule: normal users never select a site or meter in a
-request. The backend resolves the authenticated user's single site and primary
-meter server-side.
+The Compose deployment contains six services:
 
-## Repository Layout
+| Service | Responsibility |
+|---|---|
+| `db` | PostgreSQL 16 persistence |
+| `backend` | FastAPI application, policy, reports, and forecast inference |
+| `frontend` | Next.js user and administrator interface |
+| `alerts-worker` | Missing-data and threshold alert processing |
+| `email-worker` | Transactional outbox delivery, retry, and dead-letter handling |
+| `avatar-cleanup-worker` | Durable removal of superseded avatar objects |
 
-| Path | Purpose |
-| --- | --- |
-| backend/ | FastAPI application, database models, migrations, services, tests, and model runtime |
-| frontend/ | Next.js client dashboard and user workflows |
-| backend/model_artifacts/ | Versioned production forecast artifact and manifest |
-| docs/operations.md | Local setup, Docker, health checks, backups, and restore procedure |
-| docs/PFE_RELEASE_NOTES.md | Demonstration walkthrough, validation evidence, and known limitations |
-| docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md | Product scope and completed PFE milestones |
-| scripts/ | Backup and restore helpers |
-| models/, notebooks/, research/ | Research and training material, not automatically used by production runtime |
+Normal users never provide an arbitrary site or meter identifier to choose the
+data being queried. The backend resolves the authenticated user's owned site and
+primary meter server-side.
 
-## Requirements
+## Quick start with Docker Compose
+
+### Prerequisites
+
+- Docker Engine or Docker Desktop
+- Docker Compose v2
+- Approximately 12 MB for the two packaged model checkpoints, in addition to
+  container images and database storage
+
+### 1. Configure the release
+
+From the repository root in PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Open `.env` and replace every `replace_with_...` value. At minimum, provide:
+
+- a strong PostgreSQL password;
+- a JWT secret of at least 32 characters;
+- an administrator password of at least 12 characters;
+- the legal owner, contact, support, and effective-date values required when
+  `DEBUG=false`.
+
+The example enables the packaged 168-hour model. Email delivery and Google
+authentication remain disabled until their complete external configuration is
+supplied and tested.
+
+### 2. Start and verify the stack
+
+```powershell
+docker compose config --quiet
+docker compose up --build -d
+docker compose ps
+docker compose exec backend python -m app.cli create-admin
+```
+
+Open:
+
+- Application: <http://localhost:3000>
+- Interactive API: <http://localhost:8000/docs>
+- Readiness: <http://localhost:8000/api/v1/system/ready>
+
+Inspect logs when a service does not become ready:
+
+```powershell
+docker compose logs --tail 150 backend frontend alerts-worker email-worker avatar-cleanup-worker
+```
+
+Stop the application without deleting its volumes:
+
+```powershell
+docker compose down
+```
+
+See the [operations guide](docs/operations.md) before changing public origins,
+enabling external providers, backing up data, restoring a database, or rotating
+credentials.
+
+## Local development
+
+### Requirements
 
 - Python 3.11
 - Node.js 20 and npm
-- Docker Engine with Docker Compose v2 for the container workflow
-- PostgreSQL 16 when running the production-like Compose stack
+- PostgreSQL 16 for production-equivalent database behavior; SQLite is available
+  for a smaller development profile
 
-## Quick Start: Local Development
+### Backend
 
-### 1. Configure the backend
-
-From the repository root:
-
-~~~powershell
+```powershell
 Copy-Item backend\.env.example backend\.env
-~~~
-
-Edit backend/.env and set a JWT secret with at least 32 characters and an
-admin password with at least 12 characters. SQLite is the default local
-database.
-
-### 2. Install and migrate the backend
-
-~~~powershell
-cd backend
+Set-Location backend
 python -m pip install -r requirements-dev.txt
 python -m pip install -r requirements-ml.txt
 python -m app.cli migrate
 python -m app.cli create-admin
 python -m uvicorn app.main:app --reload --port 8000
-~~~
+```
 
-The ML dependency file is required for local Global TFT inference. The normal
-test target intentionally excludes Torch to keep CI resource usage bounded.
+`requirements-ml.txt` installs CPU PyTorch and is required for local TFT
+inference. The ordinary CI test image can exclude Torch to keep its resource
+usage bounded; artifact contract tests run in an ML-enabled target.
 
-### 3. Start the frontend
+### Frontend
 
 In another terminal:
 
-~~~powershell
-cd frontend
+```powershell
+Set-Location frontend
 npm ci
 $env:NEXT_PUBLIC_API_URL = "http://localhost:8000"
 npm run dev
-~~~
+```
 
-Open http://localhost:3000. The backend API and interactive OpenAPI
-documentation are available at http://localhost:8000/docs.
+### Useful checks
 
-## Quick Start: Docker Compose
-
-From the repository root:
-
-~~~powershell
-Copy-Item .env.example .env
-~~~
-
-Replace the database password, JWT secret, and admin password in .env, then
-start the stack:
-
-~~~powershell
-docker compose up --build -d
-docker compose ps
-docker compose exec backend python -m app.cli create-admin
-~~~
-
-Open http://localhost:3000. The backend is exposed at port 8000, PostgreSQL at
-5432, and the alert worker runs as a separate Compose service.
-
-Stop the stack with:
-
-~~~powershell
-docker compose down
-~~~
-
-Use docs/operations.md for production configuration, readiness troubleshooting,
-backup, restore, and deployment details.
-
-## CSV Input Contract
-
-CSV files must be UTF-8 and contain:
-
-- timestamp, including a timezone or an unambiguous ISO-8601 offset
-- active_power_kw or the accepted GAP alias
-
-Optional columns include reactive_power_kvar, voltage_v, and current_a.
-The application validates rows before persistence. The current UI limit is
-5 MB and 10,000 rows per import.
-
-Example:
-
-~~~csv
-timestamp,active_power_kw,voltage_v
-2026-07-20T08:00:00+01:00,0.42,230.1
-2026-07-20T08:05:00+01:00,0.47,230.4
-~~~
-
-## Push API
-
-Users generate a meter key from Settings. The key is shown once and should be
-stored by the sending device. Push samples are authenticated with that key and
-are rejected when invalid, out of order, duplicated, or incompatible with the
-meter configuration. The interactive API contract is available at /docs after
-the backend starts.
-
-## Forecast Contract
-
-The stable default forecast contains 24 hourly values. Product V1 adds an
-independent 168-hour artifact behind `FORECAST_168H_ENABLED`; the frontend never
-shows Week unless the backend advertises a successful artifact warm-up. Both
-fixed Global TFT capabilities require:
-
-- 336 hourly input values
-- at least 95% observed coverage
-- no unresolved gap longer than 3 hours
-- finite, valid hourly energy values
-
-The UI displays the selected horizon, model name, version, source, coverage,
-target timestamps, quantiles, preprocessing provenance, inference method, and
-fallback reason. The week chart groups 168 stored hourly targets into seven
-readable local-day totals; reports retain every hourly value. Research folders
-and experiment runs are not loaded by the production service.
-
-## Quality Gates
-
-Backend:
-
-~~~powershell
-cd backend
+```powershell
+# Backend
+Set-Location backend
 python -m pytest -q
-~~~
 
-Frontend:
-
-~~~powershell
-cd frontend
+# Frontend
+Set-Location ..\frontend
 npm run lint
 npm run typecheck
 npm run build
-~~~
+npm run test:browser
+```
 
-Docker test image:
+## Data ingestion
 
-~~~powershell
-docker build --target test -t energy-backend-test -f backend/Dockerfile .
-docker run --rm --env-file backend\.env energy-backend-test
-~~~
+### CSV contract
 
-Runtime checks:
+CSV files must be UTF-8 and contain:
 
-- GET /health is a liveness alias.
-- GET /api/v1/system/live checks process liveness.
-- GET /api/v1/system/ready checks database readiness and packaged model
-  integrity/warm-up.
-- GET /api/v1/system/health returns a compatibility health summary.
+- `timestamp`, including a timezone or unambiguous ISO-8601 offset;
+- `active_power_kw`, or the accepted `GAP` alias.
 
-## Scope Boundaries
+Optional columns include `reactive_power_kvar`, `voltage_v`, and `current_a`.
+The web import is bounded to 5 MiB and 10,000 rows, with preview and validation
+before persistence.
 
-The following are intentionally deferred until independently validated and
-implemented:
+```csv
+timestamp,active_power_kw,voltage_v
+2026-08-05T08:00:00+01:00,0.42,230.1
+2026-08-05T08:05:00+01:00,0.47,230.4
+```
 
-- Monthly production forecasting
-- Pull connectors to utility providers
-- Google authentication, email verification, password reset email, and alert
-  email delivery
-- Gemini chatbot and AI recommendations
-- Subscriptions, plans, billing, and payment flows
-- Remote appliance, battery, or demand-response control
-- Multi-site management
+### Push API
 
-These boundaries are part of the PFE product design. They keep the current
-application honest and usable while leaving a clear Product V1 path.
+Users create a meter key in Settings. It is shown once and should be stored by
+the sending device. The API rejects invalid, duplicated, out-of-order, oversized,
+or meter-incompatible batches and supports idempotent retry behavior. Consult the
+live OpenAPI contract at `/docs` for the current request and response schemas.
+
+## Security and ownership
+
+Product V1 includes:
+
+- bcrypt password hashing and short-lived access tokens;
+- hashed, rotating refresh tokens in HttpOnly cookies;
+- trusted-origin checks on cookie-mutating session operations;
+- neutral, rate-limited account recovery responses;
+- hashed single-use verification/reset tokens;
+- RBAC plus server-side ownership resolution;
+- one-time Google state/nonce challenges when that integration is enabled;
+- bounded CSV, push, avatar, and report operations;
+- full-history secret scanning in CI;
+- startup rejection of insecure release secrets or incomplete legal/provider
+  configuration.
+
+Do not commit `.env` files, API keys, SMTP credentials, Google secrets, database
+backups, client data, or new research checkpoints. Use an external secret manager
+for any public deployment.
+
+## Quality evidence
+
+The latest full application audit was recorded on 31 July 2026. Its verified
+snapshot reported:
+
+| Gate | Result |
+|---|---|
+| Backend with SQLite | 96 passed; 4 explicit PostgreSQL-only skips |
+| Backend with isolated PostgreSQL | 100 passed; 0 skipped |
+| Frontend lint, type check, production build | Passed; 25 routes generated |
+| Playwright six-project matrix | 107/108 passed; the isolated WebKit reload rerun passed |
+| Production npm dependency audit | 0 known vulnerabilities |
+| Compose runtime | Six services running; core health checks passed |
+| Forecast readiness | 24-hour and 168-hour artifacts warmed and ready |
+
+This is dated evidence, not a substitute for running the gates on the release
+commit. The audit also documented a full-development dependency gate and a
+non-reproduced WebKit reload interruption that should be cleared or formally
+handled before publishing an immutable public release.
+
+Read the [full application audit](docs/PFE_FULL_APP_AUDIT_2026-07-31.md) and
+[Product V1 validation evidence](docs/PRODUCT_V1_G7_VALIDATION_EVIDENCE.md) for
+the exact environment, boundaries, and operator-owned checks.
+
+## Repository structure
+
+| Path | Purpose |
+|---|---|
+| `backend/app/` | FastAPI application, domain services, security policy, and ML runtime |
+| `backend/alembic/` | Versioned database migrations |
+| `backend/model_artifacts/` | Production-only 24-hour and 168-hour checkpoint packages |
+| `backend/tests/` | API, ownership, database, security, worker, and model-contract tests |
+| `frontend/src/` | Next.js application, components, API client, and browser-facing policy |
+| `frontend/tests/` | Playwright Product V1 journeys |
+| `scripts/` | Backup, restore, and operational helpers |
+| `docs/` | Architecture, release, operations, audit, and validation records |
+| `report/source/` | LaTeX PFE report source |
+| `report/evidence/` | Reproducibility manifests and evaluation outputs |
+| `models/`, `notebooks/`, `experiments/` | Local research history; never loaded by the production service |
+
+## Known boundaries
+
+The following are outside the verified Product V1 public-deployment claim:
+
+- No public cloud URL, ingress, TLS termination, CDN, or production load test is
+  included in this repository.
+- SMTP inbox delivery and Google OAuth console/origin configuration require
+  operator-owned staging acceptance before their feature flags are enabled.
+- Monthly forecasting is not a production capability.
+- There are no utility pull connectors, subscriptions, billing, remote appliance
+  control, battery dispatch, or automated demand response.
+- Product V1 intentionally supports one site and one primary meter per normal user.
+- Forecast accuracy and interval calibration are not guaranteed for a new site;
+  client-specific outcomes must be measured after deployment.
+- Horizontal API scaling requires a shared rate-limit backend and reviewed worker
+  topology.
+
+These boundaries are deliberate. They keep the product demonstrable and truthful
+while separating completed engineering from future work.
 
 ## Documentation
 
-- Operations guide: docs/operations.md
-- PFE release notes: docs/PFE_RELEASE_NOTES.md
-- Product implementation plan: docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md
-- Forecast artifact contract: docs/FORECAST_ARTIFACT.md
-- 168-hour artifact evidence: docs/FORECAST_168H_ARTIFACT.md
-- Product V1 execution plan: docs/PRODUCT_V1_IMPLEMENTATION_PLAN_2026-07-22.md
+- [Operations, backup, restore, and release handoff](docs/operations.md)
+- [Product V1 release notes](docs/PRODUCT_V1_RELEASE_NOTES.md)
+- [Product V1 validation evidence](docs/PRODUCT_V1_G7_VALIDATION_EVIDENCE.md)
+- [Full application audit](docs/PFE_FULL_APP_AUDIT_2026-07-31.md)
+- [24-hour forecast artifact](docs/FORECAST_ARTIFACT.md)
+- [168-hour forecast artifact](docs/FORECAST_168H_ARTIFACT.md)
+- [PFE report QA](report/qa/final_report_qa.md)
 
-## License and Academic Context
+## Academic context and license
 
-EnergyAI is a Master's PFE project. Add the repository's final academic or
-institutional license before public redistribution.
+EnergyAI is the Master's Final-Year Project of **Salah Eddine Zouitni** in the
+Master's programme in Data Science and Artificial Intelligence at the Faculty of
+Sciences of Meknès, Université Moulay Ismaïl, under the academic supervision of
+**Pr. Ali Oubelkacem**.
+
+No open-source license is currently included. The repository should not be
+treated as granting redistribution or commercial-use rights until an explicit
+license is added.
