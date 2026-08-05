@@ -146,6 +146,7 @@ test('concurrent expired requests share one refresh, reload restores, and logout
   let logoutBody = 'unset';
   let settingsAttempts = 0;
   let budgetAttempts = 0;
+  let setupStatusCalls = 0;
   await page.route(`${API}/**`, async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
@@ -155,7 +156,10 @@ test('concurrent expired requests share one refresh, reload restores, and logout
       return route.fulfill({ json: { access_token: `memory-token-${refreshCalls}`, token_type: 'bearer' } });
     }
     if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
-    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/settings/setup-status') {
+      setupStatusCalls += 1;
+      return route.fulfill({ json: { is_setup_complete: true } });
+    }
     if (pathname === '/api/v1/settings') {
       settingsAttempts += 1;
       if (settingsAttempts === 1) return route.fulfill({ status: 401, json: { detail: { code: 'access_expired', message: 'Expired' } } });
@@ -179,9 +183,12 @@ test('concurrent expired requests share one refresh, reload restores, and logout
   await expect.poll(() => refreshCalls).toBe(2);
   await page.reload();
   await expect.poll(() => refreshCalls).toBe(3);
+  await expect.poll(() => setupStatusCalls).toBe(2);
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
 
-  await page.locator('#navbar-user-menu').click();
+  const userMenu = page.locator('#navbar-user-menu');
+  await expect(userMenu).toBeVisible();
+  await userMenu.click();
   await page.locator('#nav-logout > div').click();
   await expect(page).toHaveURL(/\/login/);
   expect(logoutBody).toBe('');
