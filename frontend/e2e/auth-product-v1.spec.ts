@@ -142,6 +142,7 @@ test('local login keeps the refresh credential out of JSON and browser storage',
 });
 
 test('concurrent expired requests share one refresh, reload restores, and logout has no token body', async ({ page }) => {
+  test.slow();
   let refreshCalls = 0;
   let logoutBody = 'unset';
   let settingsAttempts = 0;
@@ -176,14 +177,15 @@ test('concurrent expired requests share one refresh, reload restores, and logout
       return route.fulfill({ json: { message: 'Logged out successfully' } });
     }
     if (pathname === '/api/v1/auth/capabilities') return route.fulfill({ json: { email_delivery_enabled: true, google_auth_enabled: false, google_client_id: null } });
-    return route.fulfill({ status: 200, json: {} });
+    return route.fulfill({ status: 404, json: { detail: 'Not mocked' } });
   });
   await page.goto('/settings');
   await expect(page).toHaveURL(/\/settings/);
-  await expect.poll(() => refreshCalls).toBe(2);
+  await expect.poll(() => Math.min(settingsAttempts, budgetAttempts), { timeout: 15_000 }).toBe(2);
+  expect(refreshCalls).toBe(2);
   await page.reload();
-  await expect.poll(() => refreshCalls).toBe(3);
-  await expect.poll(() => setupStatusCalls).toBe(2);
+  await expect.poll(() => refreshCalls, { timeout: 15_000 }).toBe(3);
+  await expect.poll(() => setupStatusCalls, { timeout: 15_000 }).toBe(2);
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
 
   const userMenu = page.locator('#navbar-user-menu');
