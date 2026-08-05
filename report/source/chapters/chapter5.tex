@@ -1,5 +1,6 @@
 \chapter{Experiments, Benchmarks, and Final Model Selection}
 \label{chap:experiments}
+\chaptermark{Experiments and Model Selection}
 
 \section{Experimental narrative and evidence status}
 
@@ -179,6 +180,46 @@ Quantile-crossing rate & 0.01895\% & 0.02742\% \\
 
 The 24-hour central interval is close to its nominal coverage on the frozen London cohort; the 168-hour interval undercovers by approximately 1.65 percentage points and is wider. The asymmetric q10 and q90 pinball losses are consistent with the negative median-forecast bias in \cref{tab:tftcoldmetrics}. These are descriptive test-cohort diagnostics, not a calibrated guarantee for a new site.
 
+\subsection{Serving-normalization evaluation}
+
+The preserved experiment directory was sufficient for an exact inference-only comparison without the original large CSV source. It contains the complete 2,500-household hourly matrix, ordered identities, disjoint known and cold-start assignments, common split boundaries, nine calendar features, and both frozen checkpoints. The 24 fixed test origins, 336-hour histories, future targets, and 168-hour seasonal-naive profiles were reconstructed from these arrays. The research checkpoints and packaged production copies have identical SHA-256 digests for both horizons.
+
+The supplementary run replaced only the research household scaler with the product transformation: the mean and population standard deviation of each current 336-hour history. It then used the production inverse transform, non-negative clamp, and per-step quantile ordering. No training, fine-tuning, checkpoint replacement, or data download occurred. \Cref{tab:servingcomparison} keeps the original research results and the new serving-transform evidence in separate columns.
+
+\begin{table}[p]
+\centering
+\caption[Research and serving-normalization comparison]{Frozen research metrics compared with supplementary serving-normalization evidence on the same cold-start samples.}
+\label{tab:servingcomparison}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{Yrrrr}
+\toprule
+Metric & \makecell{Research\\24 h} & \makecell{Serving\\24 h} & \makecell{Research\\168 h} & \makecell{Serving\\168 h} \\
+\midrule
+Evaluated households & 500 & 500 & 499 & 499 \\
+Evaluation windows & 11,871 & 11,871 & 11,830 & 11,830 \\
+Macro MAE (kWh) & 0.184928 & 0.181945 & 0.197322 & 0.194138 \\
+Median household MAE (kWh) & 0.142566 & 0.142769 & 0.149232 & 0.150560 \\
+p90 household MAE (kWh) & 0.362807 & 0.362684 & 0.389872 & 0.387758 \\
+Macro RMSE (kWh) & 0.328317 & 0.322854 & 0.341090 & 0.335025 \\
+Macro bias (kWh) & -0.074996 & -0.061638 & -0.076080 & -0.053130 \\
+Macro $R^2$ & 0.270362 & 0.285221 & 0.216235 & 0.244525 \\
+Global $R^2$ & 0.609431 & 0.638839 & 0.548724 & 0.581186 \\
+Seasonal-naive macro MAE (kWh) & 0.251540 & 0.251540 & 0.249055 & 0.249055 \\
+Households beating seasonal naive & 495/500 & 498/500 & 491/499 & 496/499 \\
+Household win rate & 99.0000\% & 99.6000\% & 98.3968\% & 99.3988\% \\
+q10 pinball loss (kWh) & 0.029654 & 0.029440 & 0.031180 & 0.031123 \\
+q50 pinball loss (kWh) & 0.092568 & 0.091103 & 0.098576 & 0.096999 \\
+q90 pinball loss (kWh) & 0.064440 & 0.061746 & 0.068650 & 0.066166 \\
+Central-80 empirical coverage & 80.7963\% & 81.0108\% & 78.3518\% & 78.0556\% \\
+Mean interval width (kWh) & 0.559770 & 0.571945 & 0.585659 & 0.598749 \\
+Quantile-crossing rate & 0.01895\% & 0.00000\% & 0.02742\% & 0.00000\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+On this preserved London cohort, rolling normalization yields slightly lower macro MAE and macro RMSE at both horizons while retaining the same seasonal baseline. The 24-hour interval is slightly wider and covers 81.0108\%; the 168-hour interval is also wider but covers 78.0556\%. The serving crossing rate is zero by construction because the production path orders the three outputs at every step. These supplementary results close the identified scaler mismatch for this fixed cohort only. They do not replace the frozen research headlines, establish Moroccan transfer, or provide per-site calibration guarantees.
+
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{tft_checkpoint_diagnostics.pdf}
@@ -225,4 +266,4 @@ Global TFT was selected and packaged for both supported horizons because it prov
   \label{fig:tftflow}
 \end{figure}
 
-The final selection is narrower than the research history by design. iTransformer leads the stored ECL benchmark; Global TFT leads the LCL household cold-start comparison under the original per-household training-segment normalization. TimePro and TimeMixer++ remain attempted. Monthly N-BEATS and MultiCycleNet remain experimental. Historical DEPM scores remain invalidated. The packaged 24-hour and 168-hour capabilities remain scientifically conditional until the rolling 336-hour serving normalization is tested on the frozen cold-start cohort or replaced by a validated equivalent contract.
+The final selection is narrower than the research history by design. iTransformer leads the stored ECL benchmark; Global TFT leads the LCL household cold-start comparison under the original per-household training-segment normalization. TimePro and TimeMixer++ remain attempted. Monthly N-BEATS and MultiCycleNet remain experimental. Historical DEPM scores remain invalidated. The supplementary rolling-normalization run now supports the packaged transform on the same frozen London cohort, while geographic transfer and per-site calibration remain scientifically conditional.

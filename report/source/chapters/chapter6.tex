@@ -1,5 +1,6 @@
 \chapter{EnergyAI Platform Design and Implementation}
 \label{chap:platform}
+\chaptermark{EnergyAI Platform Implementation}
 
 \section{Product vision and user journey}
 
@@ -83,7 +84,7 @@ This separation improves safety and usability. A user can identify a wrong delim
 
 \section{Forecasting service and artifact contracts}
 
-The forecast router exposes capabilities, readiness, demo-history preparation, run, latest, and history operations. The service resolves the configured horizon to a packaged artifact, checks its manifest, loads the user's owned site history, applies data gates and derived calendar features, normalizes the latest 336-hour window, performs inference, inversely transforms outputs with the same window statistics, persists the forecast, and returns the median path and quantile bounds. This implementation contract is not the scaler contract used for the frozen LCL metrics; \cref{tab:normalizationcontracts} states the resulting validation gap.
+The forecast router exposes capabilities, readiness, demo-history preparation, run, latest, and history operations. The service resolves the configured horizon to a packaged artifact, checks its manifest, loads the user's owned site history, applies data gates and derived calendar features, normalizes the latest 336-hour window, performs inference, inversely transforms outputs with the same window statistics, persists the forecast, and returns the median path and quantile bounds. This implementation contract differs from the scaler contract used for the frozen headline metrics; \cref{tab:normalizationcontracts} and \cref{tab:servingcomparison} separate the two evidence sets.
 
 \begin{figure}[H]
   \centering
@@ -164,4 +165,4 @@ No cloud provider, public URL, production screenshot, or external production val
 
 \section{Implementation summary}
 
-EnergyAI's engineering contribution is an inspectable boundary between scientific artifacts and product behavior. The application exposes only supported horizons, verifies artifact identity, rejects insufficient input, records provenance, isolates user data, and preserves uncertainty. It also reveals one unresolved boundary---serving normalization differs from research evaluation---instead of silently treating file identity as proof of deployment accuracy. The next chapter evaluates the quality evidence for this implementation and states what remains conditional.
+EnergyAI's engineering contribution is an inspectable boundary between scientific artifacts and product behavior. The application exposes only supported horizons, verifies artifact identity, rejects insufficient input, records provenance, isolates user data, and preserves uncertainty. The serving scaler is now evaluated separately on the preserved London cohort instead of being treated as equivalent to the research transform. The next chapter evaluates the quality evidence for this implementation and states what remains conditional.

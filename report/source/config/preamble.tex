@@ -50,10 +50,9 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small\nouppercase{\leftmark}}
-\fancyhead[R]{\small\nouppercase{\rightmark}}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
-\setlength{\headheight}{15pt}
+\setlength{\headheight}{16pt}
 \usepackage{titlesec}
 \titleformat{\chapter}[display]
   {\normalfont\bfseries\color{UMIBlue}}
@@ -64,7 +63,9 @@
 \usepackage[backend=biber,style=ieee,sorting=none,maxbibnames=99]{biblatex}
 \addbibresource{bibliography.bib}
 \usepackage[hidelinks,bookmarksopen=true,bookmarksnumbered=true]{hyperref}
-\usepackage{xurl}
+\usepackage{url}
+\def\UrlBreaks{\do\/\do-\do\_\do\.}
+\Urlmuskip=0mu plus 1mu
 \hypersetup{
   pdftitle={Multi-Horizon Electricity Consumption Forecasting: Methodological Audit, Deep Learning Benchmarking, and Operationalization in a Reliable Platform},
   pdfauthor={Zouitni Salah Eddine},

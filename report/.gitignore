@@ -21,3 +21,4 @@
 # Legacy/duplicate exports; keep only the named PDF and current source bundle
 /exports/main.*
 /exports/PFE_ZOUITNI_Salah_Eddine_draft_source.pre_reanalysis_backup.zip
+/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_*.pdf

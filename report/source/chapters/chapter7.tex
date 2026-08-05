@@ -3,7 +3,7 @@
 
 \section{Validation scope and evidence date}
 
-The software-validation evidence in this chapter is frozen to the full application audit performed on 31 July 2026 and the Product V1 commit identified in the appendices. Historical validation reports are used only for chronology because test counts, routes, and capabilities changed over time. That audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis was generated on 1 August 2026 and is separately identified by script, input, and output hashes.
+The software-validation evidence in this chapter is frozen to the full application audit performed on 31 July 2026 and the Product V1 commit identified in the appendices. Historical validation reports are used only for chronology because test counts, routes, and capabilities changed over time. That audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes.
 
 \section{Backend validation}
 
@@ -39,7 +39,7 @@ Docker Compose & Core health checks green, workers running & Validated local dep
 
 The product does not rely only on a database model name. Artifact tests verify manifest parsing, supported horizon, checksum, strict state-dict load, CPU inference, finite output, expected shape, and reference points where recorded. Both 24-hour and 168-hour capabilities are packaged. The checkpoints share a file size of 5,600,105 bytes but have distinct SHA-256 hashes, confirming that the weekly artifact is not merely a renamed daily file.
 
-The manifests also preserve limitations. London-cohort metrics are not a guarantee for a client site. More importantly, new sites use their recent 336-hour window for normalization, while the frozen research metrics use each evaluation household's pre-validation training-segment statistics. Hash and shape tests prove which neural weights are loaded; they do not prove accuracy after changing the input/output transform. Quantile outputs have not been recalibrated per site. Week-ahead uncertainty grows with the horizon and must be displayed with provenance.
+The manifests also preserve limitations. London-cohort metrics are not a guarantee for a client site. New sites use their recent 336-hour window for normalization, while the frozen research metrics use each evaluation household's pre-validation training-segment statistics. The supplementary inference-only evaluation now measures this transform change on the same frozen London cohort and reports it separately from the research headlines. Quantile outputs have not been recalibrated per site. Week-ahead uncertainty grows with the horizon and must be displayed with provenance.
 
 \section{Security validation}
 
@@ -73,11 +73,11 @@ The product contract uses timestamp and energy. This lowers onboarding friction 
 
 \subsection{Uncertainty calibration}
 
-The TFT produces 0.1, 0.5, and 0.9 quantiles, but the manifests state that they are not recalibrated for each client. Reanalysis under the original research scaler finds 80.7963\% empirical coverage for the nominal central 80\% interval at 24 hours and 78.3518\% at 168 hours, with mean widths of 0.559770 and 0.585659 kWh. This closes the report-level checkpoint diagnostic, but not site-level calibration or the serving-normalization gap. Conformal time-series methods are a candidate extension if their assumptions, calibration cohort, and deployment contract are stated explicitly \cite{stankeviciute2021conformal}.
+The TFT produces 0.1, 0.5, and 0.9 quantiles, but the manifests state that they are not recalibrated for each client. Reanalysis under the original research scaler finds 80.7963\% empirical coverage for the nominal central 80\% interval at 24 hours and 78.3518\% at 168 hours, with mean widths of 0.559770 and 0.585659 kWh. Under serving normalization, coverage is 81.0108\% and 78.0556\%, with widths of 0.571945 and 0.598749 kWh. This closes the scaler-specific comparison on the frozen London cohort, but not site-level calibration. Conformal time-series methods are a candidate extension if their assumptions, calibration cohort, and deployment contract are stated explicitly \cite{stankeviciute2021conformal}.
 
 \subsection{Research-to-serving preprocessing}
 
-The principal unresolved scientific risk is no longer hidden. The cold-start experiment gives every held-out London household a mean and standard deviation fitted on its own historical training segment; the application instead estimates both statistics from the current 336-hour request window. This difference can change the distribution presented to the fixed network and the inverse scale applied to every output. Until the frozen test cohort is rerun through the exact product preparation code, the LCL MAE and coverage values support checkpoint selection under the research protocol, not expected end-to-end EnergyAI accuracy.
+The cold-start experiment gives every held-out London household a mean and standard deviation fitted on its own historical training segment; the application instead estimates both statistics from the current 336-hour request window. The preserved artifacts were sufficient to rerun exactly the same cold households, fixed origins, histories, targets, seasonal baselines, calendar features, and checkpoints with the production rolling normalization and output transform. Macro MAE is 0.181945 kWh at 24 hours and 0.194138 kWh at 168 hours under that serving transform, compared with the unchanged research headlines of 0.184928 and 0.197322 kWh. This resolves the identified transform mismatch for the frozen LCL cohort. It does not establish expected accuracy for an arbitrary new site because geography, data quality, time-zone handling, and calibration may differ.
 
 \subsection{Monthly horizon}
 
@@ -102,7 +102,7 @@ The current release needs a configured local environment and does not have a ver
 Validity type & Threat & Mitigation and remaining gap \\
 \midrule
 Internal & Leakage, preprocessing scope, repeated test use & Causal windows, chronological split, train-only transforms, evidence registries; historic notebooks remain separately labelled \\
-Research--serve & Research scaler differs from 336-hour serving scaler & Gap documented and serving path contract-tested; exact end-to-end cold-start re-evaluation remains required \\
+Research--serve & Research scaler differs from 336-hour serving scaler & Exact frozen-cohort comparison completed; new-site transfer and calibration remain required \\
 Construct & Accuracy/classification confused with forecasting value & Continuous target, physical-unit errors, seasonal baselines, household distribution \\
 External & London/IHEPC results transferred to Moroccan users & Cold-start household split; local-country evaluation still required \\
 Conclusion & Single seed, clock-influenced dynamic sampling, aggregation choice & Frozen seed and common protocol, macro/median/p90/win rate; bitwise retraining and multi-seed finalist study remain desirable \\
@@ -116,6 +116,6 @@ Operational & Healthy local stack interpreted as public production & Deployment 
 
 The project demonstrates a change in what counts as success. At the beginning, success meant matching a 98\% article result. After the audit, success meant constructing a task that could fail honestly. That shift led to lower and more interpretable metrics, stronger baselines, broader household analysis, and explicit artifact limitations.
 
-The final TFT research results are credible because they satisfy several independent conditions: the target is continuous and future-indexed; all households share one causal chronology; households are evaluated in a cold-start cohort; the model beats a seasonal baseline for nearly all evaluated households; median, p90, bias, and interval diagnostics are reported; and the original checkpoints are hash-identified. The application adds strict loading and refuses unsupported horizons. These facts support a controlled demonstration and a defensible PFE contribution, but they do not transfer the frozen MAE to the rolling-normalized serving path without a further end-to-end test.
+The final TFT research results are credible because they satisfy several independent conditions: the target is continuous and future-indexed; all households share one causal chronology; households are evaluated in a cold-start cohort; the model beats a seasonal baseline for nearly all evaluated households; median, p90, bias, and interval diagnostics are reported; and the original checkpoints are hash-identified. The application adds strict loading and refuses unsupported horizons. The separate serving-normalization evaluation extends this evidence to the rolling transform on the same frozen cohort. These facts support a controlled demonstration and a defensible PFE contribution, but they do not establish geographic transfer or site-specific calibration.
 
 The remaining conditional findings also improve rather than weaken the report. They separate current evidence from future work and prevent a local academic prototype from being misrepresented as a globally deployed service.

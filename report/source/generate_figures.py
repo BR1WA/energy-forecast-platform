@@ -396,13 +396,14 @@ def layered_architecture():
         (0.76, "Experience layer", "Next.js 16 / React 19\nDashboard, Usage, Forecast, Actions, Settings", BLUE),
         (0.58, "API and policy layer", "FastAPI routers, JWT sessions, RBAC, validation", CYAN),
         (0.40, "Domain services", "Forecasting, ingestion, analytics, alerts, email, account lifecycle", GREEN),
-        (0.22, "Persistence and background work", "PostgreSQL 16; dedicated alert, email, and avatar-cleanup workers", AMBER),
+        (0.22, "Persistence and background work", "PostgreSQL 16; alert, email, and\navatar-cleanup workers", AMBER),
         (0.04, "Model artifacts", "Global TFT 24 h and 168 h, manifests, hashes, readiness gates", NAVY),
     ]
     for y, title, text, color in layers:
         ax.add_patch(FancyBboxPatch((0.08, y), 0.84, 0.13, boxstyle="round,pad=0.012,rounding_size=0.015", facecolor="white", edgecolor=color, lw=1.4))
-        ax.text(0.12, y + 0.065, title, va="center", ha="left", color=color, weight="bold", fontsize=10.5)
-        ax.text(0.37, y + 0.065, text, va="center", ha="left", color=DARK, fontsize=8.8)
+        ax.text(0.12, y + 0.065, title, va="center", ha="left", color=color, weight="bold", fontsize=9.6)
+        description_x = 0.47 if title == "Persistence and background work" else 0.44
+        ax.text(description_x, y + 0.065, text, va="center", ha="left", color=DARK, fontsize=8.5)
     save(fig, FIG / "energyai_layered_architecture.pdf")
 
 
@@ -456,38 +457,106 @@ def use_case():
 
 
 def class_domain():
-    fig, ax = canvas(11, 7.4)
+    fig, ax = canvas(12, 8.5)
     ax.text(0.02, 0.96, "Core domain class diagram", fontsize=14, weight="bold", color=NAVY)
     classes = {
-        "User": (0.04, 0.68, ["PK id: int", "email: string", "role: enum", "is_active: bool"]),
-        "Site": (0.29, 0.68, ["PK id: int", "FK owner_id: int", "name: string", "timezone: string"]),
-        "Meter": (0.54, 0.68, ["PK id: int", "FK site_id: int", "name: string", "status: enum"]),
-        "SmartMeterReading": (0.78, 0.68, ["PK id: int", "FK meter_id: int", "timestamp: datetime", "energy_kwh: float"]),
-        "Forecast": (0.54, 0.35, ["PK id: int", "FK user_id/site_id", "horizon_hours: int", "values: JSON"]),
-        "AlertConfig": (0.04, 0.35, ["PK/FK user_id: int", "thresholds: JSON", "enabled: bool"]),
-        "Alert": (0.29, 0.35, ["PK id: int", "FK user_id: int", "type/status: enum", "timestamp: datetime"]),
-        "Recommendation": (0.29, 0.08, ["PK id: int", "FK user_id: int", "category: string", "status: enum"]),
-        "IngestionBatch": (0.78, 0.35, ["PK id: int", "FK meter_id: int", "rows: int", "status: enum"]),
+        "User": (0.03, 0.71, ["PK id: int", "email: string", "role: enum", "is_active: bool"]),
+        "Site": (0.28, 0.71, ["PK id: int", "FK owner_id: int", "name: string", "timezone: string"]),
+        "Meter": (0.53, 0.71, ["PK id: int", "FK site_id: int", "name: string", "status: enum"]),
+        "SmartMeterReading": (0.78, 0.71, ["PK id: int", "FK meter_id: int", "timestamp: datetime", "energy_kwh: float"]),
+        "AlertConfig": (0.03, 0.36, ["PK/FK user_id: int", "thresholds: JSON", "enabled: bool"]),
+        "Alert": (0.28, 0.36, ["PK id: int", "FK user_id: int", "type/status: enum", "timestamp: datetime"]),
+        "Forecast": (0.53, 0.36, ["PK id: int", "FK user_id/site_id", "horizon_hours: int", "values: JSON"]),
+        "IngestionBatch": (0.78, 0.36, ["PK id: int", "FK meter_id: int", "rows: int", "status: enum"]),
+        "Recommendation": (0.28, 0.03, ["PK id: int", "FK user_id: int", "category: string", "status: enum"]),
     }
     pos = {}
     for name, (x, y, attrs) in classes.items():
         w, h = 0.18, 0.19
         ax.add_patch(Rectangle((x, y), w, h, facecolor="white", edgecolor=NAVY, lw=1.2))
         ax.add_patch(Rectangle((x, y+h-0.055), w, 0.055, facecolor=LIGHT, edgecolor=NAVY, lw=1.0))
-        ax.text(x+w/2, y+h-0.027, name, ha="center", va="center", weight="bold", fontsize=8.5)
+        title_size = 7.6 if len(name) > 15 else 8.5
+        ax.text(x+w/2, y+h-0.027, name, ha="center", va="center", weight="bold", fontsize=title_size)
         ax.text(x+0.012, y+h-0.07, "\n".join(attrs), ha="left", va="top", fontsize=7.4, linespacing=1.25)
         pos[name] = (x, y, w, h)
-    relations = [
-        ("User","Site","1 owns","0..*"),("Site","Meter","1 contains","0..*"),("Meter","SmartMeterReading","1 records","0..*"),
-        ("Site","Forecast","1 has","0..*"),("User","AlertConfig","1 configures","0..1"),("User","Alert","1 receives","0..*"),
-        ("Alert","Recommendation","0..1 motivates","0..*"),("Meter","IngestionBatch","1 imports","0..*"),
-    ]
-    for a,b,ma,mb in relations:
-        xa,ya,wa,ha=pos[a]; xb,yb,wb,hb=pos[b]
-        p1=(xa+wa/2, ya+ha/2); p2=(xb+wb/2, yb+hb/2)
-        ax.plot([p1[0],p2[0]],[p1[1],p2[1]],color=GREY,lw=0.9,zorder=0)
-        ax.text(p1[0]+0.02*(p2[0]-p1[0]),p1[1]+0.02*(p2[1]-p1[1]),ma,fontsize=6.8,color=GREY)
-        ax.text(p2[0]-0.07*(p2[0]-p1[0]),p2[1]-0.07*(p2[1]-p1[1]),mb,fontsize=6.8,color=GREY)
+
+    def anchor(name, side):
+        x, y, w, h = pos[name]
+        return {
+            "left": (x, y + h / 2),
+            "right": (x + w, y + h / 2),
+            "top": (x + w / 2, y + h),
+            "bottom": (x + w / 2, y),
+        }[side]
+
+    def relation(a, b, side_a, side_b, label, mult_a, mult_b, via=(), label_at=None):
+        start = anchor(a, side_a)
+        end = anchor(b, side_b)
+        points = [start, *via, end]
+        ax.plot(
+            [point[0] for point in points],
+            [point[1] for point in points],
+            color=GREY,
+            lw=1.0,
+            zorder=0,
+        )
+        if label_at is None:
+            label_at = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
+        ax.text(
+            label_at[0],
+            label_at[1],
+            label,
+            ha="center",
+            va="center",
+            fontsize=6.6,
+            color=DARK,
+            bbox=dict(boxstyle="round,pad=0.12", fc="white", ec="none", alpha=0.96),
+            zorder=3,
+        )
+        def outside(point, side, distance=0.014):
+            offsets = {
+                "left": (-distance, 0),
+                "right": (distance, 0),
+                "top": (0, distance),
+                "bottom": (0, -distance),
+            }
+            dx, dy = offsets[side]
+            return point[0] + dx, point[1] + dy
+
+        for point, side, multiplicity in (
+            (start, side_a, mult_a),
+            (end, side_b, mult_b),
+        ):
+            x_text, y_text = outside(point, side)
+            ax.text(
+                x_text,
+                y_text,
+                multiplicity,
+                ha="center",
+                va="center",
+                fontsize=6.4,
+                color=GREY,
+                bbox=dict(fc="white", ec="none", pad=0.05),
+                zorder=3,
+            )
+
+    relation("User", "Site", "right", "left", "owns", "1", "0..*", label_at=(0.255, 0.825))
+    relation("Site", "Meter", "right", "left", "contains", "1", "0..*", label_at=(0.505, 0.825))
+    relation("Meter", "SmartMeterReading", "right", "left", "records", "1", "0..*", label_at=(0.755, 0.825))
+    relation("User", "AlertConfig", "bottom", "top", "configures", "1", "0..1", label_at=(0.075, 0.635))
+    relation(
+        "User", "Alert", "bottom", "top", "receives", "1", "0..*",
+        via=((0.12, 0.66), (0.37, 0.66)), label_at=(0.245, 0.66),
+    )
+    relation(
+        "Site", "Forecast", "bottom", "top", "has", "1", "0..*",
+        via=((0.37, 0.62), (0.62, 0.62)), label_at=(0.495, 0.62),
+    )
+    relation(
+        "Meter", "IngestionBatch", "bottom", "top", "imports", "1", "0..*",
+        via=((0.62, 0.60), (0.87, 0.60)), label_at=(0.745, 0.60),
+    )
+    relation("Alert", "Recommendation", "bottom", "top", "motivates", "0..1", "0..*", label_at=(0.39, 0.295))
     save(fig, DIA / "class_domain.pdf")
 
 

@@ -7,7 +7,7 @@ This file lists information that could not be established from the repository or
 - Official Master PFE cover template applicable to SDIA. The public Faculty of Sciences cover model found during the institutional search is for doctoral theses; its official logo and visual motif were adapted without claiming that its doctoral wording governs a Master PFE.
 - Supervisor laboratory affiliation, if required. Current faculty material supports the title `Pr.`, the name Ali Oubelkacem, and the Department of Computer Science affiliation.
 - Host organization, if the PFE was conducted with an external organization.
-- Final administrative confirmation of the scheduled defense date, currently entered as 9 September 2026 on the user's instruction.
+- Official defense date. The earlier tentative 9 September 2026 value was removed because no official evidence is preserved locally.
 - Jury members, grades, institutions, and roles.
 - Official FS-UMI rules for citation style, margins, font, line spacing, binding, cover wording, and front-matter order for this Master programme.
 - Exact institution-approved wording for the AI-tool usage declaration.
@@ -19,8 +19,7 @@ This file lists information that could not be established from the repository or
 - No successful frozen metric artifact was found for TimeMixer++.
 - The exploratory TSMixer work has no frozen successful metric artifact.
 - MultiCycleNet is represented by local experimental results; exact reproduction of a named published implementation is not claimed.
-- The new empirical interval-coverage results validate the frozen LCL checkpoints only. Site-specific serving-transform calibration, conformal recalibration, and Moroccan household transfer remain unvalidated.
-- The product's latest-window normalization has not been rerun through the frozen LCL cohort. End-to-end serving-transform MAE, interval coverage, and win rate therefore remain unknown.
+- The serving-normalization comparison validates the scaler and inverse-transform change on the exact frozen LCL cohort only. Site-specific calibration, conformal recalibration, time-zone transfer, and Moroccan household transfer remain unvalidated.
 - Code-coverage evidence was not found and is not claimed.
 
 ## Deployment and operational gaps
@@ -36,5 +35,5 @@ This file lists information that could not be established from the repository or
 3. Confirm the FS-UMI Master PFE cover and formatting rules.
 4. Approve the neutral wording of the DEPM methodological audit.
 5. Approve or replace the draft AI-tool declaration.
-6. Decide whether a serving-normalization re-evaluation and interval recalibration study must be completed before defense.
+6. Decide whether interval recalibration or a Moroccan pilot study must be completed before defense.
 7. Provide public-deployment evidence only if public deployment is intended to become a claimed result.

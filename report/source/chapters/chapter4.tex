@@ -30,7 +30,7 @@ Validation guides early stopping and architecture choice. The test region must n
 
 The LCL source field is named \texttt{energy(kWh/hh)}: each value is energy consumed during a half-hour interval, not an instantaneous power measurement. The preparation parses timestamps as UTC, converts them to timezone-naive UTC indices, aggregates duplicate half-hours by timestamp, and sums the two half-hour energy values into each hourly total. Consequently, an hourly target and its MAE are expressed in kWh for an hourly interval. The report does not reinterpret these values as kW. Daily targets are sums in kWh and require at least 22 finite hourly values.
 
-All 2013 households are reindexed to the same 8,760-position UTC calendar before the shared split is applied. This avoids a local-clock duplicate hour in autumn and a missing hour in spring: daylight-saving transitions do not create ambiguous positions in the research matrix. The product accepts timezone-aware site settings and normalizes stored timestamps through its ingestion contract, but equivalence with the LCL UTC preparation must still be tested end to end.
+All 2013 households are reindexed to the same 8,760-position UTC calendar before the shared split is applied. This avoids a local-clock duplicate hour in autumn and a missing hour in spring: daylight-saving transitions do not create ambiguous positions in the research matrix. The product accepts timezone-aware site settings and normalizes stored timestamps through its ingestion contract. The supplementary serving-normalization evaluation reuses the preserved calendar rows of the frozen LCL samples, so it isolates the scaler change without claiming that arbitrary site time zones are equivalent to the LCL preparation.
 
 \section{Train-only transformations}
 
@@ -45,7 +45,7 @@ The same $\mu_{\mathrm{train}}$ and $\sigma_{\mathrm{train}}$ transform validati
 
 The ECL benchmark uses per-client means and standard deviations learned from its training rows. The LCL training worker also stores one mean and standard deviation per household, calculated only from positions before the common training boundary. This includes each cold-start household's historical training segment: those values define its evaluation scale but are never used for gradient updates.
 
-EnergyAI serving does something different. For a new site, it calculates mean and standard deviation from the latest accepted 336-hour input window, normalizes that window, and inversely transforms outputs with those same rolling statistics. The frozen LCL cold-start metrics were not recomputed under this rolling transform. It is therefore an \emph{unvalidated train--serve preprocessing mismatch}, not a validated adaptation. The packaged checkpoint can be demonstrated as software, while its research MAE must not be presented as the expected error of the rolling-normalized product path.
+EnergyAI serving does something different. For a new site, it calculates mean and standard deviation from the latest accepted 336-hour input window, normalizes that window, and inversely transforms outputs with those same rolling statistics. A supplementary inference-only evaluation has now rerun the exact frozen LCL cold-start households, origins, targets, seasonal baselines, and checkpoints with this rolling transform and the production non-negative, ordered-quantile output handling. This closes the transform-specific evidence gap on the preserved London cohort. It does not convert the original research metrics into serving metrics, nor does it validate transfer to a new Moroccan site.
 
 \begin{table}[H]
 \centering
@@ -58,7 +58,7 @@ Context & Statistics used & Supported interpretation \\
 ECL benchmark & Per client, fitted on benchmark training rows & Valid for stored ECL benchmark rows only \\
 LCL known-household evaluation & Per household, fitted on that household's common training segment & Valid for future-time windows of known London households \\
 LCL cold-start evaluation & Per cold household, fitted on its historical pre-validation segment; no gradient use & Valid for London household transfer when historical scaling statistics are available \\
-EnergyAI serving & Per site, calculated from the latest accepted 336-hour window & Implemented and contract-tested; forecast efficacy under this transform is not established by the frozen LCL metrics \\
+EnergyAI serving & Per site, calculated from the latest accepted 336-hour window & Implemented and evaluated on the preserved frozen LCL cohort; new-site and Moroccan transfer remain unvalidated \\
 \bottomrule
 \end{tabularx}
 \end{table}

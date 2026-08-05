@@ -71,7 +71,7 @@ Notebook & Status & Interpretation \\
   \item \textbf{Research archive:} PatchTST, advanced PatchTST, iTransformer, CNN-BiLSTM, and multi-horizon checkpoints available at historical Git tags.
   \item \textbf{Benchmark evidence:} ECL and Low Carbon London leaderboards and their run metadata.
   \item \textbf{Candidates:} Global N-BEATS and MultiCycleNet-adapted experimental outputs.
-  \item \textbf{Packaged Product V1 checkpoints:} \texttt{global\_tft\_24h} and \texttt{global\_tft\_168h}; their frozen LCL metrics use a different normalization contract from serving.
+  \item \textbf{Packaged Product V1 checkpoints:} \texttt{global\_tft\_24h} and \texttt{global\_tft\_168h}; frozen research metrics and supplementary serving-normalization metrics are reported separately.
 \end{itemize}
 
 \section{Production hyperparameters and contracts}
@@ -96,7 +96,7 @@ Serving normalization & Latest-window 336-hour z-score & Latest-window 336-hour 
 \end{tabular}
 \end{table}
 
-The weekly manifest records hidden size 128, four attention heads, dropout 0.1, and 186 state-dict tensors. The original worker and strict checkpoint load confirm the same architecture for the two frozen runs. File compatibility does not establish metric equivalence under the different serving normalization.
+The weekly manifest records hidden size 128, four attention heads, dropout 0.1, and 186 state-dict tensors. The original worker and strict checkpoint load confirm the same architecture for the two frozen runs. Metric equivalence was not assumed from file compatibility: the rolling serving normalization was evaluated separately on the exact preserved cold-start samples.
 
 \section{Checkpoint reanalysis provenance}
 
@@ -119,8 +119,15 @@ Hourly values & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/h
 Hourly calendar & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/hourly_calendar.npy} & \breakcode{32ac697bf3890b924572fca92b029b9b64cce9957f693d5c3aa985fc375a4b41} \\
 Hourly scalers & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/hourly_scalers.npz} & \breakcode{401e2b889fd7f94fe4091c891e4a20c0ce1447c730f81d0be5a71eb53e88a16a} \\
 Reanalysis script & \breakcode{report/source/analyze_lcl_tft.py} & \breakcode{4bce1b95797f82fe2672e3b82d607599a0eca1ba06d99147564dd9129ac67cb4} \\
+Prepared metadata & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/prepared.json} & \breakcode{b7bec0bc69af3d9af6c5a9855fc4f6055b737fee31cc70e54ac98da2cd27aa1f} \\
+Cold assignments & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/cold_households.npy} & \breakcode{4edd0dbc7b9d89944a0649edaf21535585a276b81c086cec73248bd1dd015444} \\
+Household identities & \breakcode{models/lcl_global_forecasting/full_selected_v1/data/households.json} & \breakcode{5e83b3ab8dc62680e8cc51e63530cb96a4b7eada8909c89d0dc154cb6fbd7519} \\
+Serving-evaluation script & \breakcode{report/source/evaluate_lcl_serving_normalization.py} & \breakcode{ffdd74c33a7403e6f3636104efbaf44c558dea6cd5de6fc2204af39e8f81f7f7} \\
+Production preprocessing source & \breakcode{backend/app/services/product_forecast_service.py} & \breakcode{312baaf589c5314cdfb747c99002a6203d2f6d9358f46476a12cb8aa1147dae3} \\
 \bottomrule
 \end{longtable}
 
 The diagnostic manifest was generated on 1 August 2026 at repository commit \breakcode{1e67921624c7dd7bd1b1ef9b93fc00ddcb28e09f}. It records 11,871 windows from 500 households for 24 hours and 11,830 windows from 499 households for 168 hours. The script validates its recomputed macro MAE and exact household win counts against the frozen metrics before writing any report evidence.
+
+The serving-normalization manifest was generated on 1 August 2026 at repository commit \breakcode{f6679d4b5f759511dcd8bec26745bb894633f66a}, with an explicitly dirty working tree because the evidence script and report revision were not committed. It records the exact fixed origins, prepared-data hashes, checkpoint equality, execution environment, production preprocessing function, CPU-versus-GPU parity checks, per-household CSVs, and the research-versus-serving comparison. No experiment or production artifact was overwritten.
 \end{landscape}

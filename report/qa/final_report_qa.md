@@ -1,50 +1,80 @@
-# Final Report QA
+# Final Report QA — Targeted Finalization Pass
 
 ## Build identification
 
-- Report: `PFE_ZOUITNI_Salah_Eddine_draft.pdf`.
-- Language: professional academic English, with the required French résumé and retained French source correspondence where relevant.
-- Format: A4, 12 pt, one-sided PDF; 90 pages; 1,656,671 bytes.
-- SHA-256 of the verified source build: `68AF8C068C92AC85FD1445EFC3E1E08A670DBA3DCBB5D011E7F4DD71514119F9`.
-- Build date: 2026-08-01.
-- Compiler: MiKTeX pdfLaTeX with Biber bibliography processing.
+- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v1.pdf` (verified local deliverable; intentionally not versioned in Git).
+- Previous draft retained: `report/exports/PFE_ZOUITNI_Salah_Eddine_draft.pdf` was not overwritten.
+- Language: professional academic English, with the required French résumé.
+- Format: A4, 12 pt, one-sided PDF; 91 pages; 1,669,108 bytes.
+- SHA-256: `44394F66214A6805FDD28BB653B5EFF66835DA68F553034E924A081165E2599A`.
+- Build date: 1 August 2026.
+- Clean build: a fresh source-and-assets copy was compiled with MiKTeX pdfLaTeX, Biber, and the required stabilizing pdfLaTeX passes. The final figure correction was followed by two additional successful pdfLaTeX passes.
 
-## Completion checklist
+## Serving-normalization evaluation decision
 
-- Institutional cover adaptation, dedication placeholder, acknowledgements, English abstract, French résumé, keywords, contents, lists of figures/tables/acronyms, general introduction, seven chapters, conclusion, references, and Appendices A-D: complete.
-- Cover identity: official combined UMI/FSM logo and the blue-orange Faculty of Sciences motif; Department of Computer Science, Master SDIA wording, supervisor title, and the scheduled 9 September 2026 defense date are present.
-- Research questions and demonstrated contributions are stated explicitly in the general introduction.
-- Chapter 2 now contains a paper-level primary-source synthesis and covers recurrent, tree-based, convolutional, Transformer, global, normalization, probabilistic, leakage, drift, conformal, and privacy literature.
-- Chapter 5 now reports exact frozen day-ahead and week-ahead results, training configuration, hardware, elapsed times, cohort/window counts, inference timing scope, post-hoc checkpoint diagnostics, and selection caveats.
-- The central narrative includes the supervisor-supplied DEPM paper, its replication, the leakage audit, corrected historical variants, the forecasting pivot, completed and incomplete deep-model attempts, the ECL benchmark, the Low Carbon London cold-start study, and EnergyAI integration.
-- Active 24-hour and 168-hour frozen metrics were retained without alteration. Historical classification scores remain labelled diagnostic or invalidated rather than forecast evidence.
-- The research/serving normalization mismatch is stated consistently: frozen LCL evaluation uses per-household training-segment statistics, while product serving uses the latest accepted 336-hour window. The report does not transfer frozen MAE or coverage to the serving transform.
-- Incomplete TimePro, TimeMixer++, and TSMixer work is reported as incomplete and excluded from successful-comparison claims. Monthly forecasting remains experimental and outside Product V1.
-- Product routes, redirects, ownership boundary, six-service Compose architecture, 80 method-path operations across 74 unique OpenAPI paths, analytics PDF export, and the absence of a separate reports workspace are aligned with the audited source.
-- Bibliography: 26 cited primary or authoritative entries processed by Biber with no unresolved citations.
-- Evidence registries cover models, figures, commits, notebooks, artifact hashes, tests, requirements, OpenAPI inventory, and post-hoc TFT reanalysis.
-- Visual assets: 21 programmatic figures/diagrams plus five live application screenshots registered with source, method, date, and status.
-- Application screenshots: five 1280 × 720 captures from a non-administrative demonstration account. They cover Dashboard, Usage, ready 24-hour and 168-hour Global TFT forecasts, and an Actions view created by a labelled 0.500 kW push sample crossing a configured 0.400 kW threshold. No token, meter key, password, local path, or personal identifier is visible.
+The exact inference-only evaluation was possible from preserved local evidence. The original Low Carbon London CSV files were not needed and were not downloaded. No model was trained, fine-tuned, or replaced, and no research metric, checkpoint, or production artifact was overwritten.
 
-## Scientific evidence controls
+The following files under `models/lcl_global_forecasting/full_selected_v1/` supplied the required evidence:
 
-- Frozen 24-hour cold-start headline: macro MAE 0.184928 kWh per hourly interval, 26.48% below the seasonal-naive baseline, with 495/500 household wins.
-- Frozen 168-hour cold-start headline: macro MAE 0.197322 kWh per hourly interval, 20.77% below the seasonal-naive baseline, with 491/499 household wins.
-- The reanalysis script strictly loads the frozen checkpoints and aborts if recomputed macro MAE or exact win counts differ from the frozen results beyond the declared numerical tolerance.
-- Post-hoc empirical central-80% interval coverage is reported as 80.796% at 24 hours and 78.352% at 168 hours. These are frozen-cohort diagnostics, not claims of calibrated client-site coverage.
-- Checkpoint, raw-array, calendar-array, scaler, and reanalysis-script hashes are recorded in the reanalysis manifest and Appendix B.
-- Full-cohort batched research inference times are explicitly distinguished from request latency.
-- The dynamic-window worker's clock-derived randomness and cuDNN benchmark setting are disclosed; seed 2026 is not represented as bitwise reproducibility.
-- No code-coverage percentage is claimed because no coverage artifact was found.
+- `data/hourly_raw.npy`: exact hourly values for 2,500 households over 8,760 hourly positions;
+- `data/hourly_calendar.npy`: preserved calendar features for the same 8,760 positions;
+- `data/households.json`: ordered household identities;
+- `data/known_households.npy` and `data/cold_households.npy`: disjoint, complete known/cold-start assignments;
+- `data/prepared.json`: shared train, validation, and test boundaries at 6,132, 7,008, and 8,760;
+- the frozen 24-origin protocol recoverable from the preserved training worker;
+- `runs/global_tft/day_24h/best.pt` and `runs/global_tft/week_168h/best.pt`: frozen checkpoints whose hashes match the packaged backend checkpoints.
 
-## Software and deployment evidence
+These artifacts permit exact reconstruction of the 336-hour histories, future targets, fixed origins, cold-start cohort, calendar inputs, and seasonal-naive targets. There is therefore no missing-artifact blocker for this evaluation.
 
-- Frozen application audit: 96 backend tests passed with four expected SQLite skips; 100 passed and zero skipped on disposable PostgreSQL; frontend lint, type check, and production build passed; 107 Playwright tests passed, with one isolated WebKit reload interruption passing on rerun.
-- Docker was rechecked on 2026-08-01 after Docker Desktop started: PostgreSQL, backend, and frontend were healthy; alert, email, and avatar-cleanup workers were running.
-- The deployment claim remains local Compose only. No public URL, TLS termination, cloud deployment, external provider validation, or production-load evidence is asserted.
-- Nine high-severity npm findings remain documented as development-tool advisories; the production npm audit is recorded as clean.
+## Serving-normalization results
 
-## Compilation checks
+The new results use the exact production rolling-history rule implemented by `backend/app/services/product_forecast_service.py::ProductForecastService._predict_tft`: compute the mean and population standard deviation over the latest 336 accepted hourly values, clamp the standard deviation to at least `1e-6`, normalize the history, inverse-transform the quantiles, clamp predictions at zero, and sort q10/q50/q90 independently at every lead time. A vectorized evaluation implementation passed CPU production-method parity checks at both horizons within 0.001 kWh.
+
+| Metric | 24 h serving | 168 h serving |
+|---|---:|---:|
+| Evaluated households | 500 | 499 |
+| Evaluation windows | 11,871 | 11,830 |
+| Macro MAE (kWh) | 0.181945 | 0.194138 |
+| Median household MAE (kWh) | 0.142769 | 0.150560 |
+| p90 household MAE (kWh) | 0.362684 | 0.387758 |
+| Macro RMSE (kWh) | 0.322854 | 0.335025 |
+| Bias (kWh) | -0.061638 | -0.053130 |
+| Macro R² | 0.285221 | 0.244525 |
+| Global R² | 0.638839 | 0.581186 |
+| Seasonal-naive macro MAE (kWh) | 0.251540 | 0.249055 |
+| Households beating seasonal naive | 498/500 (99.60%) | 496/499 (99.40%) |
+| q10 pinball loss (kWh) | 0.029440 | 0.031123 |
+| q50 pinball loss (kWh) | 0.091103 | 0.096999 |
+| q90 pinball loss (kWh) | 0.061746 | 0.066166 |
+| Central-80% empirical coverage | 81.011% | 78.056% |
+| Mean interval width (kWh) | 0.571945 | 0.598749 |
+| Quantile-crossing rate | 0.000% | 0.000% |
+
+The report keeps these results clearly separated from the frozen research-normalization results. The verified research headlines remain unchanged at macro MAE 0.184928 with 495/500 wins for 24 h and macro MAE 0.197322 with 491/499 wins for 168 h.
+
+## Evaluation provenance
+
+- Execution Git commit: `f6679d4b5f759511dcd8bec26745bb894633f66a`; the manifest records that the working tree was dirty because the evaluation script and report revision were uncommitted.
+- Environment: Windows 11; Python 3.13.11; NumPy 2.2.6; PyTorch 2.6.0+cu124; CUDA 12.4; NVIDIA GeForce RTX 3070 Laptop GPU; float16 autocast disabled.
+- Evaluation script SHA-256: `ffdd74c33a7403e6f3636104efbaf44c558dea6cd5de6fc2204af39e8f81f7f7`.
+- Production preprocessing source SHA-256: `312baaf589c5314cdfb747c99002a6203d2f6d9358f46476a12cb8aa1147dae3`.
+- Frozen checkpoint SHA-256 values: 24 h `60fedcdee375dc0b2973e55b9f4ec752da69c2a7e390e1f951ed5cbb7bc5a04d`; 168 h `80af16b25af9b912019c6e40cfdc491e2cf5173e5743144596801e28df695f93`.
+- Prepared-data hashes, exact origins, CPU/GPU parity checks, inference timings, and output paths are recorded in `report/evidence/lcl_tft_serving_normalization_manifest.json`.
+- New evidence outputs: the manifest above, `lcl_tft_serving_normalization_comparison.csv`, `lcl_tft_serving_day_24h_households.csv`, and `lcl_tft_serving_week_168h_households.csv` in `report/evidence/`.
+
+## Targeted report corrections
+
+- Running headers now use one controlled chapter mark; overlapping Chapter 5 and Chapter 6 headers and duplicated list/reference headings are removed.
+- The class diagram was re-laid out so relationship names and multiplicities occupy whitespace rather than boxes or attributes.
+- URL-style line breaking is restricted to meaningful separators, preventing long notebook, tag, route, CSV, and registry names from breaking character by character.
+- “An Recurrent Neural Network” was corrected to “A recurrent neural network.”
+- Model-name capitalization was checked and normalized in the touched text.
+- The unsupported 9 September 2026 date was removed. The defense date is consistently pending official confirmation; jury information remains unresolved.
+- The dedication page is excluded from this supervisor-review build because no dedication text was supplied.
+- The public-deployment section remains explicitly incomplete: there is no public URL, ingress, TLS termination, or verified cloud deployment.
+- The serving-normalization evidence and comparison table were added without changing the frozen research metrics.
+
+## Compilation and textual QA
 
 - Fatal LaTeX errors: 0.
 - Undefined references: 0.
@@ -52,34 +82,60 @@
 - Bibliography rerun warnings: 0.
 - Overfull boxes: 0.
 - Duplicate PDF destinations: 0.
-- Appendix numbering: A-D, with corresponding table and section numbers.
-- Search for unintended `TODO`, `TBD`, local Windows paths, `file://`, malformed cross-references, and unsupported metrics: no unintended matches.
-- Administrative placeholders: exactly three approved red `TO BE CONFIRMED` fields remain, on physical pages 1, 2, and 90.
-- pdfTeX reports three ignored glue-shrink diagnostics while splitting dense longtables. Targeted page inspection confirms that the affected tables are fully visible, bounded, and readable.
+- Informational underfull-box warnings: 93; page inspection found no clipping or objectionable spacing.
+- Ignored glue-shrink diagnostics from dense tables: 4; all affected tables remain bounded and readable.
+- Search results: `TODO` 0; `TBD` 0; malformed `??` references 0; duplicated “Contents Contents” 0; duplicated “References References” 0; “An Recurrent” 0; local Windows/Unix absolute paths 0; repository placeholders 0; `9 September 2026` 0.
+- `TO BE CONFIRMED`: exactly 3 intentional administrative markers.
 
-## Visual inspection
+## Visual QA
 
-All 90 pages were rendered at 110 dpi under `report/qa/rendered_verified_20260801` and inspected in eight numbered contact sheets. Targeted original-resolution checks covered the cover, both abstracts, all chapter openings, benchmark and traceability tables, the rotated full-hash table, diagrams, screenshots, references, Docker instructions, and AI-tool declaration.
+All 91 pages were rendered at 110 dpi and inspected in ten numbered contact sheets. Original-resolution or higher-resolution checks covered the cover, chapter openings, Chapter 5 research/serving tables, Chapter 5 and 6 running headers, application screenshots, the class diagram, the layered architecture, the rotated full-hash table, references, Docker instructions, and the AI-tool declaration. A persistence-layer text collision found during the first high-resolution pass was corrected, rebuilt, and re-inspected at 160 dpi.
 
-Verified conditions:
+Final verified conditions:
 
 - no accidental blank pages;
-- no cropped text, tables, captions, figures, or screenshots;
+- no overlapping or duplicated running headers;
+- no cropped or clipped text, figures, tables, captions, or screenshots;
+- no relationship labels or multiplicities overlapping class boxes;
 - no content outside page margins;
-- no distorted diagrams or application captures;
-- no broken, loading, or administrative application state in the five report screenshots;
-- readable grayscale-compatible academic figures;
-- controlled title wrapping and consistent headers/page numbers;
-- no duplicated captions or orphaned chapter headings.
+- no broken references or citations;
+- no inconsistent defense-date claim;
+- long technical identifiers break only at meaningful separators;
+- administrative placeholders are visible and confined to the intended fields.
 
-## Remaining approved placeholders and decisions
+## Remaining administrative placeholders
 
-- Personal dedication.
-- Jury composition.
-- Exact institution-approved AI-tool declaration.
-- Final administrative confirmation of the scheduled 9 September 2026 defense date.
-- Confirmation that the Faculty's public doctoral cover model may be adapted for this Master PFE, or replacement with a programme-supplied Master template.
+1. Official defense date.
+2. Jury names, grades, institutions, and roles.
+3. Exact Faculty/Master-approved AI-tool declaration.
 
-## Final status
+The dedication is not a placeholder in this draft; it has been removed. The report is technically ready for supervisor review but is not an institutionally final submission until the three items above are supplied or confirmed.
 
-The draft is technically complete, reproducible, evidence-backed, and ready for supervisor review. It is not yet an institutionally final submission because the three approved placeholders, Master-specific formatting confirmation, and defense-date confirmation remain administrative dependencies.
+## Exact files modified or generated in this pass
+
+- `report/source/evaluate_lcl_serving_normalization.py`
+- `report/evidence/lcl_tft_serving_normalization_manifest.json`
+- `report/evidence/lcl_tft_serving_normalization_comparison.csv`
+- `report/evidence/lcl_tft_serving_day_24h_households.csv`
+- `report/evidence/lcl_tft_serving_week_168h_households.csv`
+- `report/source/main.tex`
+- `report/source/config/preamble.tex`
+- `report/source/frontmatter/cover.tex`
+- `report/source/chapters/general_introduction.tex`
+- `report/source/chapters/chapter1.tex`
+- `report/source/chapters/chapter2.tex`
+- `report/source/chapters/chapter4.tex`
+- `report/source/chapters/chapter5.tex`
+- `report/source/chapters/chapter6.tex`
+- `report/source/chapters/chapter7.tex`
+- `report/source/chapters/general_conclusion.tex`
+- `report/source/appendices/appendix_a_traceability.tex`
+- `report/source/appendices/appendix_b_research_assets.tex`
+- `report/source/generate_figures.py`
+- `report/assets/diagrams/class_domain.pdf`
+- `report/assets/figures/energyai_layered_architecture.pdf`
+- `report/qa/missing_information.md`
+- `report/qa/final_report_qa.md`
+- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v1.pdf` (local deliverable; excluded from Git)
+
+No commit, push, checkpoint replacement, model training, or external dataset download was performed.
