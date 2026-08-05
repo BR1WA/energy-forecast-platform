@@ -8,8 +8,8 @@ import React, {
   useCallback,
   type ReactNode,
 } from 'react';
-import type { User, LoginPayload, RegisterPayload } from '@/types';
-import { authApi, setTokens, clearTokens, getAccessToken } from '@/lib/api';
+import type { User, LoginPayload, RegisterPayload, RegistrationResponse } from '@/types';
+import { authApi, setTokens, clearTokens } from '@/lib/api';
 
 // ============================================================
 // Auth Context Types
@@ -19,7 +19,8 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (payload: LoginPayload) => Promise<User>;
-  register: (payload: RegisterPayload) => Promise<User>;
+  loginWithGoogle: (credential: string, state: string) => Promise<User>;
+  register: (payload: RegisterPayload) => Promise<RegistrationResponse>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -35,33 +36,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check existing session on mount
   useEffect(() => {
-    const token = getAccessToken();
-    if (token) {
-      authApi
-        .getMe()
+    authApi
+        .refresh()
+        .then((session) => {
+          setTokens(session.access_token);
+          return authApi.getMe();
+        })
         .then((userData) => setUser(userData))
         .catch(() => {
           clearTokens();
           setUser(null);
         })
         .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
   }, []);
 
   const login = useCallback(async (payload: LoginPayload) => {
     const response = await authApi.login(payload);
-    setTokens(response.access_token, response.refresh_token);
+    setTokens(response.access_token);
+    setUser(response.user);
+    return response.user;
+  }, []);
+
+  const loginWithGoogle = useCallback(async (credential: string, state: string) => {
+    const response = await authApi.googleLogin(credential, state);
+    setTokens(response.access_token);
     setUser(response.user);
     return response.user;
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const response = await authApi.register(payload);
-    setTokens(response.access_token, response.refresh_token);
-    setUser(response.user);
-    return response.user;
+    setUser(null);
+    return response;
   }, []);
 
   const logout = useCallback(async () => {
@@ -71,8 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Failed to revoke the server session', err);
     } finally {
       clearTokens();
-      setUser(null);
-      window.location.href = '/login';
+      // Start the hard navigation before React can render the anonymous guard;
+      // otherwise WebKit can race the guard's `/` redirect against `/login`.
+      window.location.replace('/login');
     }
   }, []);
 
@@ -92,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
         register,
         logout,
         refreshUser,

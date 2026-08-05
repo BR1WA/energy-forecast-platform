@@ -3,6 +3,7 @@ Application configuration — environment variables and settings.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from datetime import date
 import warnings
 
 
@@ -64,6 +65,100 @@ class Settings(BaseSettings):
     # Alert worker
     ALERT_WORKER_INTERVAL_SECONDS: int = 60
 
+    # Product V1 capabilities. New integrations stay invisible until an operator
+    # explicitly enables them and supplies their complete configuration.
+    FORECAST_168H_ENABLED: bool = False
+    EMAIL_DELIVERY_ENABLED: bool = False
+    GOOGLE_AUTH_ENABLED: bool = False
+
+    # Product V1 integration contract. Delivery and identity services are
+    # implemented in later gates, but G0 validates configuration atomically now.
+    PUBLIC_FRONTEND_URL: str = ""
+    EMAIL_FROM_ADDRESS: str = ""
+    EMAIL_FROM_NAME: str = "EnergyForecast"
+    EMAIL_REPLY_TO: str = ""
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_TIMEOUT_SECONDS: int = 20
+    EMAIL_WORKER_POLL_SECONDS: int = 30
+    EMAIL_LEASE_SECONDS: int = 120
+    EMAIL_RETRY_BASE_SECONDS: int = 60
+    EMAIL_MAX_ATTEMPTS: int = 5
+    AVATAR_STORAGE_DIR: str = "static/avatars"
+    AVATAR_MAX_BYTES: int = 2 * 1024 * 1024
+    AVATAR_MAX_DIMENSION: int = 2048
+    AVATAR_CLEANUP_POLL_SECONDS: int = 60
+    AVATAR_CLEANUP_MAX_ATTEMPTS: int = 8
+    AVATAR_CLEANUP_RETRY_SECONDS: int = 60
+    REFRESH_COOKIE_DOMAIN: str = ""
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CHALLENGE_EXPIRE_MINUTES: int = 10
+
+    # Public policy identity. These may be empty only in local DEBUG mode;
+    # deployed environments must identify the legal owner and contact routes.
+    LEGAL_OWNER_NAME: str = ""
+    LEGAL_CONTACT_EMAIL: str = ""
+    SUPPORT_EMAIL: str = ""
+    LEGAL_EFFECTIVE_DATE: str = ""
+
+    def legal_configuration_errors(self) -> list[str]:
+        values = {
+            "LEGAL_OWNER_NAME": self.LEGAL_OWNER_NAME,
+            "LEGAL_CONTACT_EMAIL": self.LEGAL_CONTACT_EMAIL,
+            "SUPPORT_EMAIL": self.SUPPORT_EMAIL,
+            "LEGAL_EFFECTIVE_DATE": self.LEGAL_EFFECTIVE_DATE,
+        }
+        errors = [name for name, value in values.items() if not value.strip()]
+        for name, value in (
+            ("LEGAL_CONTACT_EMAIL", self.LEGAL_CONTACT_EMAIL),
+            ("SUPPORT_EMAIL", self.SUPPORT_EMAIL),
+        ):
+            if value and ("@" not in value or value.startswith("@") or value.endswith("@")):
+                errors.append(name)
+        if self.LEGAL_EFFECTIVE_DATE:
+            try:
+                date.fromisoformat(self.LEGAL_EFFECTIVE_DATE)
+            except ValueError:
+                errors.append("LEGAL_EFFECTIVE_DATE")
+        return list(dict.fromkeys(errors))
+
+    def validate_enabled_integrations(self) -> None:
+        """Reject partially configured capabilities without exposing secrets."""
+        missing: dict[str, list[str]] = {}
+        if self.EMAIL_DELIVERY_ENABLED:
+            required = {
+                "PUBLIC_FRONTEND_URL": self.PUBLIC_FRONTEND_URL,
+                "EMAIL_FROM_ADDRESS": self.EMAIL_FROM_ADDRESS,
+                "SMTP_HOST": self.SMTP_HOST,
+                "SMTP_USERNAME": self.SMTP_USERNAME,
+                "SMTP_PASSWORD": self.SMTP_PASSWORD,
+            }
+            absent = [name for name, value in required.items() if not value.strip()]
+            if absent:
+                missing["email"] = absent
+        if self.GOOGLE_AUTH_ENABLED:
+            required = {
+                "PUBLIC_FRONTEND_URL": self.PUBLIC_FRONTEND_URL,
+                "GOOGLE_CLIENT_ID": self.GOOGLE_CLIENT_ID,
+                "GOOGLE_CLIENT_SECRET": self.GOOGLE_CLIENT_SECRET,
+            }
+            absent = [name for name, value in required.items() if not value.strip()]
+            if absent:
+                missing["google"] = absent
+        if missing:
+            summary = "; ".join(
+                f"{integration}: {', '.join(names)}"
+                for integration, names in missing.items()
+            )
+            raise RuntimeError(
+                "Refusing to start: enabled Product V1 integration configuration "
+                f"is incomplete ({summary})."
+            )
+
     def validate_secrets(self) -> None:
         """Fail fast on insecure secrets outside of local development.
 
@@ -71,6 +166,13 @@ class Settings(BaseSettings):
         frictionless. When DEBUG is False (any deployed/non-dev run) the
         presence of a placeholder/insecure secret is fatal. See audit C3.
         """
+        self.validate_enabled_integrations()
+        legal_errors = self.legal_configuration_errors()
+        if legal_errors and not self.DEBUG:
+            raise RuntimeError(
+                "Refusing to start: public legal configuration is missing or invalid ("
+                f"{', '.join(legal_errors)})."
+            )
         insecure: list[str] = []
 
         if _looks_insecure(

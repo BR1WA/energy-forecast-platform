@@ -75,6 +75,7 @@ class TestRecommendationsApi(unittest.TestCase):
         listed = client.get("/api/v1/recommendations", headers=self.headers)
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(len(listed.json()), 1)
+        self.assertIsNotNone(listed.json()[0]["alert_id"])
         recommendation_id = listed.json()[0]["id"]
 
         denied = client.patch(

@@ -1,25 +1,41 @@
-"""Product forecast API: one site, one primary meter, one 24-hour contract."""
+"""Product forecast API for fixed 24-hour and gated 168-hour capabilities."""
 from __future__ import annotations
 
-from datetime import timedelta
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Forecast, User
-from app.schemas import ForecastReadiness, ProductForecastHistoryItem, ProductForecastResponse
+from app.schemas import (
+    ForecastCapabilitiesResponse,
+    ForecastDemoHistoryResponse,
+    ForecastReadiness,
+    ForecastRunRequest,
+    ProductForecastHistoryItem,
+    ProductForecastResponse,
+)
 from app.services.auth_service import get_current_user
+from app.services.audit_service import record_audit_event
+from app.services.forecast_demo_service import forecast_demo_service
 from app.services.product_forecast_service import (
-    FALLBACK_NAME,
-    MODEL_NAME,
+    LOOKBACK_HOURS,
+    PRODUCT_MODEL_NAMES,
+    ForecastCapabilityError,
     ForecastInputError,
     product_forecast_service,
 )
 
 
 router = APIRouter(prefix="/api/v1/forecast", tags=["Forecast"])
-PRODUCT_MODELS = (MODEL_NAME, FALLBACK_NAME)
+PRODUCT_MODELS = PRODUCT_MODEL_NAMES
+
+
+def _capability_error(exc: ForecastCapabilityError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": str(exc)},
+    )
 
 
 def _serialize(forecast: Forecast) -> dict:
@@ -28,8 +44,6 @@ def _serialize(forecast: Forecast) -> dict:
     rows = forecast.predictions or []
     points = []
     if origin:
-        from datetime import datetime
-
         parsed_origin = datetime.fromisoformat(origin)
         for index, row in enumerate(rows):
             points.append(
@@ -64,44 +78,82 @@ def _serialize(forecast: Forecast) -> dict:
     }
 
 
+@router.get("/capabilities", response_model=ForecastCapabilitiesResponse)
+def get_capabilities(current_user: User = Depends(get_current_user)):
+    del current_user
+    return product_forecast_service.capabilities()
+
+
 @router.get("/readiness", response_model=ForecastReadiness)
 def get_readiness(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return product_forecast_service.readiness(db, current_user.id)
-
-
-@router.post("/run", response_model=ProductForecastResponse, status_code=status.HTTP_201_CREATED)
-def run_forecast(
+    horizon_hours: int = Query(24),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     try:
-        result = product_forecast_service.generate(db, current_user.id)
+        return product_forecast_service.readiness(db, current_user.id, horizon_hours)
+    except ForecastCapabilityError as exc:
+        raise _capability_error(exc) from exc
+
+
+@router.post("/prepare-demo-history", response_model=ForecastDemoHistoryResponse)
+def prepare_demo_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = forecast_demo_service.prepare_history(db, current_user.id)
+    record_audit_event(
+        db,
+        "forecast.demo_history_prepared",
+        actor_user_id=current_user.id,
+        target=f"meter:{result['meter_id']}",
+        metadata={
+            "accepted_rows": result["accepted_rows"],
+            "duplicate_rows": result["duplicate_rows"],
+            "coverage_percent": result["coverage_percent"],
+        },
+    )
+    db.commit()
+    return result
+
+
+@router.post("/run", response_model=ProductForecastResponse, status_code=status.HTTP_201_CREATED)
+def run_forecast(
+    data: ForecastRunRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    horizon_hours = data.horizon_hours if data is not None else 24
+    try:
+        result = product_forecast_service.generate(db, current_user.id, horizon_hours)
+    except ForecastCapabilityError as exc:
+        raise _capability_error(exc) from exc
     except ForecastInputError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "FORECAST_INPUT_NOT_READY", "message": str(exc)},
+        ) from exc
 
     origin = result["origin"]
     forecast = Forecast(
         user_id=current_user.id,
         site_id=result["site"].id,
         model_name=result["model_name"],
-        horizon=24,
+        horizon=horizon_hours,
         input_source="meter",
-        input_start=origin - timedelta(hours=336),
+        input_start=origin - timedelta(hours=LOOKBACK_HOURS),
         input_end=origin,
         predictions=result["prediction_rows"],
         confidence_method=result["confidence_method"],
         input_snapshot={
-            "product_contract": "one_site_primary_meter_24h_v1",
+            "product_contract": f"one_site_primary_meter_{horizon_hours}h_v1",
             "model_version": result["model_version"],
             "method": result["method"],
             "fallback_reason": result["fallback_reason"],
             "timezone": result["site"].timezone,
             "meter_id": result["meter"].id,
             "forecast_origin": origin.isoformat(),
-            "forecast_end": (origin + timedelta(hours=24)).isoformat(),
+            "forecast_end": (origin + timedelta(hours=horizon_hours)).isoformat(),
             "coverage_percent": result["coverage_percent"],
             "observed_hours": result["observed_hours"],
             "maximum_gap_hours": result["maximum_gap_hours"],
@@ -117,14 +169,29 @@ def run_forecast(
     return _serialize(forecast)
 
 
+def _apply_horizon_filter(query, horizon_hours: int | None):
+    if horizon_hours is not None:
+        query = query.filter(Forecast.horizon == horizon_hours)
+    return query
+
+
 @router.get("/latest", response_model=ProductForecastResponse | None)
 def get_latest_forecast(
+    horizon_hours: int | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if horizon_hours is not None:
+        try:
+            product_forecast_service.require_enabled(horizon_hours)
+        except ForecastCapabilityError as exc:
+            raise _capability_error(exc) from exc
+    query = db.query(Forecast).filter(
+        Forecast.user_id == current_user.id,
+        Forecast.model_name.in_(PRODUCT_MODELS),
+    )
     forecast = (
-        db.query(Forecast)
-        .filter(Forecast.user_id == current_user.id, Forecast.model_name.in_(PRODUCT_MODELS))
+        _apply_horizon_filter(query, horizon_hours)
         .order_by(Forecast.created_at.desc(), Forecast.id.desc())
         .first()
     )
@@ -133,12 +200,21 @@ def get_latest_forecast(
 
 @router.get("/history", response_model=list[ProductForecastHistoryItem])
 def get_forecast_history(
+    horizon_hours: int | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if horizon_hours is not None:
+        try:
+            product_forecast_service.require_enabled(horizon_hours)
+        except ForecastCapabilityError as exc:
+            raise _capability_error(exc) from exc
+    query = db.query(Forecast).filter(
+        Forecast.user_id == current_user.id,
+        Forecast.model_name.in_(PRODUCT_MODELS),
+    )
     forecasts = (
-        db.query(Forecast)
-        .filter(Forecast.user_id == current_user.id, Forecast.model_name.in_(PRODUCT_MODELS))
+        _apply_horizon_filter(query, horizon_hours)
         .order_by(Forecast.created_at.desc(), Forecast.id.desc())
         .limit(20)
         .all()
@@ -148,6 +224,7 @@ def get_forecast_history(
             "id": forecast.id,
             "model_name": forecast.model_name,
             "method": (forecast.input_snapshot or {}).get("method", "unknown"),
+            "horizon_hours": forecast.horizon or 24,
             "forecast_start": (forecast.input_snapshot or {}).get("forecast_origin"),
             "created_at": forecast.created_at,
         }

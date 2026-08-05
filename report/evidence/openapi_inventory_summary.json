@@ -1,0 +1,9 @@
+{
+  "evidence_date": "2026-08-01",
+  "git_commit": "1e67921624c7dd7bd1b1ef9b93fc00ddcb28e09f",
+  "application": "backend/app/main.py",
+  "extraction": "Import app, generate app.openapi(), count unique paths and HTTP method-path operations.",
+  "unique_paths": 74,
+  "method_path_operations": 80,
+  "includes_root_health_operations": true
+}

@@ -3,7 +3,7 @@ SQLAlchemy ORM models for the Energy Forecast platform.
 """
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, JSON, func, UniqueConstraint, Index, text
+    ForeignKey, JSON, func, UniqueConstraint, Index, CheckConstraint, text
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -14,7 +14,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)
     full_name = Column(String(100), nullable=True)
     role = Column(String(20), default="user", nullable=False)  # admin, user
     is_active = Column(Boolean, default=True)
@@ -25,6 +25,7 @@ class User(Base):
     is_setup_complete = Column(Boolean, default=False, nullable=False)
     preferences = Column(JSON, nullable=True, default=dict)
     data_mode = Column(String(20), default="SIMULATION", nullable=False) # LIVE, HISTORICAL, SIMULATION, TRAINING, DEMO
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     forecasts = relationship("Forecast", back_populates="user", cascade="all, delete-orphan")
@@ -32,6 +33,8 @@ class User(Base):
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
     recommendations = relationship("Recommendation", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    action_tokens = relationship("AccountActionToken", back_populates="user", cascade="all, delete-orphan")
+    identities = relationship("AuthIdentity", back_populates="user", cascade="all, delete-orphan")
     energy_budget = relationship("EnergyBudget", back_populates="user", uselist=False, cascade="all, delete-orphan")
     sites = relationship("Site", back_populates="user", cascade="all, delete-orphan")
 
@@ -48,6 +51,116 @@ class RefreshToken(Base):
 
     # Relationships
     user = relationship("User", back_populates="refresh_tokens")
+
+
+class AccountActionToken(Base):
+    __tablename__ = "account_action_tokens"
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('verify_email', 'reset_password')",
+            name="ck_account_action_tokens_purpose",
+        ),
+        Index("ix_action_tokens_user_purpose", "user_id", "purpose"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    purpose = Column(String(40), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    user = relationship("User", back_populates="action_tokens")
+
+
+class AuthIdentity(Base):
+    __tablename__ = "auth_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "subject", name="uq_auth_identity_provider_subject"),
+        UniqueConstraint("user_id", "provider", name="uq_auth_identity_user_provider"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider = Column(String(40), nullable=False)
+    subject = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    user = relationship("User", back_populates="identities")
+
+
+class OAuthChallenge(Base):
+    __tablename__ = "oauth_challenges"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('login', 'link', 'delete_account')",
+            name="ck_oauth_challenges_action",
+        ),
+        Index("ix_oauth_challenges_expiry", "expires_at", "used_at"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    action = Column(String(20), nullable=False)
+    state_hash = Column(String(64), unique=True, nullable=False, index=True)
+    nonce_hash = Column(String(64), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class EmailOutbox(Base):
+    __tablename__ = "email_outbox"
+    __table_args__ = (
+        UniqueConstraint("dedup_key", name="uq_email_outbox_dedup_key"),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'sent', 'retry', 'dead')",
+            name="ck_email_outbox_status",
+        ),
+        Index("ix_email_outbox_due", "status", "next_attempt_at", "lease_expires_at"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    recipient = Column(String(255), nullable=False)
+    template = Column(String(80), nullable=False)
+    template_version = Column(String(20), nullable=False, default="v1")
+    payload = Column(JSON, nullable=False, default=dict)
+    dedup_key = Column(String(255), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    attempts = Column(Integer, nullable=False, default=0)
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    lease_owner = Column(String(64), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    provider_message_id = Column(String(255), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class AvatarCleanupJob(Base):
+    __tablename__ = "avatar_cleanup_jobs"
+    __table_args__ = (
+        UniqueConstraint("object_key", name="uq_avatar_cleanup_jobs_object_key"),
+        CheckConstraint(
+            "status IN ('pending', 'retry', 'dead')",
+            name="ck_avatar_cleanup_jobs_status",
+        ),
+        Index("ix_avatar_cleanup_jobs_due", "status", "next_attempt_at"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    object_key = Column(String(255), nullable=False)
+    reason = Column(String(40), nullable=False)
+    status = Column(String(20), nullable=False, default="pending", server_default="pending")
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_error = Column(String(200), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class Site(Base):
@@ -168,6 +281,9 @@ class AuditEvent(Base):
 
 class Forecast(Base):
     __tablename__ = "forecasts"
+    __table_args__ = (
+        Index("ix_forecasts_user_created", "user_id", "created_at", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -198,7 +314,7 @@ class AlertConfig(Base):
     threshold_kw = Column(Float, nullable=False, default=3.0)
     cooldown_minutes = Column(Integer, nullable=False, default=60)
     missing_data_minutes = Column(Integer, nullable=False, default=60)
-    email_enabled = Column(Boolean, default=True)
+    email_enabled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -208,6 +324,9 @@ class AlertConfig(Base):
 
 class Alert(Base):
     __tablename__ = "alerts"
+    __table_args__ = (
+        Index("ix_alerts_user_created", "user_id", "created_at", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)

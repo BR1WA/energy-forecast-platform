@@ -1,0 +1,74 @@
+{
+  "artifact_contract_version": 1,
+  "name": "global_tft_168h",
+  "display_name": "Global TFT 168-hour",
+  "version": "1.0.0",
+  "checkpoint_file": "model.pt",
+  "checkpoint_sha256": "80af16b25af9b912019c6e40cfdc491e2cf5173e5743144596801e28df695f93",
+  "checkpoint_size_bytes": 5600105,
+  "task": "week_168h",
+  "input_unit": "kWh per hour",
+  "output_unit": "kWh per hour",
+  "lookback_hours": 336,
+  "horizon_hours": 168,
+  "normalization": "per-site rolling-window z-score",
+  "quantiles": [0.1, 0.5, 0.9],
+  "architecture": {
+    "class": "app.ml.global_tft.GlobalTFT",
+    "hidden_size": 128,
+    "attention_heads": 4,
+    "dropout": 0.1,
+    "state_dict_tensors": 186,
+    "trainable_parameters": 1386262
+  },
+  "calendar_features": [
+    "hour_sin",
+    "hour_cos",
+    "weekday_sin",
+    "weekday_cos",
+    "month_sin",
+    "month_cos",
+    "is_workday",
+    "is_holiday",
+    "next_day_is_workday"
+  ],
+  "data_gates": {
+    "minimum_coverage_percent": 95,
+    "maximum_consecutive_gap_hours": 3,
+    "finite_values_required": true
+  },
+  "training": {
+    "dataset": "Low Carbon London smart-meter households",
+    "experiment": "full_selected_v1",
+    "seed": 2026,
+    "best_validation_loss": 0.14855933988044775,
+    "cold_start_households": 499,
+    "cold_start_evaluation_windows": 11830,
+    "cold_start_macro_mae_kwh": 0.19732180193745427,
+    "cold_start_macro_rmse_kwh": 0.34108992557105294,
+    "cold_start_macro_smape_percent": 40.87791009932431,
+    "cold_start_macro_bias_kwh": -0.07608017408627438,
+    "cold_start_seasonal_naive_macro_mae_kwh": 0.24905500402288783,
+    "cold_start_mae_improvement_percent": 20.771797895969737,
+    "cold_start_households_beating_seasonal_percent": 98.39679358717434,
+    "cold_start_p90_household_mae_kwh": 0.3898718906768972
+  },
+  "promotion_checks": {
+    "strict_state_dict_load": true,
+    "cpu_output_shape": [1, 168, 3],
+    "finite_output": true,
+    "smoke_absolute_tolerance": 0.00001,
+    "smoke_reference_indices": [0, 83, 167],
+    "smoke_reference_points": [
+      [0.45621, 0.799188, 1.374814],
+      [-0.524265, 0.560203, 1.250402],
+      [-0.965335, -0.108819, 1.116019]
+    ]
+  },
+  "limitations": [
+    "Validation metrics describe the London research cohort and are not a guarantee for a client site.",
+    "A new site is normalized from its latest 336-hour window rather than a training-period household scaler.",
+    "Quantile outputs are native model estimates and have not been recalibrated for each client site.",
+    "Week-ahead uncertainty generally grows with the forecast horizon and must be displayed with the full method and provenance."
+  ]
+}

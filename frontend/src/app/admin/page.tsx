@@ -40,7 +40,7 @@ export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [health, setHealth] = useState<SystemHealth | null>(null);
-  const [model, setModel] = useState<ModelReadiness | null>(null);
+  const [models, setModels] = useState<ModelReadiness[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<AdminUser | null>(null);
@@ -53,11 +53,11 @@ export default function AdminPage() {
       const [nextUsers, nextHealth, nextModel] = await Promise.all([
         adminApi.getUsers(),
         adminApi.getHealth(),
-        adminApi.getModelReadiness(),
+        adminApi.getAllModelReadiness(),
       ]);
       setUsers(nextUsers);
       setHealth(nextHealth);
-      setModel(nextModel);
+      setModels(nextModel.artifacts);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to load administration data.');
     } finally {
@@ -140,7 +140,7 @@ export default function AdminPage() {
           </TabsContent>
           <TabsContent value="system" className="mt-5">
             <div className="grid gap-6 border-y border-white/10 py-5 lg:grid-cols-2">
-              <div><h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Cpu className="h-4 w-4 text-cyan-400" />Packaged forecast artifact</h2><dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-500">Artifact</dt><dd className="text-slate-200">{model?.display_name || health?.model_name || 'Unavailable'}</dd></div><div><dt className="text-slate-500">Version</dt><dd className="text-slate-200">{model?.version || health?.model_version || 'Unknown'}</dd></div><div><dt className="text-slate-500">Warm-up</dt><dd className={model?.warmed ? 'text-emerald-300' : 'text-red-300'}>{model?.warmed ? 'Passed' : 'Failed'}</dd></div><div><dt className="text-slate-500">SHA-256</dt><dd className="break-all font-mono text-xs text-slate-300">{model?.artifact_fingerprint || 'Unavailable'}</dd></div>{model?.error ? <div><dt className="text-slate-500">Error</dt><dd className="text-red-300">{model.error}</dd></div> : null}</dl></div>
+              <div><h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Cpu className="h-4 w-4 text-cyan-400" />Packaged forecast artifacts</h2><div className="mt-4 space-y-5">{models.map((model) => <dl key={model.horizon_hours} className="space-y-2 border-l-2 border-white/10 pl-3 text-sm"><div><dt className="text-slate-500">Capability</dt><dd className="text-slate-200">{model.display_name} · {model.horizon_hours}h</dd></div><div><dt className="text-slate-500">State</dt><dd className={model.warmed ? 'text-emerald-300' : model.enabled ? 'text-red-300' : 'text-slate-400'}>{model.warmed ? 'Warm-up passed' : model.enabled ? 'Warm-up failed' : 'Disabled'}</dd></div><div><dt className="text-slate-500">Version / SHA-256</dt><dd className="break-all font-mono text-xs text-slate-300">{model.version} · {model.artifact_fingerprint || 'Unavailable'}</dd></div>{model.error ? <div><dt className="text-slate-500">Detail</dt><dd className={model.enabled ? 'text-red-300' : 'text-slate-400'}>{model.error}</dd></div> : null}</dl>)}</div></div>
               <div><h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Database className="h-4 w-4 text-emerald-400" />Runtime</h2><dl className="mt-4 grid grid-cols-2 gap-4 text-sm"><div><dt className="text-slate-500">CPU</dt><dd className="mt-1 text-lg text-white">{health?.cpu_usage.toFixed(1) ?? '-'}%</dd></div><div><dt className="text-slate-500">Memory</dt><dd className="mt-1 text-lg text-white">{health?.memory_usage.toFixed(1) ?? '-'}%</dd></div><div><dt className="text-slate-500">Uptime</dt><dd className="mt-1 text-lg text-white">{health ? `${Math.floor(health.uptime_seconds / 3600)}h` : '-'}</dd></div><div><dt className="text-slate-500">Database</dt><dd className="mt-1 text-lg capitalize text-white">{health?.database_status || '-'}</dd></div></dl></div>
             </div>
           </TabsContent>

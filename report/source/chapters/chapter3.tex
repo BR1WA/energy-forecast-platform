@@ -1,0 +1,128 @@
+\chapter{Critical Replication of the Deep Energy Predictor Model}
+\label{chap:depm}
+
+\section{Origin and objective of the replication}
+
+The initial research article, provided as the starting point of the PFE, was the DEPM study by Ragupathi et al.\ \cite{ragupathi2024depm}. The paper frames the problem as electricity-consumption prediction and combines XGBoost classification, a DNN, and a cascaded residual network. It reports 98\% accuracy, precision 0.97, recall 0.99, and F1-score 0.98 on the \ac{ihepc} dataset.
+
+The replication objective was initially literal: reconstruct preprocessing, feature extraction, neural components, and classifier; reproduce the announced metrics; and study architectural variants. The old PFE workspace contains the source PDF, a French summary, multiple DEPM notebooks, feature-ablation and comparison notebooks, and DNN/ResNet/XGBoost artifacts. The Git repository later added a full replication, a no-leakage variant, recurrent variants, and a Steel Industry cross-dataset experiment.
+
+The work reproduced accuracy around 99.29\% in an early local pipeline. That number is historically important because it explains why the project initially appeared successful. It is not a final result. The subsequent audit showed that the target and split allowed models to infer the label without learning a deployable temporal relationship.
+
+\section{Reconstructed architecture}
+
+The reconstructed flow is summarized in \cref{fig:depmarch}. Numeric features were standardized and reduced with \ac{pca}. A cascaded residual network and a DNN were used as nonlinear feature extractors, while XGBoost produced the final binary class. Later local variants replaced the DNN with LSTM, BiLSTM, GRU, or BiGRU representations and also evaluated each neural model independently.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{depm_architecture.pdf}
+  \caption{Simplified DEPM architecture reconstructed from the article and local notebooks.}
+  \label{fig:depmarch}
+\end{figure}
+
+The architecture itself could be implemented. The scientific issue concerned what information entered it and what the evaluation score represented. This distinction matters: a replication can correctly reproduce code behavior while exposing that the original experimental description is insufficient for the claimed use case.
+
+\section{Target construction and direct leakage}
+
+Several early notebooks constructed a binary variable named \texttt{consumption\_class} from \texttt{Global\_active\_power}. Feature selection then removed only the new class column, leaving \texttt{Global\_active\_power} in the input matrix. The classifier was therefore asked to predict a thresholded transformation of a value it already received. Under that definition, high accuracy is expected and does not demonstrate forecasting.
+
+Later notebooks excluded the raw active-power column, but some retained rolling or interaction features calculated from the same signal at the current time. If a rolling mean for time $t$ includes $y_t$, it remains target leakage even though the original column name is absent. The correct causal feature is based only on $y_{t-k:t-1}$ when predicting $y_t$ or later.
+
+\section{Physical proxy leakage}
+
+The IHEPC variables include voltage and global intensity. In an electrical circuit, active power can be approximated from voltage and current, with power factor and phase effects determining the exact relationship. At household aggregate level, the relation
+\begin{equation}
+ P \approx V \times I
+ \label{eq:powerproxy}
+\end{equation}
+is sufficiently strong to make the label derived from active power largely reconstructible from simultaneous voltage and current. Some local feature pipelines made this relation even more explicit through \texttt{voltage\_x\_intensity}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{physical_proxy.pdf}
+  \caption{Physical proxy mechanism that made the high/low active-power class reconstructible.}
+  \label{fig:physicsproxy}
+\end{figure}
+
+This is a domain-specific form of leakage. A feature may not be named after the target, yet it can encode the same quantity. Domain knowledge is therefore a necessary part of the data audit. The presence of a physical proxy does not make voltage or current universally unusable; they may be valid historical predictors when appropriately lagged and when the deployment system actually observes them. The invalid condition is using simultaneous values to predict a target that is algebraically related to them.
+
+\section{Preprocessing leakage}
+
+The historical workflow fitted both the standard scaler and the PCA transformation to the complete feature matrix before creating the train-test split. In that order, the mean, variance, and principal directions include information from the held-out observations. The classifier does not receive test labels directly, but the representation has been optimized using the test distribution.
+
+The corrected order is:
+\begin{enumerate}
+  \item define chronological train, validation, and test indices;
+  \item fit the scaler on the training region;
+  \item transform validation and test with the frozen training scaler;
+  \item fit any dimensionality reduction or feature selector on the transformed training region;
+  \item apply the fitted transformation unchanged to later regions.
+\end{enumerate}
+
+\section{Random temporal splitting}
+
+The early experiments used random stratified splitting. Adjacent electricity measurements can be nearly identical, especially at minute-level sampling. Random allocation places observations from the same day, household regime, and local trend in both train and test. Sequence construction does not automatically solve the problem: if overlapping windows are randomly split after creation, their inputs may share most time steps.
+
+Chronological separation is necessary for the target product question. Training data must precede validation data, which must precede test data. A clean boundary may allow the first validation window to use earlier training observations as historical context; it must not allow a training target after the validation start or a scaler fitted on later data.
+
+\section{Classification is not forecasting}
+
+The DEPM evaluation answers whether a contemporaneous measurement is assigned to a high or low class. EnergyAI must estimate a sequence of future energy values. The two tasks differ in output, loss, evaluation, and usefulness:
+\begin{itemize}
+  \item classification outputs a probability or category; forecasting outputs an ordered trajectory;
+  \item classification accuracy ignores the magnitude of an energy error;
+  \item a class threshold can hide large within-class deviations;
+  \item operational horizons require that all inputs be known before the first predicted timestamp;
+  \item physical-unit MAE and RMSE are needed for cost and load interpretation.
+\end{itemize}
+
+The article's class-threshold definition could not be reconstructed with sufficient confidence from the local source material. This ambiguity is reported as a reproducibility limitation, not as evidence of intent.
+
+\section{Diagnostic logistic regression}
+
+A simple logistic regression achieved 99.4\% accuracy when applied to the leaky feature set. The result is more informative than another complex-model comparison. It shows that the classification boundary is almost directly encoded in the predictors. If a linear separator equals or exceeds the reported hybrid score, the high accuracy cannot be used to demonstrate the necessity of cascaded ResNet, DNN, or XGBoost components.
+
+The diagnostic should not be misunderstood as a candidate energy forecaster. It was intentionally trained on the suspect classification formulation to test whether the task was trivial. Its role is analogous to a unit test for leakage.
+
+\section{Historical corrected variants}
+
+The later archive contains results for standalone DNN, LSTM, BiLSTM, GRU, and BiGRU classifiers and their DEPM-XGBoost hybrids after removing important direct-leak features. Recorded accuracies range from 0.8852 to 0.8959. \Cref{tab:depmvariants} reproduces selected values from \evidence{models/archive/results.csv}.
+
+\begin{table}[H]
+\centering
+\caption[Selected leakage-reduced classification results]{Selected leakage-reduced classification results. These remain non-forecasting results.}
+\label{tab:depmvariants}
+\begin{tabular}{lrrrr}
+\toprule
+Model & Accuracy & Precision & Recall & F1 \\
+\midrule
+DNN & 0.8953 & 0.9172 & 0.8691 & 0.8925 \\
+LSTM & 0.8904 & 0.9314 & 0.8428 & 0.8849 \\
+BiLSTM & 0.8885 & 0.9384 & 0.8315 & 0.8817 \\
+DEPM-DNN & 0.8959 & 0.9314 & 0.8548 & 0.8914 \\
+DEPM-LSTM & 0.8923 & 0.9204 & 0.8589 & 0.8886 \\
+DEPM-BiGRU & 0.8852 & 0.9094 & 0.8557 & 0.8817 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These lower results are scientifically healthier because they reflect removal of the most direct answer channels. They also show that the hybrid does not dominate the standalone DNN by a meaningful margin. Nonetheless, the random-classification framing and any remaining preprocessing caveats prevent use of this table as evidence for future continuous forecasting.
+
+\section{Documentary inconsistencies and neutral reporting}
+
+The audit identified additional elements that could not be reconciled from the article alone: the exact class threshold, the apparent total in a published confusion matrix compared with the stated dataset size, the evaluation subset used for that figure, and the scale on which some error metrics were reported. Some terminology also appears unrelated to electricity prediction. The correct academic conclusion is limited: the article does not provide enough information to reproduce these elements unambiguously.
+
+This report does not accuse the authors of cheating, fabrication, or plagiarism. Such claims would require a separate formal investigation. Instead, it states observable discrepancies, their effect on reproducibility, and the evidence available locally.
+
+\section{Scientific decision to pivot}
+
+\Cref{fig:leakycausal} summarizes the change in protocol. The pivot did not discard the initial work; it converted it into a methodological case study and established stricter requirements for every later experiment.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{leaky_vs_causal.pdf}
+  \caption{Contrast between the historical leaky pipeline and the corrected causal pipeline.}
+  \label{fig:leakycausal}
+\end{figure}
+
+The decision was to predict continuous energy at explicit future horizons, use lagged inputs only, compare with seasonal rules, preserve physical units, separate model selection from final testing, and require a stored source for every published metric. The following chapter formalizes that protocol.

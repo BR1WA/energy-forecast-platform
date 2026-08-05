@@ -1,0 +1,117 @@
+\chapter{Context, Requirements, and Project Framing}
+\label{chap:context}
+
+\section{Electricity consumption as a forecasting problem}
+
+Electricity consumption is a time-dependent process whose distribution changes with the hour of day, day of week, season, household behavior, tariff incentives, and external conditions. Forecasting differs from ordinary regression because the ordering of observations is part of the problem. A model evaluated on a random sample of the same historical period may perform well while failing on the next day. The operational question is therefore conditional and time-indexed: given the measurements available up to time $t$, estimate consumption for times $t+1$ through $t+H$.
+
+For a univariate household series $y_t$, a direct multi-horizon forecaster can be written as
+\begin{equation}
+  (\hat y_{t+1},\ldots,\hat y_{t+H}) = f_{\theta}(y_{t-L+1:t}, c_{t-L+1:t+H}),
+  \label{eq:forecast}
+\end{equation}
+where $L$ is the lookback length, $H$ the forecast horizon, and $c$ represents calendar or other covariates known at forecast time. The packaged EnergyAI models use a 336-hour history and output either 24 or 168 hourly values. They also estimate the 0.1, 0.5, and 0.9 quantiles, enabling the interface to show a central path and an uncertainty interval.
+
+This formulation must not be confused with a binary label such as ``high'' or ``low'' consumption. Classification can support anomaly or state detection, but it does not answer how many kWh will be consumed at each future hour. It can also become trivial if the class is constructed from a measurement retained among the inputs. One of the first framing decisions of this PFE was therefore to replace the historical class objective with a physically interpretable continuous target.
+
+\section{Operational horizons and user value}
+
+EnergyAI exposes two supported horizons. The 24-hour horizon is intended for next-day review, scheduling, and short-term action. The 168-hour horizon supports week-ahead budget awareness and operational planning. Both outputs are hourly, which preserves intraday structure and allows users to locate peaks. A 30-day aggregate horizon was explored during model research but remains experimental because the household-level macro $R^2$ values were negative in the recorded cold-start evaluation. It is not exposed as an active primary product capability.
+
+The value of a forecast depends on its comparison target. Repeating yesterday's load or the same hour from the previous week often yields a surprisingly strong baseline. A deep model is only justified when it consistently improves over such rules, not merely when it reports a low number on an arbitrary normalized scale. This report consequently compares Global TFT with a seasonal-naive baseline and reports both average error and the proportion of households for which the model wins.
+
+\section{Stakeholders}
+
+The principal stakeholders are summarized in \cref{tab:stakeholders}. The platform is designed around an authenticated user who owns a site and its meter data. The administrator manages accounts and inspects system and model readiness. The supervisor and academic jury are evidence reviewers rather than product users: they need to verify the scientific narrative, result provenance, and limitations. Future energy managers or household users would require additional validation on their own local data before operational reliance.
+
+\begin{table}[H]
+\centering
+\caption{Stakeholder needs and associated evidence.}
+\label{tab:stakeholders}
+\begin{tabularx}{\textwidth}{p{0.20\textwidth}YY}
+\toprule
+Stakeholder & Primary need & Evidence expected \\
+\midrule
+Normal user & Import consumption, inspect usage, generate supported forecasts, review actions & Clear data validation, forecast provenance, uncertainty, history, ownership isolation \\
+Administrator & Operate accounts and inspect platform/model readiness & Role checks, health endpoints, audit events, artifact status \\
+Supervisor and jury & Assess scientific rigor and engineering contribution & Reproducible protocol, primary citations, manifests, tests, Git timeline \\
+Future operator & Deploy and monitor a stable system & Configuration, backups, dependency policy, observability, deployment validation \\
+Data subject & Retain control over personal consumption data & Authentication, export, deletion, minimal exposure, bounded ingestion \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Functional scope}
+
+The current repository supports the following primary user flow:
+\begin{description}[style=multiline,leftmargin=1.8cm,labelwidth=1.4cm]
+  \item[\textbf{FR-01}] create or access an account through the available authentication capability;
+  \item[\textbf{FR-02}] complete site, timezone, tariff, and meter setup;
+  \item[\textbf{FR-03}] preview and import a CSV containing timestamps and energy values;
+  \item[\textbf{FR-04}] inspect consumption summaries and paginated readings;
+  \item[\textbf{FR-05}] verify model readiness, choose 24 or 168 hours, and generate a forecast with quantiles and provenance;
+  \item[\textbf{FR-06}] review alerts and recommendation-based actions;
+  \item[\textbf{FR-07}] manage site, budget, account export, and account deletion settings; and
+  \item[\textbf{FR-08}] permit administrators to manage users and inspect system/model readiness without exposing that surface to normal users.
+\end{description}
+
+Routes and endpoints exist for several secondary or gated behaviors, including Google authentication, email verification, password recovery, simulation controls, and administrative monitoring. This report describes them only to the degree supported by current code and configuration. It does not present removed navigation items or hidden research surfaces as primary Product V1 features.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{use_case.pdf}
+  \caption{EnergyAI use-case diagram derived from current frontend routes and backend routers.}
+  \label{fig:usecase}
+\end{figure}
+
+\section{Non-functional requirements}
+
+\subsection{Reliability and truthfulness}
+
+The application must refuse unsupported operations rather than fabricate a result. Forecast readiness is a first-class contract. The backend checks artifact presence, checksum, input coverage, maximum consecutive gaps, finite values, and supported horizon before inference. Failure is returned as an explicit state that the frontend can explain.
+
+\subsection{Privacy and isolation}
+
+Electricity traces can reveal occupancy and routine. Each Site and Meter is associated with an owning user. API queries must apply ownership conditions, and administrative access must be explicit. Authentication uses short-lived access tokens and refresh credentials stored as hashes server-side; the browser receives refresh state through an HttpOnly cookie rather than a JSON token saved in web storage.
+
+\subsection{Latency and resource constraints}
+
+The user experience requires bounded imports and responsive inference. The product therefore packages fixed CPU-loadable artifacts instead of retraining in response to user requests. The 24-hour and 168-hour TFT checkpoints each contain approximately 1.386 million trainable parameters and are approximately 5.6 MB on disk. Training occurred as an offline research workflow; serving is a controlled inference operation.
+
+\subsection{Cold-start generalization}
+
+Known-household performance can hide dependence on household identity. A product that accepts a new user's data must also be assessed on households that contributed no gradient updates. The Low Carbon London experiments split entire households into known and cold-start cohorts before model training. Checkpoint-selection claims in this report prioritize cold-start macro metrics, even when a global metric appears higher.
+
+\subsection{Reproducibility}
+
+Every central model claim must map to a manifest or leaderboard, and every packaged checkpoint must map to a SHA-256 digest. The report itself maintains registries for models, figures, notebooks, commits, artifact hashes, tests, and requirement-to-test traceability. This requirement is stricter than merely retaining source code: it connects the exact file and experimental status to each published claim.
+
+\section{System boundary and assumptions}
+
+EnergyAI currently operates as a local Docker Compose deployment. PostgreSQL, the backend, and the frontend have health checks; email, alert, and avatar-cleanup workers run as separate services. The report does not select a public cloud provider, claim a production URL, or assert that external deployment validation has passed. Likewise, validation metrics describe London and benchmark cohorts; they do not guarantee performance on a Moroccan household or organization without a local evaluation.
+
+The cover page uses the official combined UMI/FSM logo and blue-orange motif published by the Faculty of Sciences of Meknes. The department and programme wording were verified against the current institutional programme pages, and the faculty identifies the academic supervisor as Pr. Ali Oubelkacem. The defense is scheduled for 9 September 2026. The publicly available cover model is intended for doctoral theses rather than Master PFE reports; consequently, the English PFE wording is an evidence-based adaptation, while the jury composition remains an explicit administrative placeholder pending confirmation.
+
+\section{Project risks and acceptance criteria}
+
+\begin{table}[H]
+\centering
+\caption{Principal risks and acceptance criteria.}
+\label{tab:risks}
+\begin{tabularx}{\textwidth}{p{0.24\textwidth}YY}
+\toprule
+Risk & Control & Acceptance evidence \\
+\midrule
+Target leakage & Causal feature audit and chronological split & Reproducible comparison between historical and corrected pipelines \\
+Misleading model comparison & Common cohorts, units, horizons, and baselines & Leaderboards with explicit protocol columns \\
+Unsupported product promise & Capability and readiness gates & Only 24 h and 168 h artifacts exposed \\
+Cross-user data exposure & Ownership-scoped queries and RBAC & PostgreSQL integration and authorization tests \\
+Corrupted or mismatched model & Manifest and SHA-256 verification & Strict load, finite output, and expected shape checks \\
+Research--serving transform mismatch & Explicit normalization contracts and end-to-end cohort re-evaluation requirement & Gap disclosed; efficacy gate remains conditional \\
+Dependency or browser gate failure & Automated quality and security audits & Current QA report including conditional findings \\
+Institutional non-compliance & Official template and administrative review & Placeholder closure before final submission \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+This framing makes the scientific and product objectives mutually reinforcing. Reliable software cannot repair an invalid experiment, while a valid model cannot create user value without data controls, understandable output, and operational evidence.

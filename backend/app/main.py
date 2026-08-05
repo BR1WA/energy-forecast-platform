@@ -5,6 +5,7 @@ Master's PFE: Residential Energy Consumption Forecasting Platform
 import time
 import os
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -17,7 +18,7 @@ from app.database import engine, Base, SessionLocal
 from app.routers import (
     auth, forecast, alerts, analytics, admin, settings as settings_router,
     system, consumption,
-    simulation, ingestion, monitoring, recommendations
+    simulation, ingestion, monitoring, recommendations, account
 )
 from app.migrations import run_migrations
 from app.limiter import limiter
@@ -29,8 +30,13 @@ logger = logging.getLogger("app.main")
 
 settings = get_settings()
 
+# Debian slim images do not always load an OS MIME database. Register the
+# normalized avatar format explicitly so the public avatar route is usable by
+# browsers after a production restore as well as on developer machines.
+mimetypes.add_type("image/webp", ".webp", strict=True)
+
 # Ensure static directories exist before FastAPI is configured
-os.makedirs("static/avatars", exist_ok=True)
+os.makedirs(settings.AVATAR_STORAGE_DIR, exist_ok=True)
 
 
 @asynccontextmanager
@@ -42,7 +48,7 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
 
     # Ensure static/avatars directory exists
-    os.makedirs("static/avatars", exist_ok=True)
+    os.makedirs(settings.AVATAR_STORAGE_DIR, exist_ok=True)
 
     try:
         logger.info("[DB] Running database migrations...")
@@ -112,7 +118,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=(
         "Energy Forecasting Platform — "
-        "one-site monitoring and a truthful 24-hour Global TFT forecast, "
+        "one-site monitoring with truthful fixed 24-hour and gated 168-hour forecasts, "
         "with JWT authentication and alert management."
     ),
     docs_url="/docs",
@@ -139,7 +145,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files (for avatars)
+# Mount the configured durable avatar root before the broader static tree so a
+# non-default local volume remains publicly addressable.
+app.mount("/static/avatars", StaticFiles(directory=settings.AVATAR_STORAGE_DIR), name="avatars")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include routers
@@ -155,6 +163,7 @@ app.include_router(simulation.router)
 app.include_router(ingestion.router)
 app.include_router(monitoring.router)
 app.include_router(recommendations.router)
+app.include_router(account.router)
 
 
 @app.get("/", tags=["Health"])

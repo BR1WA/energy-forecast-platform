@@ -1,9 +1,14 @@
 import type {
   LoginPayload,
   LoginResponse,
+  RegistrationResponse,
+  AuthCapabilities,
   RegisterPayload,
   User,
+  ForecastDemoHistoryResult,
   ForecastReadiness,
+  ForecastCapabilities,
+  ForecastHorizon,
   ProductForecast,
   ProductForecastHistoryItem,
   AnalyticsSummary,
@@ -11,6 +16,7 @@ import type {
   AlertConfig,
   AdminUser,
   ModelReadiness,
+  ModelReadinessSummary,
   SystemHealth,
   EnergyBudget,
   SystemSettings,
@@ -22,32 +28,27 @@ import type {
   ConsumptionReadingPage,
   ConsumptionTimeframe,
   PrimaryMeter,
+  LegalConfiguration,
+  AccountDeletionCapabilities,
 } from '@/types';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+export const systemApi = {
+  getLegalConfiguration: (): Promise<LegalConfiguration> =>
+    apiFetch('/api/v1/system/legal', { skipAuth: true }),
+};
+
 // ============================================================
 // Token helpers
 // ============================================================
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
-}
+let accessToken: string | null = null;
 
-function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('refresh_token');
-}
+function getAccessToken(): string | null { return accessToken; }
 
-function setTokens(access: string, refresh: string) {
-  localStorage.setItem('access_token', access);
-  localStorage.setItem('refresh_token', refresh);
-}
+function setTokens(access: string) { accessToken = access; }
 
-function clearTokens() {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-}
+function clearTokens() { accessToken = null; }
 
 // ============================================================
 // Core fetch wrapper
@@ -79,20 +80,34 @@ function getApiErrorMessage(payload: unknown, status: number): string {
   if (detail && typeof detail === 'object' && 'msg' in detail && typeof detail.msg === 'string') {
     return detail.msg;
   }
+  if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') {
+    return detail.message;
+  }
   return `API error: ${status}`;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly code: string | null, public readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+function getApiErrorCode(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || !('detail' in payload)) return null;
+  const detail = payload.detail;
+  return detail && typeof detail === 'object' && 'code' in detail && typeof detail.code === 'string'
+    ? detail.code
+    : null;
 }
 
 let refreshPromise: Promise<string | null> | null = null;
 
 async function performTokenRefresh(): Promise<string | null> {
-  const refresh = getRefreshToken();
-  if (!refresh) return null;
-
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refresh }),
+      credentials: 'include',
     });
 
     if (!res.ok) {
@@ -101,11 +116,11 @@ async function performTokenRefresh(): Promise<string | null> {
     }
 
     const data = await res.json();
-    if (!data.refresh_token) {
+    if (!data.access_token) {
       clearTokens();
       return null;
     }
-    setTokens(data.access_token, data.refresh_token);
+    setTokens(data.access_token);
     return data.access_token;
   } catch {
     clearTokens();
@@ -146,6 +161,7 @@ async function apiFetch<T>(
   let res = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...rest,
     headers,
+    credentials: 'include',
   });
 
   // If 401, try refreshing the token
@@ -156,6 +172,7 @@ async function apiFetch<T>(
       res = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...rest,
         headers,
+        credentials: 'include',
       });
     } else {
       clearTokens();
@@ -177,7 +194,7 @@ async function apiFetch<T>(
         toast.error(message || 'Access denied.');
       }).catch(err => console.error('Failed to load sonner toast', err));
     }
-    throw new Error(message);
+    throw new ApiError(message, getApiErrorCode(errorData), res.status);
   }
 
   if (isBlob) {
@@ -191,6 +208,7 @@ async function apiFetch<T>(
 // Auth API
 // ============================================================
 export const authApi = {
+  getCapabilities: (): Promise<AuthCapabilities> => apiFetch('/api/v1/auth/capabilities', { skipAuth: true }),
   login: (payload: LoginPayload): Promise<LoginResponse> =>
     apiFetch('/api/v1/auth/login', {
       method: 'POST',
@@ -198,7 +216,7 @@ export const authApi = {
       skipAuth: true,
     }),
 
-  register: (payload: RegisterPayload): Promise<LoginResponse> =>
+  register: (payload: RegisterPayload): Promise<RegistrationResponse> =>
     apiFetch('/api/v1/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -207,8 +225,13 @@ export const authApi = {
 
   getMe: (): Promise<User> => apiFetch('/api/v1/auth/me'),
 
+  refresh: (): Promise<{ access_token: string }> => apiFetch('/api/v1/auth/refresh', { method: 'POST', skipAuth: true }),
+
   logout: (): Promise<{ message: string }> =>
     apiFetch('/api/v1/auth/logout', { method: 'POST' }),
+
+  logoutAll: (): Promise<{ message: string }> =>
+    apiFetch('/api/v1/auth/logout-all', { method: 'POST' }),
 
   updateProfile: (data: { full_name?: string }): Promise<User> =>
     apiFetch('/api/v1/auth/me', {
@@ -235,23 +258,57 @@ export const authApi = {
     apiFetch('/api/v1/auth/me/avatar', {
       method: 'DELETE',
     }),
+
+  requestPasswordReset: (email: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }), skipAuth: true }),
+  confirmPasswordReset: (token: string, new_password: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify({ token, new_password }), skipAuth: true }),
+  confirmVerification: (token: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/verification/confirm', { method: 'POST', body: JSON.stringify({ token }), skipAuth: true }),
+  resendVerification: (email: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/verification/resend', { method: 'POST', body: JSON.stringify({ email }), skipAuth: true }),
+  googleChallenge: (): Promise<{ state: string; nonce: string; expires_in_seconds: number }> => apiFetch('/api/v1/auth/google/challenge', { method: 'POST', skipAuth: true }),
+  googleLogin: (credential: string, state: string): Promise<LoginResponse> => apiFetch('/api/v1/auth/google', { method: 'POST', body: JSON.stringify({ credential, state }), skipAuth: true }),
+  googleLinkChallenge: (): Promise<{ state: string; nonce: string; expires_in_seconds: number }> => apiFetch('/api/v1/auth/google/link/challenge', { method: 'POST' }),
+  googleStatus: (): Promise<{ linked: boolean; can_unlink: boolean }> => apiFetch('/api/v1/auth/google/status'),
+  linkGoogle: (credential: string, state: string, current_password: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/google/link', { method: 'POST', body: JSON.stringify({ credential, state, current_password }) }),
+  unlinkGoogle: (current_password?: string): Promise<{ message: string }> => apiFetch('/api/v1/auth/google/link', { method: 'DELETE', body: JSON.stringify({ current_password }) }),
+};
+
+export const accountApi = {
+  exportData: (): Promise<Blob> => apiFetch('/api/v1/account/export', { isBlob: true }),
+  getDeletionCapabilities: (): Promise<AccountDeletionCapabilities> => apiFetch('/api/v1/account/deletion/capabilities'),
+  deletionChallenge: (): Promise<{ state: string; nonce: string; expires_in_seconds: number }> => apiFetch('/api/v1/account/deletion/challenge', { method: 'POST' }),
+  deleteWithPassword: (current_password: string): Promise<{ message: string }> => apiFetch('/api/v1/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmation: 'DELETE', current_password }),
+  }),
+  deleteWithGoogle: (google_credential: string, google_state: string): Promise<{ message: string }> => apiFetch('/api/v1/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmation: 'DELETE', google_credential, google_state }),
+  }),
 };
 
 // ============================================================
 // Forecast API
 // ============================================================
 export const forecastApi = {
-  getReadiness: (): Promise<ForecastReadiness> =>
-    apiFetch('/api/v1/forecast/readiness'),
+  getCapabilities: (): Promise<ForecastCapabilities> =>
+    apiFetch('/api/v1/forecast/capabilities'),
 
-  run: (): Promise<ProductForecast> =>
-    apiFetch('/api/v1/forecast/run', { method: 'POST' }),
+  getReadiness: (horizon: ForecastHorizon = 24): Promise<ForecastReadiness> =>
+    apiFetch(`/api/v1/forecast/readiness?horizon_hours=${horizon}`),
 
-  getLatest: (): Promise<ProductForecast | null> =>
-    apiFetch('/api/v1/forecast/latest'),
+  prepareDemoHistory: (): Promise<ForecastDemoHistoryResult> =>
+    apiFetch('/api/v1/forecast/prepare-demo-history', { method: 'POST' }),
 
-  getHistory: (): Promise<ProductForecastHistoryItem[]> =>
-    apiFetch('/api/v1/forecast/history'),
+  run: (horizon: ForecastHorizon = 24): Promise<ProductForecast> =>
+    apiFetch('/api/v1/forecast/run', {
+      method: 'POST',
+      body: JSON.stringify({ horizon_hours: horizon }),
+    }),
+
+  getLatest: (horizon?: ForecastHorizon): Promise<ProductForecast | null> =>
+    apiFetch(`/api/v1/forecast/latest${horizon ? `?horizon_hours=${horizon}` : ''}`),
+
+  getHistory: (horizon?: ForecastHorizon): Promise<ProductForecastHistoryItem[]> =>
+    apiFetch(`/api/v1/forecast/history${horizon ? `?horizon_hours=${horizon}` : ''}`),
 };
 
 // ============================================================
@@ -261,8 +318,8 @@ export const analyticsApi = {
   getSummary: (): Promise<AnalyticsSummary> =>
     apiFetch('/api/v1/analytics/summary'),
 
-  downloadReportPDF: (): Promise<Blob> =>
-    apiFetch('/api/v1/analytics/report/pdf', { isBlob: true }),
+  downloadReportPDF: (forecastId?: number): Promise<Blob> =>
+    apiFetch(`/api/v1/analytics/report/pdf${forecastId ? `?forecast_id=${forecastId}` : ''}`, { isBlob: true }),
 };
 
 // ============================================================
@@ -291,6 +348,9 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
+      email_enabled: raw.email_enabled,
+      email_delivery_available: raw.email_delivery_available,
+      email_delivery_unavailable_reason: raw.email_delivery_unavailable_reason,
     };
   },
 
@@ -299,6 +359,7 @@ export const alertsApi = {
       threshold_kw: config.high_consumption_threshold,
       cooldown_minutes: config.cooldown_minutes,
       missing_data_minutes: config.missing_data_minutes,
+      email_enabled: config.email_enabled ?? false,
     };
     const raw = await apiFetch<AlertConfigResponse>('/api/v1/alerts/config', {
       method: 'POST',
@@ -308,6 +369,9 @@ export const alertsApi = {
       high_consumption_threshold: raw.threshold_kw,
       cooldown_minutes: raw.cooldown_minutes,
       missing_data_minutes: raw.missing_data_minutes,
+      email_enabled: raw.email_enabled,
+      email_delivery_available: raw.email_delivery_available,
+      email_delivery_unavailable_reason: raw.email_delivery_unavailable_reason,
     };
   },
 
@@ -353,6 +417,9 @@ export const adminApi = {
   getModelReadiness: (): Promise<ModelReadiness> =>
     apiFetch('/api/v1/admin/model-readiness'),
 
+  getAllModelReadiness: (): Promise<ModelReadinessSummary> =>
+    apiFetch('/api/v1/admin/model-readiness/all'),
+
   getHealth: (): Promise<SystemHealth> =>
     apiFetch('/api/v1/admin/health'),
 
@@ -373,11 +440,7 @@ export const settingsApi = {
 
   postSetup: (data: {
     site_name?: string;
-    timezone?: string;
-    country: string;
     region: string;
-    electricity_provider: string;
-    currency: string;
     peak_rate: number;
     off_peak_rate: number;
     peak_start_hour: number;

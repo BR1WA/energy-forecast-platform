@@ -1,0 +1,95 @@
+\chapter{Technical Contracts, UML, Tests, and Installation}
+\label{app:technical}
+
+\section{Principal API contracts}
+
+\begin{longtable}{p{0.31\textwidth}p{0.13\textwidth}p{0.44\textwidth}}
+\caption{Selected API operations.}\\
+\toprule
+Endpoint & Method & Purpose \\
+\midrule
+\endfirsthead
+\toprule
+Endpoint & Method & Purpose \\
+\midrule
+\endhead
+\breakcode{/api/v1/auth/login} & POST & Authenticate and create access/refresh session \\
+\breakcode{/api/v1/auth/refresh} & POST & Rotate refresh state and return a new access token \\
+\breakcode{/api/v1/settings/setup} & POST & Create the initial site/meter configuration \\
+\breakcode{/api/v1/ingestion/meters/{id}/csv/preview} & POST & Validate a bounded CSV preview \\
+\breakcode{/api/v1/ingestion/meters/{id}/csv/import} & POST & Confirm and persist accepted readings \\
+\breakcode{/api/v1/consumption/period} & GET & Summarize consumption for a selected period \\
+\breakcode{/api/v1/forecast/capabilities} & GET & List supported and enabled horizons \\
+\breakcode{/api/v1/forecast/readiness} & GET & Explain artifact/history readiness \\
+\breakcode{/api/v1/forecast/run} & POST & Generate and persist a supported forecast \\
+\breakcode{/api/v1/forecast/history} & GET & Return owned forecast history \\
+\breakcode{/api/v1/alerts/} & GET & Return owned alert records \\
+\breakcode{/api/v1/analytics/report/pdf} & GET & Generate the supported analytics PDF \\
+\breakcode{/api/v1/system/live} & GET & Process liveness \\
+\breakcode{/api/v1/system/ready} & GET & Dependency readiness \\
+\bottomrule
+\end{longtable}
+
+The complete current OpenAPI schema contains 80 method--path operations across 74 unique paths. This count was extracted from \breakcode{backend/app/main.py} at commit \texttt{1e67921}. The full commit and extraction method are stored in \breakcode{report/evidence/openapi_inventory_summary.json}.
+
+\section{UML diagrams}
+
+This report deliberately includes only use-case, class, and sequence UML types. The main chapters contain the use-case, core domain class, authentication sequence, CSV import sequence, and forecast sequence diagrams. They are generated programmatically from a text-source Matplotlib script and registered with their repository sources.
+
+\section{Test plan}
+
+\begin{longtable}{p{0.23\textwidth}p{0.26\textwidth}p{0.39\textwidth}}
+\caption{Condensed test plan.}\\
+\toprule
+Layer & Technique & Current evidence \\
+\midrule
+\endfirsthead
+\toprule
+Layer & Technique & Current evidence \\
+\midrule
+\endhead
+Schemas/services & Unit and focused integration tests & Validation, auth, settings, forecast, alert, report, and account behavior \\
+Database/API & Full pytest suite on PostgreSQL & 100 passed, 0 skipped \\
+Frontend static & ESLint and TypeScript & Both passed \\
+Frontend build & Next.js production compilation & Passed, 25 routes \\
+Browser E2E & Playwright six-project matrix & 107 passed; one WebKit interruption passed in isolation \\
+Model artifacts & Hash, strict load, inference shape, finite values & Both 24 h and 168 h validated \\
+Dependency security & npm and pip audits & Production npm clean; development-tool findings remain \\
+Deployment & Docker health and endpoint smoke & Local Compose healthy; public deployment not tested \\
+\bottomrule
+\end{longtable}
+
+\section{Docker installation guide}
+
+\subsection{Prerequisites}
+
+Install Docker Desktop with Compose support and Git. Obtain the repository and create an environment file from the supplied example. Replace all sentinel values for database password, JWT secret, administrator password, and provider settings. Do not reuse demonstration secrets in a public environment.
+
+\subsection{Startup}
+
+\begin{lstlisting}[language=bash]
+git clone https://github.com/BR1WA/energy-forecast-platform.git PFE2
+cd PFE2
+copy .env.example .env
+# Edit .env and replace every insecure sentinel value.
+docker compose up --build -d
+docker compose ps
+\end{lstlisting}
+
+Verify:
+\begin{lstlisting}[language=bash]
+curl http://localhost:8000/api/v1/system/live
+curl http://localhost:8000/api/v1/system/ready
+curl http://localhost:3000/
+\end{lstlisting}
+
+The final public deployment must additionally specify TLS termination, hostnames, security headers, secret management, backups, monitoring, update policy, and restore testing.
+
+\section{Report reproduction}
+
+The report sources are modular. From \texttt{report/source}, run:
+\begin{lstlisting}[language=bash]
+python generate_figures.py
+latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+\end{lstlisting}
+The final build process also runs Biber, renders the PDF with Poppler, checks log warnings, searches for unapproved placeholders and local paths, and packages the source tree.

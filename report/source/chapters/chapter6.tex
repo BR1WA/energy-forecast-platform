@@ -1,0 +1,167 @@
+\chapter{EnergyAI Platform Design and Implementation}
+\label{chap:platform}
+
+\section{Product vision and user journey}
+
+EnergyAI turns the validated forecasting workflow into an application that a non-research user can operate without choosing neural architectures or manipulating notebooks. The primary journey is deliberately short: authenticate, configure a site and meter, import energy history, inspect data quality, select 24 or 168 hours, generate a forecast, and review the result with its uncertainty and provenance. Model selection is a backend responsibility governed by the artifact registry.
+
+The platform does not expose every research feature. Product V1 prioritizes Dashboard, Usage, Forecast, Actions, and Settings. Administrative views are role-gated. Historical simulation and research model-selection surfaces may still exist in source or secondary routes, but they are not documented as the primary user journey.
+
+\section{Layered architecture}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.96\textwidth]{energyai_layered_architecture.pdf}
+  \caption{Layered architecture derived from the current Docker Compose and application source.}
+  \label{fig:layeredarch}
+\end{figure}
+
+The presentation layer uses Next.js 16, React 19, TypeScript, Tailwind CSS, and reusable UI components. The API layer uses FastAPI and Pydantic schemas. Persistence uses SQLAlchemy models, Alembic migrations, and PostgreSQL 16. Separate worker services handle alert, email, and avatar-cleanup responsibilities. The model layer contains fixed Global TFT artifacts and their manifests.
+
+The Docker Compose configuration defines six services: PostgreSQL, backend, frontend, alert worker, email worker, and avatar-cleanup worker. At the current local checkpoint, database, backend, and frontend health checks pass and the three workers are running. No public ingress or cloud environment is included in the verified scope.
+
+\section{Frontend design}
+
+The Next.js application provides authenticated and public routes. Public routes include the landing page, registration and login, password recovery, email verification states, privacy, terms, and support. The normal-user navigation contains exactly five primary destinations: \texttt{/dashboard}, \texttt{/usage}, \texttt{/forecast}, \texttt{/actions}, and \texttt{/settings}. Compatibility routes redirect \texttt{/consumption} to Usage; \texttt{/alerts} and \texttt{/recommendations} to Actions; and \texttt{/reports} to Usage. The \texttt{/admin} view is rendered only for an administrator.
+
+The interface uses explicit empty, loading, blocked, error, and success states. This is particularly important for forecasting. A missing model, insufficient history, disabled capability, or failed data-quality gate must be explained rather than replaced by a synthetic chart. Horizon state is persisted so that a user can move between 24-hour and 168-hour views without silently changing the underlying forecast.
+
+\IfFileExists{../assets/screenshots/dashboard.png}{
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{dashboard.png}
+  \caption[Normal-user EnergyAI dashboard]{Normal-user EnergyAI dashboard with measured hourly consumption, tariff-cost estimates, source freshness, and data coverage. The non-personal demonstration account has no administrative navigation.}
+  \label{fig:screenshotdashboard}
+\end{figure}}{}
+
+\section{Backend API and domain model}
+
+FastAPI routers separate authentication, account lifecycle, settings, ingestion, consumption, forecasting, analytics, alerts, recommendations, simulation, monitoring, system health, and administration. Importing the current application and generating its OpenAPI schema yields exactly 80 method--path operations across 74 unique paths, including the two root health operations. Pydantic request and response models define validation boundaries, while dependency functions enforce authentication, role, and ownership rules.
+
+The core domain model is shown in \cref{fig:classdomain}. A User owns one or more Sites; a Site contains Meters; meter observations are stored as SmartMeterReading records; IngestionBatch records summarize import operations; Forecast records preserve output and horizon provenance; AlertConfig and Alert represent policy and detected conditions; Recommendations record suggested actions. Additional entities support refresh tokens, account-action tokens, OAuth challenges, outbox delivery, audit events, budgets, and system settings.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{class_domain.pdf}
+  \caption{Core EnergyAI domain class diagram based on the SQLAlchemy entities.}
+  \label{fig:classdomain}
+\end{figure}
+
+\section{Authentication, JWT sessions, and RBAC}
+
+Local login verifies a bcrypt password hash. On success, the backend returns an access token and sets refresh state through an HttpOnly cookie. The server stores refresh-token hashes and supports rotation, logout, and logout-all operations. This design reduces exposure compared with storing long-lived refresh credentials in browser local storage.
+
+\ac{rbac} protects administrative operations. Ownership checks are also required for normal-user resources: role membership alone must not permit access to another user's site, readings, forecast history, or alerts. Account actions cover email verification, password reset, Google identity linking where configured, data export, avatar management, and irreversible deletion with recent-authentication controls.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{sequence_authentication.pdf}
+  \caption{Sequence diagram for local authentication and refresh-state creation.}
+  \label{fig:authsequence}
+\end{figure}
+
+\section{CSV ingestion and validation}
+
+The product input contract is intentionally simple: timestamps and energy values in kWh. A meter-scoped preview endpoint parses a bounded sample and returns detected columns and validation information. Import is a separate confirmed operation. The backend verifies ownership, normalizes supported timestamps, rejects invalid rows, bounds file/row processing, stores accepted readings transactionally, and records an ingestion batch.
+
+This separation improves safety and usability. A user can identify a wrong delimiter, timestamp column, or unit before modifying persisted history. Duplicate or malformed timestamps are not silently converted into model-ready data. The consumption API supports period summaries, paginated readings, current/history statistics, and export.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{sequence_csv_import.pdf}
+  \caption{Sequence diagram for CSV preview and confirmed import.}
+  \label{fig:importsequence}
+\end{figure}
+
+\IfFileExists{../assets/screenshots/usage.png}{
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{usage.png}
+  \caption[Normal-user Usage and data-quality view]{Normal-user Usage view showing persisted demonstration readings, monthly energy and cost summaries, provenance, and data coverage.}
+  \label{fig:screenshotusage}
+\end{figure}}{}
+
+\section{Forecasting service and artifact contracts}
+
+The forecast router exposes capabilities, readiness, demo-history preparation, run, latest, and history operations. The service resolves the configured horizon to a packaged artifact, checks its manifest, loads the user's owned site history, applies data gates and derived calendar features, normalizes the latest 336-hour window, performs inference, inversely transforms outputs with the same window statistics, persists the forecast, and returns the median path and quantile bounds. This implementation contract is not the scaler contract used for the frozen LCL metrics; \cref{tab:normalizationcontracts} states the resulting validation gap.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{forecast_request_lifecycle.pdf}
+  \caption{Forecast lifecycle and failure boundaries.}
+  \label{fig:forecastlifecycle}
+\end{figure}
+
+The 24-hour and 168-hour manifests record artifact version, checksum, size, unit, lookback, horizon, normalization, quantiles, calendar features, data gates, research metrics, and limitations. The weekly manifest additionally records architecture properties, strict state-dict load, CPU output shape, finite-output verification, and smoke-reference values. Artifact readiness is fixed and explicit rather than inferred from a mutable database label.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{sequence_forecast.pdf}
+  \caption{Sequence diagram for a supported 24-hour or 168-hour forecast.}
+  \label{fig:forecastsequence}
+\end{figure}
+
+\IfFileExists{../assets/screenshots/forecast_24h.png}{
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{forecast_24h.png}
+  \caption[Normal-user 24-hour Global TFT forecast]{Normal-user 24-hour Global TFT forecast with readiness gates, hourly quantiles, and explicit research-evidence context.}
+  \label{fig:screenshotforecast24}
+\end{figure}}{}
+
+\IfFileExists{../assets/screenshots/forecast_168h.png}{
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{forecast_168h.png}
+  \caption[Normal-user 168-hour Global TFT forecast]{Normal-user 168-hour Global TFT forecast with the same input-readiness contract and daily aggregation of 168 hourly targets.}
+  \label{fig:screenshotforecast168}
+\end{figure}}{}
+
+\section{Dashboard, actions, alerts, and reports}
+
+The dashboard aggregates current consumption, historical trend, forecast summary, and prioritized actions from database-backed APIs. The Usage area focuses on measurements and export. Forecast focuses on horizon selection, readiness, quantiles, validation context, and history. Actions combine recommendations and alert state so that the prediction can lead to a practical response rather than remain an isolated chart.
+
+Alerts have acknowledged, resolved, and reopened states and a per-user configuration. Background workers support alert generation and delivery responsibilities. Recommendations can also be updated through explicit status transitions. PDF export is available from the forecasting workflow through the analytics endpoint. The legacy \texttt{/reports} page redirects to Usage; there is no separate reports workspace or external reporting warehouse.
+
+\IfFileExists{../assets/screenshots/actions.png}{
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{actions.png}
+  \caption[Evidence-backed normal-user incident and action]{Normal-user Actions view after a measured 0.500\,kW push sample crossed the configured 0.400\,kW threshold, producing an evidence-backed incident and follow-up action.}
+  \label{fig:screenshotalerts}
+\end{figure}}{}
+
+\section{Real-time behavior and background work}
+
+The repository contains WebSocket connection management and real-time alert behavior, along with workers for alerts, email outbox delivery, and avatar cleanup. Their responsibilities are separated from request-response handlers to avoid blocking API operations. The current audit verified that the worker containers run; it did not revalidate external SMTP inbox delivery or Google OAuth with real providers. Those capabilities remain configuration-dependent.
+
+\section{Observability and error handling}
+
+System endpoints expose liveness, readiness, health, version, and legal information. Administrative endpoints expose user, system, and model-readiness views. Structured logging and audit events preserve significant account, authentication, ingestion, and forecast actions. User-facing errors use explicit codes and messages rather than leaking internal exception details.
+
+The product must distinguish service readiness from model readiness. A healthy FastAPI process can still lack a valid forecasting artifact or sufficient site history. Conversely, a valid artifact does not make external email or OAuth providers ready. Separate capability responses allow the frontend to present these states accurately.
+
+\section{UI/UX and accessibility considerations}
+
+The interface uses a consistent dark visual language, responsive layouts, labeled controls, status messages, and chart alternatives where practical. Browser tests cover desktop Chromium, Firefox, WebKit, and 360, 390, and 768-pixel responsive projects. Accessibility is not claimed as certified: a formal WCAG audit, keyboard-only review, screen-reader validation, and contrast inventory remain future work.
+
+\section{Local Docker deployment}
+
+The verified deployment is local and reproducible:
+\begin{lstlisting}[language=bash]
+docker compose up --build -d
+docker compose ps
+curl http://localhost:8000/api/v1/system/live
+curl http://localhost:8000/api/v1/system/ready
+\end{lstlisting}
+Environment configuration must replace insecure sentinel secrets before startup. PostgreSQL data and avatars use named volumes. Alembic migrations run against the configured database. Model artifacts are packaged in the backend image or mounted according to the repository's Compose build context.
+
+\section{Platform deployment}
+
+\textit{This section will be completed after the final deployment of the EnergyAI platform.}
+
+No cloud provider, public URL, production screenshot, or external production validation is claimed in this draft.
+
+\section{Implementation summary}
+
+EnergyAI's engineering contribution is an inspectable boundary between scientific artifacts and product behavior. The application exposes only supported horizons, verifies artifact identity, rejects insufficient input, records provenance, isolates user data, and preserves uncertainty. It also reveals one unresolved boundary---serving normalization differs from research evaluation---instead of silently treating file identity as proof of deployment accuracy. The next chapter evaluates the quality evidence for this implementation and states what remains conditional.

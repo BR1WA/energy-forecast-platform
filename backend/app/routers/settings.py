@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from typing import Literal
-from zoneinfo import ZoneInfo
 from app.database import get_db
 from app.models import EnergyBudget, Site, SiteSettings, User
 from app.services.auth_service import get_current_user
@@ -11,30 +10,35 @@ from app.services.audit_service import record_audit_event
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
+MOROCCO_COUNTRY = "Morocco"
+MOROCCO_CURRENCY = "MAD"
+MOROCCO_TIMEZONE = "Africa/Casablanca"
+MoroccoRegion = Literal[
+    "Tanger-Tétouan-Al Hoceïma",
+    "Oriental",
+    "Fès-Meknès",
+    "Rabat-Salé-Kénitra",
+    "Béni Mellal-Khénifra",
+    "Casablanca-Settat",
+    "Marrakech-Safi",
+    "Drâa-Tafilalet",
+    "Souss-Massa",
+    "Guelmim-Oued Noun",
+    "Laâyoune-Sakia El Hamra",
+    "Dakhla-Oued Ed-Dahab",
+]
+
+
 class SetupPayload(BaseModel):
     model_config = {"extra": "forbid"}
 
     site_name: str | None = Field(default=None, min_length=1, max_length=120)
-    timezone: str | None = None
-    country: str = Field(min_length=2, max_length=100)
-    region: str = Field(min_length=1, max_length=100)
-    electricity_provider: str = Field(min_length=1, max_length=100)
-    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    region: MoroccoRegion
     peak_rate: float = Field(ge=0, le=100)
     off_peak_rate: float = Field(ge=0, le=100)
     peak_start_hour: int = Field(ge=0, le=23)
     peak_end_hour: int = Field(ge=0, le=23)
     sensor_type: Literal["csv", "push", "simulator"]
-
-    @field_validator("timezone")
-    @classmethod
-    def timezone_must_exist(cls, value: str | None) -> str | None:
-        if value is not None:
-            try:
-                ZoneInfo(value)
-            except (KeyError, ValueError) as exc:
-                raise ValueError("timezone must be a valid IANA timezone") from exc
-        return value
 
 class PreferencesPayload(BaseModel):
     model_config = {"extra": "forbid"}
@@ -62,10 +66,10 @@ def get_settings(
     settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first()
     if not settings:
         return {
-            "country": "Morocco",
+            "country": MOROCCO_COUNTRY,
             "region": "Casablanca-Settat",
-            "electricity_provider": "Lydec",
-            "currency": "MAD",
+            "electricity_provider": None,
+            "currency": MOROCCO_CURRENCY,
             "peak_rate": 1.1,
             "off_peak_rate": 0.8,
             "peak_start_hour": 6,
@@ -83,17 +87,17 @@ def save_setup(
     site = ensure_default_site(db, current_user.id)
     if payload.site_name is not None:
         site.name = payload.site_name.strip() or "Default site"
-    if payload.timezone is not None:
-        site.timezone = payload.timezone
+    site.region = payload.region
+    site.timezone = MOROCCO_TIMEZONE
     settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).first()
     if not settings:
         settings = SiteSettings(site_id=site.id)
         db.add(settings)
 
-    settings.country = payload.country
+    settings.country = MOROCCO_COUNTRY
     settings.region = payload.region
-    settings.electricity_provider = payload.electricity_provider
-    settings.currency = payload.currency
+    settings.electricity_provider = None
+    settings.currency = MOROCCO_CURRENCY
     settings.peak_rate = payload.peak_rate
     settings.off_peak_rate = payload.off_peak_rate
     settings.peak_start_hour = payload.peak_start_hour

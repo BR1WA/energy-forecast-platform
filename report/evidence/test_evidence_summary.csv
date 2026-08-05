@@ -1,0 +1,12 @@
+area,command_or_source,result,status,limitations
+Backend SQLite,python -m pytest -q,96 passed 4 PostgreSQL-only skipped,passed,Audit run dated 2026-07-31
+Backend PostgreSQL,disposable migrated PostgreSQL database then python -m pytest -q,100 passed 0 skipped,passed,Database removed after isolated run
+Frontend lint,npm run lint,passed,passed,Audit run dated 2026-07-31
+Frontend type checking,npm run typecheck,passed,passed,Audit run dated 2026-07-31
+Frontend production build,npm run build,25 routes generated,passed,Audit run dated 2026-07-31
+Playwright six-project matrix,npm run test:browser,107 passed 1 WebKit reload interruption,conditional,Isolated rerun of failing test passed 1/1; gate classified as flaky
+Production npm dependencies,npm audit --omit=dev,0 known vulnerabilities,passed,Full development graph still reported nine high-severity tooling advisories
+Python dependency audit,pip-audit including development constraints,one pytest advisory,conditional,pytest 8.4.2 advisory fixed in 9.0.3 but project constrained below 9
+Secret scanning,CI full-history gitleaks job,present in CI,configured,Current report generation did not rerun a full-history scan
+Docker Compose,docker compose ps,PostgreSQL backend and frontend healthy; three workers running,passed,Local deployment only
+Artifact contract,manifest hash/readiness/inference tests,24h and 168h artifacts validated,passed,Production manifest evidence and audit tests

@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.product_forecast_service import product_forecast_service
+from app.config import get_settings
+from app.models import EmailOutbox
 
 
 router = APIRouter(prefix="/api/v1/system", tags=["System"])
@@ -14,6 +16,7 @@ START_TIME = time.time()
 
 
 def build_readiness(db: Session) -> dict:
+    settings = get_settings()
     database_ready = True
     database_error = None
     try:
@@ -25,6 +28,13 @@ def build_readiness(db: Session) -> dict:
     forecast = product_forecast_service.warmup()
     forecast_ready = bool(forecast["available"] and forecast.get("warmed"))
     ready = database_ready and forecast_ready
+    forecast_artifacts = {"24": forecast}
+    if product_forecast_service.is_enabled(168):
+        forecast_artifacts["168"] = product_forecast_service.warmup(168)
+    mail_counts = {"processing": 0, "retry": 0, "dead": 0}
+    if settings.EMAIL_DELIVERY_ENABLED:
+        for state in mail_counts:
+            mail_counts[state] = db.query(EmailOutbox).filter(EmailOutbox.status == state).count()
     return {
         "status": "ready" if ready else "not_ready",
         "ready": ready,
@@ -40,6 +50,12 @@ def build_readiness(db: Session) -> dict:
             "artifact_fingerprint": forecast["artifact_fingerprint"],
             "warmed": bool(forecast.get("warmed")),
             "error": forecast["error"],
+        },
+        "forecast_artifacts": forecast_artifacts,
+        "email": {
+            "enabled": settings.EMAIL_DELIVERY_ENABLED,
+            "status": "disabled" if not settings.EMAIL_DELIVERY_ENABLED else ("degraded" if mail_counts["dead"] else "ready"),
+            **mail_counts,
         },
         "uptime_seconds": int(time.time() - START_TIME),
     }
@@ -65,6 +81,7 @@ def get_health(db: Session = Depends(get_db)):
         "backend": "healthy",
         "database": readiness["database"]["status"],
         "forecast": readiness["forecast"]["status"],
+        "email": readiness["email"],
         "ready": readiness["ready"],
         "uptime": readiness["uptime_seconds"],
     }
@@ -73,3 +90,16 @@ def get_health(db: Session = Depends(get_db)):
 @router.get("/version")
 def get_version():
     return {"version": "1.0.0"}
+
+
+@router.get("/legal")
+def get_legal_configuration():
+    settings = get_settings()
+    configured = not settings.legal_configuration_errors()
+    return {
+        "configured": configured,
+        "owner_name": settings.LEGAL_OWNER_NAME if configured else None,
+        "contact_email": settings.LEGAL_CONTACT_EMAIL if configured else None,
+        "support_email": settings.SUPPORT_EMAIL if configured else None,
+        "effective_date": settings.LEGAL_EFFECTIVE_DATE if configured else None,
+    }

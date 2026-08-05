@@ -8,16 +8,40 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.models import User, Forecast, Alert
+from app.models import User, Forecast, Alert, EmailOutbox
 from app.schemas import UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role
 from app.services.audit_service import record_audit_event
-from app.services.product_forecast_service import FALLBACK_NAME, MODEL_NAME, product_forecast_service
+from app.services.product_forecast_service import PRODUCT_MODEL_NAMES, product_forecast_service
+from app.services.email_service import retry_dead_email
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
 # Track server start time
 _start_time = time.time()
+
+
+@router.post("/email-outbox/{outbox_id}/retry")
+def retry_email_outbox(
+    outbox_id: str,
+    current_user: User = Depends(require_role(["admin"])),
+    db: Session = Depends(get_db),
+):
+    row = db.query(EmailOutbox).filter(EmailOutbox.id == outbox_id).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "email_not_found", "message": "Email outbox item was not found."})
+    if row.status != "dead":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "email_not_dead", "message": "Only dead email can be retried."})
+    retry_dead_email(db, row)
+    record_audit_event(
+        db,
+        "email.retry_requested",
+        actor_user_id=current_user.id,
+        target=f"email-outbox:{row.id}",
+        metadata={"message_type": row.template},
+    )
+    db.commit()
+    return {"id": row.id, "status": row.status}
 
 
 @router.get("/users", response_model=List[UserResponse])
@@ -130,7 +154,7 @@ def system_health(
     return SystemHealth(
         status="operational" if db_status == "healthy" and model["available"] and model["warmed"] else "degraded",
         total_users=db.query(User).count(),
-        total_forecasts=db.query(Forecast).filter(Forecast.model_name.in_([MODEL_NAME, FALLBACK_NAME])).count(),
+        total_forecasts=db.query(Forecast).filter(Forecast.model_name.in_(PRODUCT_MODEL_NAMES)).count(),
         database_status=db_status,
         forecast_status="ready" if model["available"] and model["warmed"] else "not_ready",
         forecast_error=model["error"],
@@ -170,3 +194,17 @@ def model_readiness(
 ):
     """Return fixed packaged-artifact status without mutation controls."""
     return product_forecast_service.warmup()
+
+
+@router.get("/model-readiness/all")
+def all_model_readiness(
+    current_user: User = Depends(require_role(["admin"])),
+):
+    """Return independent readiness for every fixed forecast artifact."""
+    del current_user
+    return {
+        "artifacts": [
+            product_forecast_service.warmup(),
+            product_forecast_service.warmup(168),
+        ]
+    }

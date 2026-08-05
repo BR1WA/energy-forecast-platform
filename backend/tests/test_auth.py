@@ -1,24 +1,31 @@
-import unittest
-import os
+from __future__ import annotations
+
+from datetime import datetime, timezone
 import hashlib
+import unittest
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Meter, RefreshToken, Site, User
-from app.services.auth_service import hash_password, create_access_token
+from app.models import AccountActionToken, AuditEvent, EmailOutbox, Meter, RefreshToken, Site, User
+from app.routers import auth as auth_router
+from app.services.account_action_service import hash_action_token, unseal_action_token
+from app.services.auth_service import create_access_token, hash_password
 
-from sqlalchemy.pool import StaticPool
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
+    "sqlite:///:memory:",
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool
+    poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+ORIGIN = "http://localhost:3000"
+
 
 def override_get_db():
     db = TestingSessionLocal()
@@ -27,66 +34,88 @@ def override_get_db():
     finally:
         db.close()
 
+
 client = TestClient(app)
+
 
 class TestAuthAndTokens(unittest.TestCase):
     def setUp(self):
         app.dependency_overrides[get_db] = override_get_db
+        client.cookies.clear()
         Base.metadata.create_all(bind=engine)
         self.db = TestingSessionLocal()
+        self.original_email_delivery = auth_router.settings.EMAIL_DELIVERY_ENABLED
+        auth_router.settings.EMAIL_DELIVERY_ENABLED = True
+        auth_router.settings.DEBUG = True
 
     def tearDown(self):
+        auth_router.settings.EMAIL_DELIVERY_ENABLED = self.original_email_delivery
         self.db.close()
         Base.metadata.drop_all(bind=engine)
-        if get_db in app.dependency_overrides:
-            del app.dependency_overrides[get_db]
+        app.dependency_overrides.pop(get_db, None)
 
-    def test_register_flow_persists_refresh_token(self):
-        payload = {
-            "email": " NewUser@Example.COM ",
-            "password": "testpassword123",
-            "full_name": "New User"
-        }
-        res = client.post("/api/v1/auth/register", json=payload)
-        self.assertEqual(res.status_code, 201)
-        data = res.json()
-        self.assertIn("access_token", data)
-        self.assertIn("refresh_token", data)
+    def _verified_user(self, email: str, password: str = "testpassword123") -> User:
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            full_name="Verified User",
+            role="user",
+            is_active=True,
+            email_verified_at=datetime.now(timezone.utc),
+        )
+        self.db.add(user)
+        self.db.commit()
+        return user
 
-        # Verify token is persisted in DB
-        refresh_token = data["refresh_token"]
-        token_hash = hashlib.sha256(refresh_token.encode('utf-8')).hexdigest()
-        db_token = self.db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
-        self.assertIsNotNone(db_token)
-        self.assertEqual(db_token.is_revoked, False)
-        user = self.db.query(User).filter(User.email == "newuser@example.com").one()
-        site = self.db.query(Site).filter(Site.user_id == user.id).one()
-        meter = self.db.query(Meter).filter(
-            Meter.site_id == site.id, Meter.is_primary.is_(True)
-        ).one()
-        self.assertEqual(meter.name, "Primary meter")
+    def _login(self, user: User, password: str = "testpassword123"):
+        return client.post("/api/v1/auth/login", json={"email": user.email, "password": password})
 
-    def test_registration_rejects_short_password(self):
+    def test_registration_is_unverified_and_has_no_session_or_raw_token_at_rest(self):
         response = client.post(
             "/api/v1/auth/register",
-            json={
-                "email": "weak@example.com",
-                "password": "short",
-                "full_name": "Weak Password",
-            },
+            json={"email": " NewUser@Example.COM ", "password": "testpassword123", "full_name": "New User"},
         )
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 201)
+        self.assertNotIn("access_token", response.json())
+        self.assertIsNone(response.cookies.get("refresh_token"))
+        self.assertEqual(self.db.query(RefreshToken).count(), 0)
 
-    def test_database_rejects_a_second_site_for_one_user(self):
+        user = self.db.query(User).filter(User.email == "newuser@example.com").one()
+        self.assertIsNone(user.email_verified_at)
+        action = self.db.query(AccountActionToken).filter_by(user_id=user.id, purpose="verify_email").one()
+        outbox = self.db.query(EmailOutbox).filter_by(user_id=user.id, template="verify_email").one()
+        raw_token = unseal_action_token(outbox.payload["sealed_token"])
+        self.assertEqual(action.token_hash, hash_action_token(raw_token))
+        self.assertNotIn(raw_token, str(outbox.payload))
+        self.assertNotIn("token=", str(outbox.payload))
+
+        site = self.db.query(Site).filter(Site.user_id == user.id).one()
+        meter = self.db.query(Meter).filter(Meter.site_id == site.id, Meter.is_primary.is_(True)).one()
+        self.assertEqual(meter.name, "Primary meter")
+
+    def test_unverified_login_uses_typed_public_error(self):
         user = User(
-            email="one-site@example.com",
-            password_hash=hash_password("password123"),
-            full_name="One Site",
+            email="waiting@example.com",
+            password_hash=hash_password("testpassword123"),
             role="user",
             is_active=True,
         )
         self.db.add(user)
         self.db.commit()
+        response = self._login(user)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["code"], "email_verification_required")
+        self.assertIsNone(response.cookies.get("refresh_token"))
+
+    def test_registration_rejects_short_password(self):
+        response = client.post(
+            "/api/v1/auth/register",
+            json={"email": "weak@example.com", "password": "short", "full_name": "Weak Password"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_database_rejects_a_second_site_for_one_user(self):
+        user = self._verified_user("one-site@example.com")
         self.db.add(Site(user_id=user.id, name="First"))
         self.db.commit()
         self.db.add(Site(user_id=user.id, name="Second"))
@@ -94,148 +123,64 @@ class TestAuthAndTokens(unittest.TestCase):
             self.db.flush()
         self.db.rollback()
 
-    def test_login_flow_persists_refresh_token(self):
-        # Create a user first
-        user = User(
-            email="loginuser@example.com",
-            password_hash=hash_password("loginpassword123"),
-            full_name="Login User",
-            role="user",
-            is_active=True
-        )
-        self.db.add(user)
-        self.db.commit()
-
-        # Login
-        payload = {
-            "email": "loginuser@example.com",
-            "password": "loginpassword123"
-        }
-        res = client.post("/api/v1/auth/login", json=payload)
-        self.assertEqual(res.status_code, 200)
-        data = res.json()
-        self.assertIn("access_token", data)
-        self.assertIn("refresh_token", data)
-
-        # Verify token in DB
-        refresh_token = data["refresh_token"]
-        token_hash = hashlib.sha256(refresh_token.encode('utf-8')).hexdigest()
-        db_token = self.db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
-        self.assertIsNotNone(db_token)
-        self.assertEqual(db_token.is_revoked, False)
-
-    def test_refresh_token_rotation_and_replay_prevention(self):
-        user = User(
-            email="refreshuser@example.com",
-            password_hash=hash_password("refreshpassword123"),
-            full_name="Refresh User",
-            role="user",
-            is_active=True
-        )
-        self.db.add(user)
-        self.db.commit()
-
-        # Login to get initial tokens
-        login_res = client.post("/api/v1/auth/login", json={"email": "refreshuser@example.com", "password": "refreshpassword123"})
-        self.assertEqual(login_res.status_code, 200)
-        tokens = login_res.json()
-        first_refresh = tokens["refresh_token"]
-
-        # 1. Refresh using first token
-        refresh_res = client.post("/api/v1/auth/refresh", json={"refresh_token": first_refresh})
-        self.assertEqual(refresh_res.status_code, 200)
-        refresh_data = refresh_res.json()
-        self.assertIn("access_token", refresh_data)
-        self.assertIn("refresh_token", refresh_data)
-        
-        second_refresh = refresh_data["refresh_token"]
-        self.assertNotEqual(first_refresh, second_refresh)
-
-        # Verify first token is revoked in DB, second is active
-        first_hash = hashlib.sha256(first_refresh.encode('utf-8')).hexdigest()
-        second_hash = hashlib.sha256(second_refresh.encode('utf-8')).hexdigest()
-
-        first_db = self.db.query(RefreshToken).filter(RefreshToken.token_hash == first_hash).first()
-        second_db = self.db.query(RefreshToken).filter(RefreshToken.token_hash == second_hash).first()
-
-        self.assertIsNotNone(first_db)
-        self.assertEqual(first_db.is_revoked, True)
-        self.assertIsNotNone(second_db)
-        self.assertEqual(second_db.is_revoked, False)
-
-        # 2. Replay prevention: try to refresh using first_refresh again -> should fail
-        replay_res = client.post("/api/v1/auth/refresh", json={"refresh_token": first_refresh})
-        self.assertEqual(replay_res.status_code, 401)
-
-        # 3. Refresh using second_refresh -> should succeed
-        refresh_res2 = client.post("/api/v1/auth/refresh", json={"refresh_token": second_refresh})
-        self.assertEqual(refresh_res2.status_code, 200)
-
-    def test_logout_revokes_tokens(self):
-        user = User(
-            email="logoutuser@example.com",
-            password_hash=hash_password("logoutpassword123"),
-            full_name="Logout User",
-            role="user",
-            is_active=True
-        )
-        self.db.add(user)
-        self.db.commit()
-
-        # Login
-        login_res = client.post("/api/v1/auth/login", json={"email": "logoutuser@example.com", "password": "logoutpassword123"})
-        tokens = login_res.json()
-        access_token = tokens["access_token"]
-        refresh_token = tokens["refresh_token"]
-        token_hash = hashlib.sha256(refresh_token.encode('utf-8')).hexdigest()
-
-        # Logout with token in body
-        logout_res = client.post(
-            "/api/v1/auth/logout",
-            json={"refresh_token": refresh_token},
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
-        self.assertEqual(logout_res.status_code, 200)
-
-        # Verify revoked in DB
-        db_token = self.db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
-        self.assertEqual(db_token.is_revoked, True)
-
-        # Try to refresh -> should fail
-        refresh_res = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
-        self.assertEqual(refresh_res.status_code, 401)
-
-    def test_logout_without_body_revokes_all_user_sessions(self):
-        user = User(
-            email="logoutall@example.com",
-            password_hash=hash_password("logoutpassword123"),
-            full_name="Logout All",
-            role="user",
-            is_active=True,
-        )
-        self.db.add(user)
-        self.db.commit()
-        first = client.post(
-            "/api/v1/auth/login",
-            json={"email": user.email, "password": "logoutpassword123"},
-        ).json()
-        second = client.post(
-            "/api/v1/auth/login",
-            json={"email": user.email, "password": "logoutpassword123"},
-        ).json()
-
-        response = client.post(
-            "/api/v1/auth/logout",
-            headers={"Authorization": f"Bearer {first['access_token']}"},
-        )
+    def test_login_persists_only_refresh_hash_and_sets_hardened_cookie(self):
+        response = self._login(self._verified_user("loginuser@example.com"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            client.post(
-                "/api/v1/auth/refresh",
-                json={"refresh_token": second["refresh_token"]},
-            ).status_code,
-            401,
+        self.assertIn("access_token", response.json())
+        self.assertNotIn("refresh_token", response.json())
+        refresh = response.cookies.get("refresh_token")
+        self.assertIsNotNone(refresh)
+        stored = self.db.query(RefreshToken).filter_by(token_hash=hashlib.sha256(refresh.encode()).hexdigest()).one()
+        self.assertFalse(stored.is_revoked)
+        cookie = response.headers["set-cookie"].lower()
+        self.assertIn("httponly", cookie)
+        self.assertIn("samesite=lax", cookie)
+        self.assertIn("path=/api/v1/auth", cookie)
+
+    def test_refresh_requires_origin_rotates_and_rejects_replay(self):
+        login = self._login(self._verified_user("refreshuser@example.com"))
+        first = login.cookies.get("refresh_token")
+        self.assertEqual(client.post("/api/v1/auth/refresh").status_code, 403)
+
+        client.cookies.set("refresh_token", first, path="/api/v1/auth")
+        rotated = client.post("/api/v1/auth/refresh", headers={"Origin": ORIGIN})
+        self.assertEqual(rotated.status_code, 200)
+        second = rotated.cookies.get("refresh_token")
+        self.assertNotEqual(first, second)
+        self.assertTrue(self.db.query(RefreshToken).filter_by(token_hash=hashlib.sha256(first.encode()).hexdigest()).one().is_revoked)
+
+        client.cookies.set("refresh_token", first, path="/api/v1/auth")
+        replay = client.post("/api/v1/auth/refresh", headers={"Origin": ORIGIN})
+        self.assertEqual(replay.status_code, 401)
+        self.assertEqual(replay.json()["detail"]["code"], "refresh_token_replayed")
+
+    def test_logout_current_and_logout_all_revoke_sessions(self):
+        user = self._verified_user("logout@example.com")
+        first = self._login(user)
+        first_refresh = first.cookies.get("refresh_token")
+        first_access = first.json()["access_token"]
+        second = self._login(user)
+        second_refresh = second.cookies.get("refresh_token")
+
+        client.cookies.set("refresh_token", first_refresh, path="/api/v1/auth")
+        logout = client.post(
+            "/api/v1/auth/logout",
+            headers={"Authorization": f"Bearer {first_access}", "Origin": ORIGIN},
         )
+        self.assertEqual(logout.status_code, 200)
+        first_row = self.db.query(RefreshToken).filter_by(token_hash=hashlib.sha256(first_refresh.encode()).hexdigest()).one()
+        second_row = self.db.query(RefreshToken).filter_by(token_hash=hashlib.sha256(second_refresh.encode()).hexdigest()).one()
+        self.assertTrue(first_row.is_revoked)
+        self.assertFalse(second_row.is_revoked)
+
+        client.cookies.set("refresh_token", second_refresh, path="/api/v1/auth")
+        logout_all = client.post(
+            "/api/v1/auth/logout-all",
+            headers={"Authorization": f"Bearer {second.json()['access_token']}", "Origin": ORIGIN},
+        )
+        self.assertEqual(logout_all.status_code, 200)
+        self.db.expire_all()
+        self.assertTrue(all(row.is_revoked for row in self.db.query(RefreshToken).filter_by(user_id=user.id).all()))
 
     def test_final_active_admin_cannot_be_disabled_or_demoted(self):
         admin = User(
@@ -244,11 +189,11 @@ class TestAuthAndTokens(unittest.TestCase):
             full_name="Only Admin",
             role="admin",
             is_active=True,
+            email_verified_at=datetime.now(timezone.utc),
         )
         self.db.add(admin)
         self.db.commit()
         access = create_access_token({"sub": str(admin.id), "role": "admin"})
-
         for payload in ({"is_active": False}, {"role": "user"}):
             response = client.put(
                 f"/api/v1/admin/users/{admin.id}",
@@ -257,26 +202,58 @@ class TestAuthAndTokens(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 409)
 
-    def test_password_change_revokes_existing_refresh_tokens(self):
-        user = User(
-            email="passworduser@example.com",
-            password_hash=hash_password("oldpassword123"),
-            full_name="Password User",
-            role="user",
+    def test_admin_dead_letter_retry_is_explicit_and_audited(self):
+        admin = User(
+            email="retry-admin@example.com",
+            password_hash=hash_password("adminpassword123"),
+            role="admin",
             is_active=True,
+            email_verified_at=datetime.now(timezone.utc),
         )
-        self.db.add(user)
+        self.db.add(admin)
+        self.db.flush()
+        row = EmailOutbox(
+            id="dead-letter-for-audit",
+            recipient="capture@example.test",
+            template="critical_alert",
+            template_version="v1",
+            payload={},
+            dedup_key="dead-letter:audit",
+            status="dead",
+            attempts=5,
+        )
+        self.db.add(row)
         self.db.commit()
+        access = create_access_token({"sub": str(admin.id), "role": "admin"})
+        response = client.post(
+            f"/api/v1/admin/email-outbox/{row.id}/retry",
+            headers={"Authorization": f"Bearer {access}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "retry")
+        self.assertEqual(self.db.query(AuditEvent).filter_by(event_type="email.retry_requested").count(), 1)
 
-        login_res = client.post("/api/v1/auth/login", json={"email": user.email, "password": "oldpassword123"})
-        self.assertEqual(login_res.status_code, 200)
-        tokens = login_res.json()
-        change_res = client.put(
+    def test_password_change_requires_origin_and_revokes_existing_sessions(self):
+        user = self._verified_user("passworduser@example.com", "oldpassword123")
+        login = self._login(user, "oldpassword123")
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        self.assertEqual(
+            client.put(
+                "/api/v1/auth/password",
+                json={"current_password": "oldpassword123", "new_password": "newpassword123"},
+                headers=headers,
+            ).status_code,
+            403,
+        )
+        headers["Origin"] = ORIGIN
+        changed = client.put(
             "/api/v1/auth/password",
             json={"current_password": "oldpassword123", "new_password": "newpassword123"},
-            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+            headers=headers,
         )
-        self.assertEqual(change_res.status_code, 200)
-        self.assertIn("Sign in again", change_res.json()["message"])
-        self.assertTrue(all(token.is_revoked for token in self.db.query(RefreshToken).filter(RefreshToken.user_id == user.id).all()))
-        self.assertEqual(client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}).status_code, 401)
+        self.assertEqual(changed.status_code, 200)
+        self.assertTrue(all(row.is_revoked for row in self.db.query(RefreshToken).filter_by(user_id=user.id).all()))
+
+
+if __name__ == "__main__":
+    unittest.main()

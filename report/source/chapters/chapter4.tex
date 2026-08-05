@@ -1,0 +1,152 @@
+\chapter{Reliable Experimental Protocol}
+\label{chap:protocol}
+
+\section{Continuous multi-horizon formulation}
+
+The corrected task estimates future hourly energy rather than a contemporaneous high/low class. For an origin $t$, lookback $L$, and horizon $H$, the input contains observations $y_{t-L+1},\ldots,y_t$ and the target contains $y_{t+1},\ldots,y_{t+H}$. Calendar features for future timestamps are permitted because hour, weekday, month, workday status, and holiday flags are known before inference. Future measured consumption or future weather observations are not permitted unless replaced by forecasts available at the same origin.
+
+EnergyAI supports $L=336$ hours and $H\in\{24,168\}$. The two-week history covers recent daily and weekly patterns. The 24-hour horizon supports next-day action, while 168 hours provides a full week. Direct multi-output forecasting avoids the error accumulation of recursively feeding each prediction back as the next input, although uncertainty still grows across the horizon.
+
+\section{Causal windows}
+
+A window is causal when every input could have been observed at its forecast origin. Lag features use $y_{t-k}$ with $k\geq 0$; rolling statistics end at $t$ when predicting $t+1$ or later. If the target begins at $t$, the rolling window must end at $t-1$. This indexing convention is stated explicitly in each notebook or worker.
+
+Missing inputs are not silently imputed from future observations. The research preparation performs bounded causal forward filling after hourly aggregation and excludes evaluation windows that remain non-finite. The serving manifests instead require at least 95\% coverage, no consecutive gap longer than three hours, and finite model inputs. These policies share a causal intent but are not identical; the report therefore treats preprocessing equivalence as a validation requirement, not as an established property.
+
+\section{Chronological separation}
+
+The ECL benchmark reconstructs a common 321-client hourly matrix and uses 18,317 rows for training, 2,633 for validation, and 5,261 for testing. The Low Carbon London workflow first selects 2,500 eligible 2013 households, assigns 2,000 to the known cohort and 500 to the cold-start cohort, and then applies one common hourly chronology to every series. Indices 0--6,131 form training (1 January 00:00 through 13 September 11:00 UTC), 6,132--7,007 form validation (13 September 12:00 through 19 October 23:00 UTC), and 7,008--8,759 form test (20 October 00:00 through 31 December 23:00 UTC). Cold-start households contribute no gradient updates. Their test results therefore measure both later time and transfer to unseen households.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.96\textwidth]{chronological_split.pdf}
+  \caption{Chronological split used to prevent future observations from influencing model fitting.}
+  \label{fig:chronosplit}
+\end{figure}
+
+Validation guides early stopping and architecture choice. The test region must not be consulted repeatedly while tuning. Once the final configuration is selected, a final test evaluation is recorded. If multiple seeds are run, the selection rule and aggregation must be declared before inspecting the final cohort.
+
+\section{Resampling, units, and time zones}
+
+The LCL source field is named \texttt{energy(kWh/hh)}: each value is energy consumed during a half-hour interval, not an instantaneous power measurement. The preparation parses timestamps as UTC, converts them to timezone-naive UTC indices, aggregates duplicate half-hours by timestamp, and sums the two half-hour energy values into each hourly total. Consequently, an hourly target and its MAE are expressed in kWh for an hourly interval. The report does not reinterpret these values as kW. Daily targets are sums in kWh and require at least 22 finite hourly values.
+
+All 2013 households are reindexed to the same 8,760-position UTC calendar before the shared split is applied. This avoids a local-clock duplicate hour in autumn and a missing hour in spring: daylight-saving transitions do not create ambiguous positions in the research matrix. The product accepts timezone-aware site settings and normalizes stored timestamps through its ingestion contract, but equivalence with the LCL UTC preparation must still be tested end to end.
+
+\section{Train-only transformations}
+
+For a training variable $x$, standardization uses
+\begin{equation}
+ z = \frac{x-\mu_{\mathrm{train}}}{\sigma_{\mathrm{train}}}.
+\end{equation}
+The same $\mu_{\mathrm{train}}$ and $\sigma_{\mathrm{train}}$ transform validation and test data. Predictions are converted back with
+\begin{equation}
+ \hat x = \hat z\sigma_{\mathrm{train}} + \mu_{\mathrm{train}}.
+\end{equation}
+
+The ECL benchmark uses per-client means and standard deviations learned from its training rows. The LCL training worker also stores one mean and standard deviation per household, calculated only from positions before the common training boundary. This includes each cold-start household's historical training segment: those values define its evaluation scale but are never used for gradient updates.
+
+EnergyAI serving does something different. For a new site, it calculates mean and standard deviation from the latest accepted 336-hour input window, normalizes that window, and inversely transforms outputs with those same rolling statistics. The frozen LCL cold-start metrics were not recomputed under this rolling transform. It is therefore an \emph{unvalidated train--serve preprocessing mismatch}, not a validated adaptation. The packaged checkpoint can be demonstrated as software, while its research MAE must not be presented as the expected error of the rolling-normalized product path.
+
+\begin{table}[H]
+\centering
+\caption{Normalization contracts and what the evidence supports.}
+\label{tab:normalizationcontracts}
+\begin{tabularx}{\textwidth}{p{0.25\textwidth}p{0.31\textwidth}Y}
+\toprule
+Context & Statistics used & Supported interpretation \\
+\midrule
+ECL benchmark & Per client, fitted on benchmark training rows & Valid for stored ECL benchmark rows only \\
+LCL known-household evaluation & Per household, fitted on that household's common training segment & Valid for future-time windows of known London households \\
+LCL cold-start evaluation & Per cold household, fitted on its historical pre-validation segment; no gradient use & Valid for London household transfer when historical scaling statistics are available \\
+EnergyAI serving & Per site, calculated from the latest accepted 336-hour window & Implemented and contract-tested; forecast efficacy under this transform is not established by the frozen LCL metrics \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Datasets and their roles}
+
+\begin{table}[H]
+\centering
+\caption{Datasets used at different stages of the research.}
+\label{tab:datasets}
+\begin{tabularx}{\textwidth}{p{0.19\textwidth}p{0.21\textwidth}YY}
+\toprule
+Dataset & Granularity / entity & Role & Important caveat \\
+\midrule
+IHEPC \cite{uci_ihepc} & One French household, minute-level source & DEPM replication, leakage audit, CNN-BiLSTM pivot & A single household does not demonstrate cross-household generalization \\
+Steel Industry & Industrial consumption records & Cross-dataset DEPM transfer experiment & Different domain and target distribution \\
+ECL \cite{uci_ecl} & 321-client hourly benchmark after deterministic preparation & Common multivariate deep-model benchmark & Multivariate matrix task differs from one new user's CSV \\
+Low Carbon London \cite{lcl_dataset} & Thousands of smart-meter households & Global-model selection and cold-start evaluation & Geographic and behavioral transfer to Morocco remains unverified \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+No dataset is treated as interchangeable. IHEPC is valuable for replicating the article that motivated the PFE. ECL supports comparison with modern multivariate forecasting literature. Low Carbon London is closest to the product's many-household transfer problem and is therefore the source of the final checkpoint-selection metrics.
+
+\section{Baselines}
+
+At minimum, each horizon should be compared with:
+\begin{itemize}
+  \item persistence, which repeats the most recent observation or profile;
+  \item daily seasonal naive, which reuses the corresponding hour from the previous day;
+  \item weekly seasonal naive when enough history exists;
+  \item a simple linear or tree-based model when engineered covariates are available.
+\end{itemize}
+
+The artifact manifests expose comparison with a seasonal-naive baseline. The cold-start 24-hour baseline macro MAE is 0.251540 kWh per hourly interval; the 168-hour value is 0.249055 kWh per hourly interval. Model selection requires a positive and sufficiently broad improvement over this reference.
+
+\section{Metrics}
+
+For $n$ target points, \ac{mae} is
+\begin{equation}
+ \mathrm{MAE}=\frac{1}{n}\sum_{i=1}^{n}|y_i-\hat y_i|,
+\end{equation}
+and \ac{rmse} is
+\begin{equation}
+ \mathrm{RMSE}=\sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\hat y_i)^2}.
+\end{equation}
+MAE is the primary product-selection metric because it is robust and directly interpretable after inverse transformation. RMSE highlights large misses. Bias, $n^{-1}\sum_i(\hat y_i-y_i)$, identifies systematic over- or under-prediction.
+
+For quantile $q$, TFT minimizes the pinball loss
+\begin{equation}
+ \rho_q(y-\hat y_q)=\max\left((q-1)(y-\hat y_q),q(y-\hat y_q)\right).
+\end{equation}
+The local model averages this loss over $q\in\{0.1,0.5,0.9\}$, samples, and lead times. The 0.5 output is the median point forecast. The 0.1 and 0.9 outputs define a nominal central 80\% interval, whose empirical coverage and mean width are reported separately rather than assumed from the quantile labels \cite{koenker1978quantile,gneiting2014probabilistic}.
+
+\ac{smape} is computed as
+\begin{equation}
+ \mathrm{sMAPE}=\frac{100}{n}\sum_i\frac{2|y_i-\hat y_i|}{|y_i|+|\hat y_i|+\epsilon}.
+\end{equation}
+It remains sensitive near zero. \ac{mase} divides MAE by an in-sample seasonal-naive error and provides a scale-relative view. $R^2$ is useful but depends on aggregation: global flattening can overweight high-load clients, whereas macro $R^2$ averages client-level coefficients. Negative macro $R^2$ means the average client forecast is worse than a mean-based reference under that definition and must not be hidden behind a favorable global score.
+
+\section{Known-household and cold-start evaluation}
+
+Known-household metrics evaluate future windows for households represented during training. Cold-start metrics evaluate households completely held out from gradient updates. For a platform accepting a new user's recent history, cold-start evidence is the stronger selection criterion. EnergyAI therefore reports cold-start macro MAE, median household MAE, p90 household MAE, macro and global $R^2$, seasonal improvement, and household win rate.
+
+Macro aggregation first calculates a metric per household and then averages those values. It prevents a few high-consumption households from dominating the decision. The p90 value shows the error below which 90\% of households fall and makes the long tail visible.
+
+\section{Reproducibility controls}
+
+Each experiment should record the dataset transformation, split boundaries, lookback, horizon, seed, batch size, epochs, early-stopping rule, optimizer, parameter count, training time, checkpoint, metric file, and software source. Production artifacts add:
+\begin{itemize}
+  \item a versioned artifact-contract number;
+  \item a checkpoint filename and SHA-256 digest;
+  \item input and output units;
+  \item data-quality gates;
+  \item output quantiles and expected shape;
+  \item architecture metadata;
+  \item limitations and smoke-reference points.
+\end{itemize}
+
+The 24-hour checkpoint digest is \texttt{60fedcde...bc5a04d}; the 168-hour digest is \texttt{80af16b2...95f93}. The full hashes are stored in the artifact hash inventory under \evidence{report/evidence}. The report registry also marks each artifact as historical, invalidated, benchmark, candidate, experimental, or a packaged product capability with explicit limitations.
+
+\section{Promotion discipline}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\textwidth]{model_selection_flow.pdf}
+  \caption{Evidence gates used to separate an experiment from an exposed product capability.}
+  \label{fig:promotion}
+\end{figure}
+
+Completion of training is not sufficient for promotion. The run must use a comparable causal protocol, beat a seasonal baseline, remain robust across the household distribution, load strictly from a reproducible artifact, and produce finite outputs of the expected shape. A model that fails a gate remains an archive or research result. This discipline explains why the monthly experiments are discussed but not exposed, and why TimePro or TimeMixer++ are not assigned local performance claims without successful metric files.

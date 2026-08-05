@@ -1,0 +1,148 @@
+\chapter{A Reasoned Review of Forecasting Approaches}
+\label{chap:stateofart}
+
+\section{From prediction accuracy to forecasting validity}
+
+The literature on energy forecasting contains models with very different targets, horizons, sampling rates, and evaluation scales. A numerical score cannot be interpreted without this context. An accuracy percentage may describe a high/low class, while \ac{mae} may be expressed in normalized units, kW, kWh, or an aggregate over clients. A model can predict one point recursively or produce an entire horizon directly. These distinctions determine whether two results are comparable.
+
+The review in this chapter is therefore organized by the forecasting difficulty addressed by each family, rather than as independent summaries of papers. It also treats validation design as part of the model: a sophisticated architecture cannot compensate for a split that exposes future information.
+
+\section{Statistical and seasonal baselines}
+
+Persistence forecasts set $\hat y_{t+h}=y_t$ for all $h$ or reuse a recent observation appropriate to the sampling frequency. Seasonal-naive forecasts use the last corresponding seasonal value, such as $\hat y_{t+h}=y_{t+h-s}$ with daily or weekly period $s$. These methods have no learned representation, but they exploit the strongest regularity in many electricity series. They are inexpensive, transparent, and difficult to beat consistently for stable households.
+
+Classical exponential smoothing and autoregressive models provide trend, seasonality, and residual dynamics with explicit assumptions. Their limitations arise when many nonlinear interactions, large multivariate panels, or long direct horizons are involved. Nevertheless, they remain essential references because a model whose absolute error is low but worse than seasonal naive has not demonstrated practical added value \cite{hyndman2021fpp3}.
+
+\section{Classical machine learning}
+
+Linear and regularized regressions can combine lagged values, calendar terms, and rolling statistics. Tree ensembles such as random forests and XGBoost capture nonlinear thresholds and interactions and often perform well on engineered tabular features; XGBoost's original system combines regularized boosting with sparsity-aware and scalable learning mechanisms \cite{chen2016xgboost}. Their principal risk in time-series work is not architectural but procedural: current or future target information can be hidden in aggregates, centered windows, or derived physical variables.
+
+In this project, logistic regression became a diagnostic instrument. When it achieved 99.4\% classification accuracy with the suspect variables, it demonstrated that high DEPM accuracy did not require the hybrid neural architecture. This is a general lesson: a deliberately simple baseline can expose an ill-posed task more effectively than another deep model.
+
+\section{Recurrent sequence models}
+
+An \ac{rnn} maintains a hidden state that summarizes prior inputs, but simple recurrent units can suffer from vanishing or exploding gradients. \ac{lstm} and \ac{gru} architectures introduce gates that regulate memory updates and improve learning over longer dependencies \cite{hochreiter1997lstm,cho2014gru}. Bidirectional variants process a training sequence in both directions. They are valuable for representation learning when the complete input window is known, but their use must remain causal with respect to the prediction target: a backward recurrence over the historical input window is acceptable, while access to future target samples is not.
+
+The local research archive contains standalone DNN, LSTM, BiLSTM, GRU, and BiGRU classifiers, as well as DEPM hybrids using their representations with XGBoost. After removal of direct target information, the recorded classification accuracies cluster approximately between 0.885 and 0.896 rather than around 0.99. This comparison supports the audit, but it remains a classification study and is not used as the final forecasting leaderboard.
+
+\section{Convolutional-recurrent hybrids}
+
+One-dimensional convolutions can extract local motifs and reduce noise before recurrent processing. Le et al. propose EECP-CBL, a CNN-BiLSTM architecture evaluated on minutely, hourly, daily, and weekly forms of IHEPC \cite{le2019eecpcbl}. The design is attractive when both local fluctuations and longer temporal context matter. The paper reports comparisons with linear regression, LSTM, and CNN-LSTM using MSE, RMSE, MAE, MAPE, training time, and prediction time.
+
+The PFE used this work as the first structured pivot away from DEPM classification. Local notebooks implemented chronological splitting, train-only scaling, continuous targets, inverse transformation, and non-shuffled evaluation. The exact published numbers are not claimed as reproduced unless matched by a preserved local output. The CNN-BiLSTM family also appears as a baseline in the later ECL benchmark, where it is evaluated under the same split and scaling policy as the Transformer-oriented models.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.96\textwidth]{cnn_bilstm_architecture.pdf}
+  \caption{Conceptual CNN-BiLSTM forecasting pipeline used to frame the corrected sequence experiments.}
+  \label{fig:cnnbilstm}
+\end{figure}
+
+\section{Patch-based temporal representation}
+
+PatchTST segments each channel's lookback into temporal patches and applies a Transformer encoder to the patch tokens \cite{nie2023patchtst}. Patching reduces the token count and encourages representation of local subsequences. Channel independence allows the same backbone to process each variable while preserving variable-specific sequences. \ac{revin} symmetrically removes and restores instance statistics to address temporal distribution shift \cite{kim2022revin}. It should not be conflated with an arbitrary change of normalization at deployment: a serving transform must be evaluated under the same contract used for the reported claim.
+
+PatchTST was implemented at 24 hours and in long-horizon research notebooks, and it was later evaluated on the common ECL benchmark at 24, 96, 192, 336, and 720 hours. These experiments demonstrate the architecture's applicability, but final checkpoint selection ultimately depended on the different Low Carbon London household cold-start problem and a minimal user input contract.
+
+\section{Inverted and dual-stream representations}
+
+iTransformer reorients the Transformer so that each variable becomes a token whose embedding summarizes its temporal history. Attention then learns cross-variable relationships, while feed-forward components learn representations within each variable token \cite{liu2024itransformer}. This organization is well suited to the multivariate ECL benchmark with 321 clients. In the local benchmark, iTransformer achieves the lowest normalized MAE among the four completed architectures at every recorded horizon.
+
+xPatch is a dual-stream, non-Transformer architecture based on exponential seasonal-trend decomposition. It combines a linear stream with a nonlinear CNN stream and uses patching and channel independence \cite{stitsyuk2025xpatch}. Its local ECL results are generally close to PatchTST and, at some horizons, achieve lower normalized MAE. The distinction between PatchTST and iTransformer is illustrated in \cref{fig:transformers}; xPatch should be understood as a complementary decomposition-based competitor rather than another attention architecture.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{transformer_comparison.pdf}
+  \caption{Conceptual comparison between temporal-patch and variable-token representations.}
+  \label{fig:transformers}
+\end{figure}
+
+\section{Recent universal and efficient models}
+
+TimeMixer++ proposes multi-resolution time imaging, decomposition, and mixing for several time-series tasks \cite{wang2025timemixerpp}. TimePro addresses multivariate long-term forecasting through variable- and time-aware hyper-states and a Mamba-based design \cite{ma2025timepro}. Both were included in the ECL benchmark notebook's planned experiment matrix.
+
+Reproducibility conditions differed from the mature baselines. The TimeMixer++ path used a public PyPOTS backbone rather than an author-maintained official training repository. TimePro required compiled selective-scan and DCNv4 operators pinned to a different PyTorch/CUDA environment. The current evidence tree contains no successful leaderboard rows for either model. They are therefore documented as attempted integrations and software-reproducibility lessons, not as completed local reproductions.
+
+\section{Global models for many related series}
+
+A global model shares parameters across many time series. Its complexity does not grow one-for-one with the number of series, and it can learn structure across a panel without requiring that every series be identical \cite{monteromanso2021global}. N-BEATS uses stacks of fully connected residual blocks that produce backcast and forecast components and can be configured for interpretable trend and seasonality \cite{oreshkin2020nbeats}. The local product-candidate experiment used a shared global N-BEATS backbone, with optional localization support retained in the worker but disabled in the selected full-profile run because localization did not improve the balanced-run evidence.
+
+\ac{tft} combines variable selection, gated residual networks, recurrent local processing, and interpretable attention for multi-horizon forecasting \cite{lim2021tft}. The EnergyAI Global TFT adapts this family to a household input contract consisting of historical energy and derived calendar features. It outputs three quantiles learned through the pinball objective introduced by quantile regression \cite{koenker1978quantile} and is trained across households. The artifact manifests document 1,386,262 trainable parameters, a 336-hour lookback, and data-quality gates.
+
+\section{Ensembles and extraordinary scores}
+
+Alghamdi et al. propose a stacked LSTM snapshot ensemble combined with \ac{fft} features and a meta-learner and report RMSE 0.020, MAE 0.013, MAPE 0.017, and $R^2=0.999$ on IHEPC with weather data \cite{alghamdi2024snapshot}. The paper is relevant because it illustrates how ensemble diversity and frequency-domain features can be combined. It also illustrates why scale, split, target definition, and inverse transformation must accompany extraordinary metrics.
+
+The old PFE folder contains an LSTM classifier, but not evidence of an exact FFT plus snapshot-ensemble plus meta-learner reproduction. This report therefore treats the article as reviewed literature and the local LSTM as a separate experiment. It does not merge their statuses.
+
+\section{Primary-source synthesis and local evidence boundary}
+
+\Cref{tab:paperreview} distinguishes what each primary work contributes from what this PFE actually completed. The table is intentionally paper-level: local metrics are reported later, where dataset, split, units, and artifact status can accompany them.
+
+\begin{longtable}{p{0.20\textwidth}p{0.31\textwidth}p{0.37\textwidth}}
+\caption{Primary works, methodological relevance, and local status.}
+\label{tab:paperreview}\\
+\toprule
+Primary work & Contribution relevant to this PFE & Local use and evidence status \\
+\midrule
+\endfirsthead
+\toprule
+Primary work & Contribution relevant to this PFE & Local use and evidence status \\
+\midrule
+\endhead
+DEPM \cite{ragupathi2024depm} & Hybrid classification pipeline combining neural representations and XGBoost & Starting replication supplied by the supervisor; architecture reconstructed, evaluation claim invalidated by leakage audit \\
+LSTM \cite{hochreiter1997lstm} and GRU \cite{cho2014gru} & Gated recurrent memory for long dependencies & Standalone and hybrid historical classifiers; later used as causal sequence baselines, not claimed as exact paper reproductions \\
+XGBoost \cite{chen2016xgboost} & Scalable regularized tree boosting & Hybrid head and diagnostic baseline in the DEPM phase \\
+EECP-CBL \cite{le2019eecpcbl} & CNN plus BiLSTM electricity-consumption prediction & Dedicated replication attempt and later family-level ECL baseline; exact published values not claimed as reproduced \\
+RevIN \cite{kim2022revin} & Reversible instance normalization under distribution shift & Used in patch-oriented research; also clarifies why research/serving normalization equivalence must be tested \\
+PatchTST \cite{nie2023patchtst} & Channel-independent temporal patch tokens & Completed ECL rows; historical product research archived \\
+iTransformer \cite{liu2024itransformer} & Variable-token attention for multivariate forecasting & Completed ECL rows and best stored normalized MAE at every completed horizon \\
+xPatch \cite{stitsyuk2025xpatch} & Seasonal-trend decomposition with linear and nonlinear patch streams & Completed ECL rows; treated as a separate non-Transformer competitor \\
+N-BEATS \cite{oreshkin2020nbeats} & Residual backcast/forecast basis expansion & Completed LCL candidate rows; not the selected packaged model \\
+TFT \cite{lim2021tft} & Gating, variable selection, recurrent context, attention, and multi-horizon quantiles & Completed LCL 24 h and 168 h checkpoints; packaged with an explicit serving-normalization evidence gap \\
+TimeMixer++ \cite{wang2025timemixerpp} and TimePro \cite{ma2025timepro} & Recent multi-resolution and efficient multivariate designs & Integration attempted; dependency/provenance barriers prevented completed local leaderboard rows \\
+Probabilistic and conformal forecasting \cite{gneiting2014probabilistic,stankeviciute2021conformal} & Calibration, sharpness, and post-hoc interval validity & Used to evaluate TFT interval coverage and define future calibration work; no conformal layer is claimed as implemented \\
+\bottomrule
+\end{longtable}
+
+\section{Methodological risks across model families}
+
+\subsection{Temporal leakage}
+
+Leakage occurs whenever information unavailable at prediction time influences model fitting or evaluation \cite{kaufman2012leakage}. Direct leakage includes the target or a deterministic transformation of it. Proxy leakage occurs when other variables reconstruct the target through domain relations. Preprocessing leakage occurs when the scaler, dimensionality reduction, feature selection, or imputation learns from validation or test observations. Window leakage occurs when centered or non-shifted rolling statistics include the prediction point.
+
+\subsection{Inappropriate splitting}
+
+Random cross-validation assumes exchangeability. Consecutive electricity measurements violate this assumption because adjacent values share regime, weather, occupancy, and season. Time-aware evaluation must preserve ordering or use rolling-origin procedures. Even when some autoregressive cross-validation schemes can be valid under specific assumptions \cite{bergmeir2018cv}, a deployment-oriented split must imitate what the application will know at prediction time.
+
+\subsection{Metric aggregation}
+
+Global $R^2$ can be dominated by high-load clients, whereas macro household $R^2$ gives each client equal weight. MAPE is unstable near zero. sMAPE reduces but does not eliminate that problem. RMSE emphasizes large errors; MAE is more robust. MASE compares performance with a seasonal rule and is useful across scales. No single metric is sufficient; the EnergyAI selection considers macro MAE, median, p90, seasonal improvement, proportion of households beating baseline, bias, and inference cost.
+
+\subsection{Calibration, drift, and data responsibility}
+
+Probabilistic forecasts should be evaluated for both calibration and sharpness rather than by point error alone \cite{gneiting2014probabilistic}. A nominal central 80\% interval should therefore be accompanied by empirical coverage and interval width. Under changing load regimes, concept drift can alter the relationship between recent context and future demand \cite{gama2014drift}; detection and governed response are deployment responsibilities, not automatic consequences of a good static test score. Finally, fine-grained smart-meter traces can reveal household routines, so ownership scoping, minimized exports, and bounded retention are part of model-system quality \cite{molina2010privacy}.
+
+\begin{table}[H]
+\centering
+\caption{Model families and their role in this PFE.}
+\label{tab:families}
+\begin{tabularx}{\textwidth}{p{0.19\textwidth}p{0.23\textwidth}YY}
+\toprule
+Family & Main strength & Main risk & PFE status \\
+\midrule
+Seasonal naive & Transparent, strong periodic reference & Cannot adapt to changing regimes & Mandatory baseline \\
+Linear/tree ML & Fast, interpretable engineered features & Leakage through feature construction & Diagnostic and comparison \\
+LSTM/GRU & Sequential state and nonlinear dynamics & Random windows can inflate performance & Historical and corrected experiments \\
+CNN-BiLSTM & Local motifs plus sequence context & Complexity without causal validation & Corrected baseline and ECL benchmark \\
+PatchTST & Efficient temporal patches & Benchmark-to-product task mismatch & Completed benchmark \\
+iTransformer & Cross-variable relations & Global metrics dominated by large clients & Completed ECL benchmark \\
+xPatch & Decomposition with linear/nonlinear streams & Recent implementation sensitivity & Completed ECL benchmark \\
+TimePro / TimeMixer++ & Recent efficient designs & Reproduction uncertainty & Attempted; no completed metrics \\
+N-BEATS & Strong global residual backbone & Point forecast without native uncertainty in local setup & Product fallback/experimental \\
+TFT & Multi-horizon quantiles and gating & More complex artifact and calibration needs & Selected and packaged at 24 h and 168 h \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The review leads to a clear experimental principle: the model family is only one component of the claim. Target construction, causal information, split policy, preprocessing scope, baseline, aggregation, and artifact provenance are equally necessary. The next chapter applies this principle to the initial DEPM replication.

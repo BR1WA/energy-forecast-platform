@@ -41,11 +41,55 @@ node_modules/
 frontend/.next/
 frontend/out/
 
-# Research/Experiments outputs
+# Research datasets, notebooks, and experiment outputs (store externally)
+checkpoints/
+notebooks/.ipynb_checkpoints/
+models/active/
+models/archive/*
+data/*.csv
+data/*.parquet
+data/*.npy
+data/*.npz
+results/*
 experiments/
 backend/experiments/
-results/
+wandb/
+mlruns/
+models/**/data/
+models/**/logs/
+models/**/runs/
+models/**/repos/
+models/**/__pycache__/
+models/**/checkpoints/
+models/**/outputs/
+models/**/artifacts/
+models/**/wandb/
+models/__results___files*/
+
+# Research model binaries and serialized preprocessing state
+*.ckpt
+*.pth
+*.pkl
+*.pickle
+*.joblib
+*.pt
+*.onnx
+*.h5
+
+# Product runtime models remain eligible for tracking; this rule does not
+# match backend/model_artifacts/**.
+!backend/model_artifacts/**
+
+# Retained Product V1 unknowns are explicit review artifacts, not disposable
+# generated output, even though their parent patterns are ignored above.
+!data/app_test_samples.csv
+!models/archive/results.csv
+!static/dummy_export.csv
+!results/benchmark.csv
+!results/benchmark.md
 benchmark_report.json
+playwright-report/
+test-results/
 logs_*.txt
 test.csv
 lint_results.txt

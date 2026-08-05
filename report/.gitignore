@@ -1,0 +1,23 @@
+# LaTeX build artefacts (the verified deliverables live under exports/)
+/source/__pycache__/
+/source/main.aux
+/source/main.bbl
+/source/main.bcf
+/source/main.blg
+/source/main.lof
+/source/main.log
+/source/main.lot
+/source/main.out
+/source/main.pdf
+/source/main.run.xml
+/source/main.toc
+
+# Rendered page-by-page QA is reproducible and intentionally not versioned
+/qa/current_report_text.txt
+/qa/rendered/
+/qa/rendered_final_*/
+/qa/rendered_verified_*/
+
+# Legacy/duplicate exports; keep only the named PDF and current source bundle
+/exports/main.*
+/exports/PFE_ZOUITNI_Salah_Eddine_draft_source.pre_reanalysis_backup.zip

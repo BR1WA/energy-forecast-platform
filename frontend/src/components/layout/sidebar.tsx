@@ -9,15 +9,13 @@ import { useI18n } from '@/lib/i18n';
 import {
   LayoutDashboard,
   LineChart,
-  Bell,
+  CircleAlert,
   ChevronLeft,
   ChevronRight,
   Zap,
   LogOut,
   Settings,
   User,
-  Sparkles,
-  FileText,
   Shield,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -48,9 +46,9 @@ const navItems: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    label: 'Consumption',
+    label: 'Usage',
     translationKey: 'nav.consumption',
-    href: '/consumption',
+    href: '/usage',
     icon: Zap,
   },
   {
@@ -60,22 +58,16 @@ const navItems: NavItem[] = [
     icon: LineChart,
   },
   {
-    label: 'Recommendations',
+    label: 'Actions',
     translationKey: 'nav.recommendations',
-    href: '/recommendations',
-    icon: Sparkles,
+    href: '/actions',
+    icon: CircleAlert,
   },
   {
-    label: 'Reports',
-    translationKey: 'nav.reports',
-    href: '/reports',
-    icon: FileText,
-  },
-  {
-    label: 'Notifications',
-    translationKey: 'nav.alerts',
-    href: '/alerts',
-    icon: Bell,
+    label: 'Settings',
+    translationKey: 'nav.settings',
+    href: '/settings',
+    icon: Settings,
   },
   {
     label: 'Admin Panel',
@@ -83,12 +75,6 @@ const navItems: NavItem[] = [
     href: '/admin',
     icon: Shield,
     adminOnly: true,
-  },
-  {
-    label: 'Settings',
-    translationKey: 'nav.settings',
-    href: '/settings',
-    icon: Settings,
   },
 ];
 

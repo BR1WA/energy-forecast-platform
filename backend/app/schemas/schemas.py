@@ -121,22 +121,77 @@ class UserResponse(BaseModel):
     last_activity: Optional[datetime] = None
     is_setup_complete: bool = False
     preferences: Optional[Dict[str, Any]] = None
+    email_verified_at: Optional[datetime] = None
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
+class RegistrationResponse(BaseModel):
+    message: str
+    verification_required: bool = True
+
+
+class VerifyTokenRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
 
 
 class TokenData(BaseModel):
     access_token: str
-    refresh_token: Optional[str] = None
     token_type: str = "bearer"
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+    new_password: str = Field(min_length=8, max_length=100)
+
+
+class AccountDeletionRequest(BaseModel):
+    confirmation: Literal["DELETE"]
+    current_password: Optional[str] = Field(default=None, max_length=100)
+    google_credential: Optional[str] = Field(default=None, min_length=20, max_length=4096)
+    google_state: Optional[str] = Field(default=None, min_length=20, max_length=512)
+
+
+class AccountDeletionCapabilities(BaseModel):
+    method: Literal["password", "google"]
+    google_reauthentication_available: bool
+
+
+class GoogleCredentialRequest(BaseModel):
+    credential: str = Field(min_length=20, max_length=4096)
+    state: str = Field(min_length=20, max_length=512)
+
+
+class GoogleLinkRequest(GoogleCredentialRequest):
+    current_password: str = Field(min_length=1, max_length=100)
+
+
+class GoogleUnlinkRequest(BaseModel):
+    current_password: Optional[str] = Field(default=None, max_length=100)
+
+
+class GoogleChallengeResponse(BaseModel):
+    state: str
+    nonce: str
+    expires_in_seconds: int
+
+
+class AuthCapabilitiesResponse(BaseModel):
+    email_delivery_enabled: bool
+    google_auth_enabled: bool
+    google_client_id: Optional[str] = None
 
 
 # ======================== INGESTION ========================
@@ -223,6 +278,9 @@ class PasswordUpdate(BaseModel):
 
 class ForecastModelStatus(BaseModel):
     available: bool
+    enabled: bool = True
+    warmed: bool = False
+    horizon_hours: Literal[24, 168] = 24
     name: str
     display_name: str
     version: str
@@ -230,7 +288,38 @@ class ForecastModelStatus(BaseModel):
     error: Optional[str] = None
 
 
+class ForecastCapability(BaseModel):
+    horizon_hours: Literal[24, 168]
+    label: str
+    description: str
+    model: ForecastModelStatus
+
+
+class ForecastCapabilitiesResponse(BaseModel):
+    default_horizon_hours: Literal[24] = 24
+    capabilities: List[ForecastCapability]
+
+
+class ForecastRunRequest(BaseModel):
+    horizon_hours: Literal[24, 168] = 24
+
+
+class ForecastDemoHistoryResponse(BaseModel):
+    status: Literal["ready", "insufficient_data"]
+    meter_id: int
+    synthetic_source: Literal["forecast_demo"]
+    required_hours: int
+    accepted_rows: int
+    duplicate_rows: int
+    coverage_percent: float
+    observed_hours: int
+    maximum_gap_hours: int
+    forecast_origin: Optional[datetime] = None
+    message: str
+
+
 class ForecastReadiness(BaseModel):
+    horizon_hours: Literal[24, 168] = 24
     status: Literal["ready", "fallback_ready", "insufficient_data"]
     ready_for_tft: bool
     fallback_available: bool
@@ -288,6 +377,7 @@ class ProductForecastHistoryItem(BaseModel):
     id: int
     model_name: str
     method: str
+    horizon_hours: int
     forecast_start: Optional[datetime] = None
     created_at: datetime
 
@@ -297,6 +387,7 @@ class AlertConfigCreate(BaseModel):
     threshold_kw: float = Field(ge=0.1, le=20.0, default=3.0)
     cooldown_minutes: int = Field(ge=5, le=1440, default=60)
     missing_data_minutes: int = Field(ge=5, le=10080, default=60)
+    email_enabled: bool = False
 
 
 class AlertConfigResponse(BaseModel):
@@ -306,6 +397,9 @@ class AlertConfigResponse(BaseModel):
     threshold_kw: float
     cooldown_minutes: int
     missing_data_minutes: int
+    email_enabled: bool
+    email_delivery_available: bool
+    email_delivery_unavailable_reason: Optional[Literal["mail_disabled", "email_unverified"]] = None
     created_at: datetime
 
 class AlertResponse(BaseModel):
@@ -331,6 +425,7 @@ class RecommendationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    alert_id: Optional[int] = None
     category: str
     title: str
     message: str
@@ -380,6 +475,7 @@ class ReportForecastItem(BaseModel):
     id: int
     model_name: str
     method: str
+    horizon_hours: int
     created_at: datetime
     forecast_start: Optional[datetime] = None
     peak_hourly_kwh: Optional[float] = None

@@ -11,7 +11,7 @@ const translations: Record<Language, Translations> = {
     // Nav & Sidebar
     'nav.dashboard': 'Dashboard',
     'nav.forecasts': 'Forecasts',
-    'nav.consumption': 'Consumption',
+    'nav.consumption': 'Usage',
     'nav.simulation': 'Simulation',
     'nav.analytics': 'Analytics',
     'nav.alerts': 'Alerts',
@@ -20,7 +20,7 @@ const translations: Record<Language, Translations> = {
     'nav.profile': 'Profile',
     'nav.logout': 'Sign Out',
     'nav.telemetry': 'Live Telemetry',
-    'nav.recommendations': 'Recommendations',
+    'nav.recommendations': 'Actions',
     'nav.budget': 'Budget & Goals',
     'nav.reports': 'Reports',
 
@@ -103,7 +103,7 @@ const translations: Record<Language, Translations> = {
     // Nav & Sidebar
     'nav.dashboard': 'Tableau de bord',
     'nav.forecasts': 'Prévisions',
-    'nav.consumption': 'Consommation',
+    'nav.consumption': 'Utilisation',
     'nav.simulation': 'Simulation',
     'nav.analytics': 'Analyses',
     'nav.alerts': 'Alertes',
@@ -112,7 +112,7 @@ const translations: Record<Language, Translations> = {
     'nav.profile': 'Profil',
     'nav.logout': 'Déconnexion',
     'nav.telemetry': 'Télémesure Live',
-    'nav.recommendations': 'Recommandations',
+    'nav.recommendations': 'Actions',
     'nav.budget': 'Budget et Objectifs',
     'nav.reports': 'Rapports',
 
@@ -204,7 +204,7 @@ const translations: Record<Language, Translations> = {
     'nav.profile': 'الملف الشخصي',
     'nav.logout': 'تسجيل الخروج',
     'nav.telemetry': 'القياس المباشر',
-    'nav.recommendations': 'توصيات',
+    'nav.recommendations': 'الإجراءات',
     'nav.budget': 'الميزانية والأهداف',
     'nav.reports': 'التقارير',
 

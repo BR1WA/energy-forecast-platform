@@ -33,7 +33,39 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@energyforecast.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      FORECAST_168H_ENABLED: ${FORECAST_168H_ENABLED:-false}
+      EMAIL_DELIVERY_ENABLED: ${EMAIL_DELIVERY_ENABLED:-false}
+      GOOGLE_AUTH_ENABLED: ${GOOGLE_AUTH_ENABLED:-false}
+      PUBLIC_FRONTEND_URL: ${PUBLIC_FRONTEND_URL:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-EnergyForecast}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-20}
+      EMAIL_WORKER_POLL_SECONDS: ${EMAIL_WORKER_POLL_SECONDS:-30}
+      EMAIL_LEASE_SECONDS: ${EMAIL_LEASE_SECONDS:-120}
+      EMAIL_RETRY_BASE_SECONDS: ${EMAIL_RETRY_BASE_SECONDS:-60}
+      EMAIL_MAX_ATTEMPTS: ${EMAIL_MAX_ATTEMPTS:-5}
+      REFRESH_COOKIE_DOMAIN: ${REFRESH_COOKIE_DOMAIN:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      LEGAL_OWNER_NAME: ${LEGAL_OWNER_NAME:-}
+      LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      LEGAL_EFFECTIVE_DATE: ${LEGAL_EFFECTIVE_DATE:-}
+      AVATAR_STORAGE_DIR: /app/static/avatars
+      AVATAR_MAX_BYTES: ${AVATAR_MAX_BYTES:-2097152}
+      AVATAR_MAX_DIMENSION: ${AVATAR_MAX_DIMENSION:-2048}
+      AVATAR_CLEANUP_POLL_SECONDS: ${AVATAR_CLEANUP_POLL_SECONDS:-60}
+      AVATAR_CLEANUP_MAX_ATTEMPTS: ${AVATAR_CLEANUP_MAX_ATTEMPTS:-8}
+      AVATAR_CLEANUP_RETRY_SECONDS: ${AVATAR_CLEANUP_RETRY_SECONDS:-60}
       PYTHONUNBUFFERED: "1"
+    volumes:
+      - avatars:/app/static/avatars
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/live', timeout=3)"]
       interval: 10s
@@ -51,11 +83,13 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     container_name: energy_frontend
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 10s
@@ -76,10 +110,74 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
       DEBUG: ${DEBUG:-false}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      LEGAL_OWNER_NAME: ${LEGAL_OWNER_NAME:-}
+      LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      LEGAL_EFFECTIVE_DATE: ${LEGAL_EFFECTIVE_DATE:-}
       PYTHONUNBUFFERED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  email-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m app.cli run-email-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-energy_forecast}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      DEBUG: ${DEBUG:-false}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      LEGAL_OWNER_NAME: ${LEGAL_OWNER_NAME:-}
+      LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      LEGAL_EFFECTIVE_DATE: ${LEGAL_EFFECTIVE_DATE:-}
+      EMAIL_DELIVERY_ENABLED: ${EMAIL_DELIVERY_ENABLED:-false}
+      PUBLIC_FRONTEND_URL: ${PUBLIC_FRONTEND_URL:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-EnergyForecast}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-20}
+      EMAIL_WORKER_POLL_SECONDS: ${EMAIL_WORKER_POLL_SECONDS:-30}
+      EMAIL_LEASE_SECONDS: ${EMAIL_LEASE_SECONDS:-120}
+      EMAIL_RETRY_BASE_SECONDS: ${EMAIL_RETRY_BASE_SECONDS:-60}
+      EMAIL_MAX_ATTEMPTS: ${EMAIL_MAX_ATTEMPTS:-5}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  avatar-cleanup-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m app.cli run-avatar-cleanup-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-energy_forecast}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      DEBUG: ${DEBUG:-false}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      LEGAL_OWNER_NAME: ${LEGAL_OWNER_NAME:-}
+      LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      LEGAL_EFFECTIVE_DATE: ${LEGAL_EFFECTIVE_DATE:-}
+      AVATAR_STORAGE_DIR: /app/static/avatars
+      AVATAR_CLEANUP_POLL_SECONDS: ${AVATAR_CLEANUP_POLL_SECONDS:-60}
+      AVATAR_CLEANUP_MAX_ATTEMPTS: ${AVATAR_CLEANUP_MAX_ATTEMPTS:-8}
+      AVATAR_CLEANUP_RETRY_SECONDS: ${AVATAR_CLEANUP_RETRY_SECONDS:-60}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - avatars:/app/static/avatars
     depends_on:
       backend:
         condition: service_healthy
 
 volumes:
   pgdata:
+  avatars:

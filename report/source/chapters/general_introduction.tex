@@ -1,0 +1,50 @@
+\chapter*{General Introduction}
+\addcontentsline{toc}{chapter}{General Introduction}
+\markboth{General Introduction}{General Introduction}
+
+Electricity must be generated, transported, and consumed in near real time. Forecast errors therefore have practical consequences: they can distort purchasing decisions, reserve planning, demand-response actions, and household budget estimates. At the same time, electricity demand is difficult to predict because it combines several temporal scales. Daily routines, weekends, holidays, weather, appliance usage, occupancy, and structural changes interact with one another. A useful forecasting system must consequently do more than fit a historical curve. It must state what is predicted, how far into the future, from which information, and with what evidence that the reported error will generalize.
+
+This project began from an apparently straightforward objective: reproduce the \ac{depm} proposed by Ragupathi et al.\ \cite{ragupathi2024depm}. The article describes a hybrid architecture that combines XGBoost, a \ac{dnn}, and a cascaded residual network and reports 98\% classification accuracy on household electricity data. The first local experiments reconstructed the pipeline and obtained similarly high scores. If read without further investigation, this outcome might have been presented as a successful replication or even an improvement. However, an elementary logistic-regression diagnostic produced 99.4\% accuracy when variables capable of reconstructing the target were included. That result redirected the project toward a more important question: did the models learn future demand, or did the evaluation reveal the answer to them?
+
+The audit identified several distinct failure mechanisms. In early local implementations, the class label was derived from active power while active power itself, or mathematically related variables, remained among the predictors. Voltage and global intensity also encode an approximate reconstruction of power through the physical relationship $P \approx V \times I$. Rolling statistics sometimes included the current target value. Standardization and \ac{pca} were fitted before the split, allowing test-distribution information into the training pipeline. Finally, random splitting placed temporally adjacent and highly correlated measurements on both sides of the evaluation boundary. The resulting score measured neither a genuine future forecast nor deployment-time generalization.
+
+The project was therefore reformulated around continuous, causal, multi-horizon forecasting. Inputs were restricted to information available at prediction time; windows were shifted; train, validation, and test regions were ordered chronologically; preprocessing was fitted on training observations; and metrics were evaluated after transformation back to physical units. Seasonal-naive and persistence forecasts were treated as mandatory baselines. Model selection used validation evidence, while the test cohort was reserved for final comparison. This methodological change is the central contribution of the work, because it turns an initially misleading high score into an auditable forecasting problem.
+
+The corrected research path evaluated several model families. Recurrent and convolutional approaches included \ac{lstm}, \ac{gru}, bidirectional variants, and CNN-BiLSTM, drawing in particular on the EECP-CBL architecture of Le et al.\ \cite{le2019eecpcbl}. Transformer-oriented experiments included PatchTST \cite{nie2023patchtst}, iTransformer \cite{liu2024itransformer}, and xPatch \cite{stitsyuk2025xpatch}. More recent TimePro and TimeMixer++ integrations were investigated, but the report does not claim successful reproduction where no completed metric artifact exists. The product-selection stage moved to global household forecasting using \ac{tft} \cite{lim2021tft} and N-BEATS \cite{oreshkin2020nbeats} with explicit known-household and cold-start cohorts.
+
+The final packaged models forecast 24 and 168 hours. For the 24-hour horizon, the Global TFT cold-start macro \ac{mae} is approximately 0.185 kWh per hourly interval, compared with 0.252 kWh per hourly interval for the seasonal-naive baseline, an improvement of 26.48\%. The model beats that baseline for 99.0\% of the evaluated cold-start households. At 168 hours, the corresponding values are approximately 0.197 and 0.249 kWh per hourly interval, an improvement of 20.77\%, with 98.40\% of households beating the baseline. The exact values and cohort sizes appear in \cref{chap:experiments} and resolve to the frozen run metrics.
+
+The selected models were integrated into EnergyAI, a full-stack platform that combines a Next.js frontend, a FastAPI backend, PostgreSQL persistence, background workers, authenticated data ownership, CSV ingestion, forecast history, alerts, recommendations, analytics-PDF export, and model-readiness checks. Each packaged artifact has a manifest, a SHA-256 checksum, an input contract, data-quality gates, an output shape, and documented limitations. The audit also identified an important evidence boundary: the frozen research evaluation uses per-household normalization fitted on each household's training segment, whereas serving uses statistics from the latest accepted 336-hour window. The software path exists and is testable, but the frozen headline metrics do not validate that changed serving transform. This distinction is maintained throughout the report.
+
+\section*{Research questions}
+
+The PFE is organized around four questions:
+\begin{description}[style=multiline,leftmargin=1.8cm,labelwidth=1.4cm]
+  \item[\textbf{RQ1}] Which target, feature, preprocessing, and split choices made the initial DEPM classification scores unsuitable as evidence of future electricity-consumption forecasting?
+  \item[\textbf{RQ2}] Under causal chronological evaluation, which completed deep-model families provide the strongest evidence for the benchmark task and for future-time transfer to households excluded from gradient updates?
+  \item[\textbf{RQ3}] How can selected forecasting checkpoints be operationalized in a user-facing platform with explicit data, artifact, ownership, readiness, and uncertainty contracts?
+  \item[\textbf{RQ4}] Which scientific and operational claims remain unsupported, especially across geography, random seeds, uncertainty calibration, and research-to-serving preprocessing?
+\end{description}
+
+\section*{Demonstrated contributions}
+
+The resulting contributions are:
+\begin{enumerate}
+  \item a forensic reconstruction of the supervisor-supplied starting paper and early local implementations, preserving high scores as historical evidence while identifying direct, proxy, preprocessing, window, and split leakage;
+  \item a corrected causal protocol for continuous multi-horizon forecasting, including physical-unit metrics, seasonal baselines, shared chronology, and known-versus-cold-start household evaluation;
+  \item a traceable experimental survey spanning recurrent, convolutional, patch-based, inverted, decomposition, and global approaches, with failed or incomplete integrations reported separately from completed results;
+  \item a checkpoint-backed Global TFT analysis at 24 and 168 hours, including household-distribution and post-hoc quantile diagnostics without modifying the frozen headline metrics;
+  \item an implemented EnergyAI platform whose principal routes, API operations, access controls, ingestion workflow, artifact checks, and current validation limits are mapped to repository evidence; and
+  \item an explicit train--serve normalization gap, converted from a hidden deployment assumption into a falsifiable requirement for the next validation cycle.
+\end{enumerate}
+
+The research trajectory is summarized in \cref{fig:timeline}. The report is organized into seven chapters. \Cref{chap:context} defines the problem, requirements, stakeholders, and product boundary. \Cref{chap:stateofart} provides a reasoned review of forecasting model families and validation risks. \Cref{chap:depm} reconstructs the DEPM and presents the methodological audit. \Cref{chap:protocol} defines the corrected experimental protocol. \Cref{chap:experiments} reports evidence-backed experiments and final model selection. \Cref{chap:platform} documents the EnergyAI design and implementation. \Cref{chap:validation} consolidates validation results, limitations, and threats to validity.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{project_timeline.pdf}
+  \caption{Research trajectory from DEPM replication to the EnergyAI Product V1 checkpoint. Source: Git timeline frozen on 31 July 2026.}
+  \label{fig:timeline}
+\end{figure}
+
+The main thesis of this report is deliberately conservative: a lower but causally valid error is more valuable than a spectacular score obtained through target reconstruction or an unrealistic split. EnergyAI is presented not as a claim of perfect prediction, but as a traceable system in which scientific conclusions, model artifacts, software behavior, and remaining limitations can all be inspected.

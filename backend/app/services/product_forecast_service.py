@@ -16,24 +16,73 @@ import holidays
 import numpy as np
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import Meter, Site, SiteSettings, SmartMeterReading
 
 
 logger = logging.getLogger("app.forecast")
 
 LOOKBACK_HOURS = 336
-HORIZON_HOURS = 24
+HORIZON_HOURS = 24  # Compatibility alias for the stable PFE contract.
 MINIMUM_COVERAGE_PERCENT = 95.0
 MAXIMUM_GAP_HOURS = 3
 MODEL_NAME = "global_tft_24h"
 MODEL_VERSION = "1.0.0"
 FALLBACK_NAME = "seasonal_naive_168h"
-ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "model_artifacts" / MODEL_NAME
+WEEK_MODEL_NAME = "global_tft_168h"
+WEEK_FALLBACK_NAME = "seasonal_naive_week_168h"
+SUPPORTED_HORIZONS = (24, 168)
+ARTIFACT_ROOT = Path(__file__).resolve().parents[2] / "model_artifacts"
+ARTIFACT_DIR = ARTIFACT_ROOT / MODEL_NAME  # Compatibility alias used by tests/docs.
 MANIFEST_PATH = ARTIFACT_DIR / "manifest.json"
+
+
+@dataclass(frozen=True)
+class ForecastArtifactSpec:
+    horizon_hours: int
+    model_name: str
+    fallback_name: str
+    display_name: str
+    feature_flag: str | None = None
+
+    @property
+    def artifact_dir(self) -> Path:
+        return ARTIFACT_ROOT / self.model_name
+
+
+ARTIFACT_SPECS = {
+    24: ForecastArtifactSpec(
+        horizon_hours=24,
+        model_name=MODEL_NAME,
+        fallback_name=FALLBACK_NAME,
+        display_name="Global TFT 24-hour",
+    ),
+    168: ForecastArtifactSpec(
+        horizon_hours=168,
+        model_name=WEEK_MODEL_NAME,
+        fallback_name=WEEK_FALLBACK_NAME,
+        display_name="Global TFT 168-hour",
+        feature_flag="FORECAST_168H_ENABLED",
+    ),
+}
+PRODUCT_MODEL_NAMES = tuple(
+    name
+    for spec in ARTIFACT_SPECS.values()
+    for name in (spec.model_name, spec.fallback_name)
+)
 
 
 class ForecastInputError(ValueError):
     """Raised when persisted meter history cannot support an honest forecast."""
+
+
+class ForecastCapabilityError(ValueError):
+    """Raised when a requested fixed forecast capability is not advertised."""
+
+    def __init__(self, code: str, message: str, status_code: int) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status_code = status_code
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -79,10 +128,46 @@ class PreparedForecastInput:
 
 
 class ProductForecastService:
-    def __init__(self) -> None:
-        self._model = None
-        self._manifest: dict | None = None
-        self._artifact_error: str | None = None
+    def __init__(self, *, forecast_168h_enabled: bool | None = None) -> None:
+        self._models: dict[int, object] = {}
+        self._manifests: dict[int, dict] = {}
+        self._artifact_errors: dict[int, str] = {}
+        self._forecast_168h_enabled = forecast_168h_enabled
+
+    def is_enabled(self, horizon_hours: int) -> bool:
+        if horizon_hours == 24:
+            return True
+        if horizon_hours != 168:
+            return False
+        if self._forecast_168h_enabled is not None:
+            return self._forecast_168h_enabled
+        return get_settings().FORECAST_168H_ENABLED
+
+    @staticmethod
+    def artifact_spec(horizon_hours: int) -> ForecastArtifactSpec:
+        spec = ARTIFACT_SPECS.get(horizon_hours)
+        if spec is None:
+            raise ForecastCapabilityError(
+                "FORECAST_HORIZON_UNSUPPORTED",
+                "Only 24-hour and 168-hour forecasts are supported.",
+                422,
+            )
+        return spec
+
+    def require_enabled(self, horizon_hours: int) -> ForecastArtifactSpec:
+        spec = self.artifact_spec(horizon_hours)
+        if not self.is_enabled(horizon_hours):
+            raise ForecastCapabilityError(
+                "FORECAST_CAPABILITY_DISABLED",
+                (
+                    "The 7-day / 168-hour forecast is disabled in this runtime. "
+                    "Enable FORECAST_168H_ENABLED only when the packaged weekly artifact is available."
+                    if horizon_hours == 168
+                    else "The requested forecast capability is not enabled."
+                ),
+                404,
+            )
+        return spec
 
     @staticmethod
     def _site_zone(site: Site) -> ZoneInfo:
@@ -214,61 +299,129 @@ class ProductForecastService:
             prepared.values = hourly_values.astype(np.float32)
         return prepared
 
-    def _load_manifest(self) -> tuple[dict | None, str | None]:
-        if self._manifest is not None or self._artifact_error is not None:
-            return self._manifest, self._artifact_error
+    def _load_manifest(self, horizon_hours: int) -> tuple[dict | None, str | None]:
+        spec = self.artifact_spec(horizon_hours)
+        if horizon_hours in self._manifests or horizon_hours in self._artifact_errors:
+            return self._manifests.get(horizon_hours), self._artifact_errors.get(horizon_hours)
         try:
-            manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-            checkpoint = ARTIFACT_DIR / manifest["checkpoint_file"]
+            manifest_path = spec.artifact_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest["name"] != spec.model_name:
+                raise RuntimeError("The packaged model name does not match its fixed capability.")
+            if int(manifest["lookback_hours"]) != LOOKBACK_HOURS:
+                raise RuntimeError("The packaged model lookback does not match the product contract.")
+            if int(manifest["horizon_hours"]) != horizon_hours:
+                raise RuntimeError("The packaged model horizon does not match its fixed capability.")
+            if manifest["quantiles"] != [0.1, 0.5, 0.9]:
+                raise RuntimeError("The packaged model quantile contract is unsupported.")
+            checkpoint = spec.artifact_dir / manifest["checkpoint_file"]
             if not checkpoint.is_file():
                 raise RuntimeError("The packaged model checkpoint is missing.")
+            if checkpoint.stat().st_size != int(manifest["checkpoint_size_bytes"]):
+                raise RuntimeError("The packaged model checkpoint size is invalid.")
             digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
             if digest != manifest["checkpoint_sha256"]:
                 raise RuntimeError("The packaged model checkpoint failed its SHA-256 integrity check.")
-            self._manifest = manifest
-        except (OSError, KeyError, ValueError, RuntimeError) as exc:
-            self._artifact_error = str(exc)
-        return self._manifest, self._artifact_error
+            self._manifests[horizon_hours] = manifest
+        except (OSError, KeyError, TypeError, ValueError, RuntimeError) as exc:
+            self._artifact_errors[horizon_hours] = str(exc)
+        return self._manifests.get(horizon_hours), self._artifact_errors.get(horizon_hours)
 
-    def model_status(self) -> dict:
-        manifest, artifact_error = self._load_manifest()
+    def model_status(self, horizon_hours: int = 24) -> dict:
+        spec = self.artifact_spec(horizon_hours)
+        enabled = self.is_enabled(horizon_hours)
+        if not enabled:
+            return {
+                "available": False,
+                "enabled": False,
+                "horizon_hours": horizon_hours,
+                "name": spec.model_name,
+                "display_name": spec.display_name,
+                "version": MODEL_VERSION,
+                "artifact_fingerprint": None,
+                "error": "The capability is disabled by configuration.",
+            }
+        manifest, artifact_error = self._load_manifest(horizon_hours)
         torch_available = importlib.util.find_spec("torch") is not None
         error = artifact_error
         if error is None and not torch_available:
             error = "PyTorch is not installed in this runtime."
         return {
             "available": error is None,
-            "name": MODEL_NAME,
-            "display_name": manifest.get("display_name", "Global TFT 24-hour") if manifest else "Global TFT 24-hour",
+            "enabled": True,
+            "horizon_hours": horizon_hours,
+            "name": spec.model_name,
+            "display_name": manifest.get("display_name", spec.display_name) if manifest else spec.display_name,
             "version": manifest.get("version", MODEL_VERSION) if manifest else MODEL_VERSION,
             "artifact_fingerprint": manifest.get("checkpoint_sha256") if manifest else None,
             "error": error,
         }
 
-    def warmup(self) -> dict:
-        """Validate and load the fixed production artifact without running client data."""
-        status = self.model_status()
+    def warmup(self, horizon_hours: int = 24) -> dict:
+        """Validate and load one fixed production artifact without client data."""
+        status = self.model_status() if horizon_hours == 24 else self.model_status(horizon_hours)
         if not status["available"]:
             return {**status, "warmed": False}
         try:
-            self._load_model()
+            self._load_model(horizon_hours)
             return {**status, "warmed": True}
         except Exception as exc:
-            logger.exception("Global TFT warm-up failed")
+            logger.exception("Global TFT %sh warm-up failed", horizon_hours)
             return {**status, "available": False, "warmed": False, "error": str(exc)}
 
-    def readiness(self, db: Session, user_id: int) -> dict:
+    def capabilities(self) -> dict:
+        """Advertise only fixed capabilities that satisfy their visibility gate."""
+        day = self.warmup()
+        advertised = [
+            {
+                "horizon_hours": 24,
+                "label": "Next 24 hours",
+                "description": "Next 24 hourly energy values",
+                "model": day,
+            }
+        ]
+        if self.is_enabled(168):
+            week = self.warmup(168)
+            if week["available"] and week.get("warmed"):
+                advertised.append(
+                    {
+                        "horizon_hours": 168,
+                        "label": "Next 7 days",
+                        "description": "Next 168 hourly energy values",
+                        "model": week,
+                    }
+                )
+        return {"default_horizon_hours": 24, "capabilities": advertised}
+
+    def _require_advertised(self, horizon_hours: int) -> ForecastArtifactSpec:
+        spec = self.require_enabled(horizon_hours)
+        if horizon_hours == 168:
+            status = self.warmup(168)
+            if not status["available"] or not status.get("warmed"):
+                raise ForecastCapabilityError(
+                    "FORECAST_ARTIFACT_NOT_READY",
+                    (
+                        "The 7-day / 168-hour model artifact is unavailable or could not be loaded. "
+                        f"{status.get('error') or 'Check the packaged weekly model and restart the backend.'}"
+                    ),
+                    503,
+                )
+        return spec
+
+    def readiness(self, db: Session, user_id: int, horizon_hours: int = 24) -> dict:
+        self._require_advertised(horizon_hours)
         prepared = self.prepare_input(db, user_id)
-        model = self.model_status()
+        model = self.warmup() if horizon_hours == 24 else self.warmup(horizon_hours)
         if not prepared.ready:
             status = "insufficient_data"
-        elif model["available"]:
+        elif model["available"] and model.get("warmed"):
             status = "ready"
         else:
             status = "fallback_ready"
         return {
+            "horizon_hours": horizon_hours,
             "status": status,
-            "ready_for_tft": prepared.ready and model["available"],
+            "ready_for_tft": prepared.ready and model["available"] and bool(model.get("warmed")),
             "fallback_available": prepared.ready,
             "required_hours": LOOKBACK_HOURS,
             "minimum_coverage_percent": MINIMUM_COVERAGE_PERCENT,
@@ -333,10 +486,10 @@ class ProductForecastService:
             )
         return np.asarray(rows, dtype=np.float32)
 
-    def _load_model(self):
-        if self._model is not None:
-            return self._model
-        manifest, error = self._load_manifest()
+    def _load_model(self, horizon_hours: int):
+        if horizon_hours in self._models:
+            return self._models[horizon_hours]
+        manifest, error = self._load_manifest(horizon_hours)
         if error or manifest is None:
             raise RuntimeError(error or "Model manifest is unavailable.")
         try:
@@ -346,15 +499,21 @@ class ProductForecastService:
         except ImportError as exc:
             raise RuntimeError("PyTorch is not installed in this runtime.") from exc
 
-        checkpoint_path = ARTIFACT_DIR / manifest["checkpoint_file"]
+        spec = self.artifact_spec(horizon_hours)
+        checkpoint_path = spec.artifact_dir / manifest["checkpoint_file"]
         try:
             checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
         except TypeError:
             checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        model = GlobalTFT()
+        architecture = manifest.get("architecture", {})
+        model = GlobalTFT(
+            hidden_size=int(architecture.get("hidden_size", 128)),
+            n_heads=int(architecture.get("attention_heads", 4)),
+            dropout=float(architecture.get("dropout", 0.1)),
+        )
         model.load_state_dict(checkpoint["model_state_dict"], strict=True)
         model.eval()
-        self._model = model
+        self._models[horizon_hours] = model
         return model
 
     def _predict_tft(
@@ -363,6 +522,7 @@ class ProductForecastService:
         country: str | None,
         mean: float,
         standard_deviation: float,
+        horizon_hours: int,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         import torch
 
@@ -372,31 +532,32 @@ class ProductForecastService:
             prepared.origin - timedelta(hours=LOOKBACK_HOURS - index)
             for index in range(LOOKBACK_HOURS)
         ]
-        future_timestamps = [prepared.origin + timedelta(hours=index) for index in range(HORIZON_HOURS)]
+        future_timestamps = [prepared.origin + timedelta(hours=index) for index in range(horizon_hours)]
         batch = {
             "x": torch.from_numpy(normalized[None, :, None].astype(np.float32)),
             "x_calendar": torch.from_numpy(self._calendar(past_timestamps, prepared.site, country)[None]),
             "y_calendar": torch.from_numpy(self._calendar(future_timestamps, prepared.site, country)[None]),
         }
-        model = self._load_model()
+        model = self._load_model(horizon_hours)
         with torch.inference_mode():
             output = model(batch)["quantiles"].cpu().numpy()[0]
-        if output.shape != (HORIZON_HOURS, 3) or not np.isfinite(output).all():
+        if output.shape != (horizon_hours, 3) or not np.isfinite(output).all():
             raise RuntimeError("The model returned an invalid forecast tensor.")
         output = np.maximum(0.0, output * standard_deviation + mean)
         output.sort(axis=1)
         return output[:, 0], output[:, 1], output[:, 2]
 
-    def generate(self, db: Session, user_id: int) -> dict:
+    def generate(self, db: Session, user_id: int, horizon_hours: int = 24) -> dict:
+        spec = self._require_advertised(horizon_hours)
         prepared = self.prepare_input(db, user_id)
         if not prepared.ready:
             raise ForecastInputError(" ".join(prepared.reasons))
         assert prepared.values is not None and prepared.origin is not None and prepared.site is not None
 
-        settings = (
+        site_settings = (
             db.query(SiteSettings).filter(SiteSettings.site_id == prepared.site.id).one_or_none()
         )
-        model_status = self.model_status()
+        model_status = self.warmup() if horizon_hours == 24 else self.warmup(horizon_hours)
         mean = float(prepared.values.mean())
         standard_deviation = max(float(prepared.values.std()), 1e-6)
         preprocessing = {
@@ -408,34 +569,39 @@ class ProductForecastService:
             "imputed_timestamps": [value.isoformat() for value in prepared.imputed_timestamps],
         }
         method = "global_tft"
-        model_name = MODEL_NAME
+        model_name = spec.model_name
         fallback_reason = None
         inference_started = time.perf_counter()
         try:
-            if not model_status["available"]:
+            if not model_status["available"] or not model_status.get("warmed"):
                 raise RuntimeError(model_status["error"] or "The TFT model is unavailable.")
             lower, median, upper = self._predict_tft(
                 prepared,
-                settings.country if settings else None,
+                site_settings.country if site_settings else None,
                 mean,
                 standard_deviation,
+                horizon_hours,
             )
             confidence_method = (
                 "Native Global TFT 10th/50th/90th quantile outputs; not recalibrated for this site."
             )
         except Exception as exc:
-            logger.exception("Global TFT inference failed; using the declared seasonal fallback")
+            logger.exception(
+                "Global TFT %sh inference failed; using the declared seasonal fallback",
+                horizon_hours,
+            )
             method = "seasonal_naive"
-            model_name = FALLBACK_NAME
+            model_name = spec.fallback_name
             fallback_reason = str(exc)
-            median = prepared.values[168:192].astype(np.float64)
-            lower = upper = np.full(HORIZON_HOURS, np.nan)
+            fallback_start = LOOKBACK_HOURS - 168
+            median = prepared.values[fallback_start : fallback_start + horizon_hours].astype(np.float64)
+            lower = upper = np.full(horizon_hours, np.nan)
             confidence_method = "Seasonal-naive point forecast; no uncertainty interval is available."
         inference_seconds = time.perf_counter() - inference_started
 
         points = []
         prediction_rows = []
-        for index in range(HORIZON_HOURS):
+        for index in range(horizon_hours):
             timestamp = prepared.origin + timedelta(hours=index)
             p50 = round(float(median[index]), 5)
             p10 = round(float(lower[index]), 5) if math.isfinite(lower[index]) else None
@@ -444,8 +610,9 @@ class ProductForecastService:
             prediction_rows.append([p50, p10, p90])
 
         return {
+            "horizon_hours": horizon_hours,
             "model_name": model_name,
-            "model_version": MODEL_VERSION if method == "global_tft" else "deterministic-v1",
+            "model_version": model_status["version"] if method == "global_tft" else "deterministic-v1",
             "method": method,
             "fallback_reason": fallback_reason,
             "confidence_method": confidence_method,

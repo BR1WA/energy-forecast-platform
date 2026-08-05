@@ -13,6 +13,7 @@ export interface User {
   last_activity?: string;
   is_setup_complete?: boolean;
   preferences?: Record<string, any>;
+  email_verified_at?: string | null;
 }
 
 export interface AuthTokens {
@@ -23,9 +24,19 @@ export interface AuthTokens {
 
 export interface LoginResponse {
   access_token: string;
-  refresh_token: string;
   token_type: string;
   user: User;
+}
+
+export interface RegistrationResponse {
+  message: string;
+  verification_required: boolean;
+}
+
+export interface AuthCapabilities {
+  email_delivery_enabled: boolean;
+  google_auth_enabled: boolean;
+  google_client_id?: string | null;
 }
 
 export interface RegisterPayload {
@@ -105,8 +116,13 @@ export interface PrimaryMeter {
   push_key_configured: boolean;
 }
 
+export type ForecastHorizon = 24 | 168;
+
 export interface ForecastModelStatus {
   available: boolean;
+  enabled: boolean;
+  warmed: boolean;
+  horizon_hours: ForecastHorizon;
   name: string;
   display_name: string;
   version: string;
@@ -114,7 +130,20 @@ export interface ForecastModelStatus {
   error: string | null;
 }
 
+export interface ForecastCapability {
+  horizon_hours: ForecastHorizon;
+  label: string;
+  description: string;
+  model: ForecastModelStatus;
+}
+
+export interface ForecastCapabilities {
+  default_horizon_hours: 24;
+  capabilities: ForecastCapability[];
+}
+
 export interface ForecastReadiness {
+  horizon_hours: ForecastHorizon;
   status: 'ready' | 'fallback_ready' | 'insufficient_data';
   ready_for_tft: boolean;
   fallback_available: boolean;
@@ -132,6 +161,20 @@ export interface ForecastReadiness {
   forecast_origin: string | null;
   reasons: string[];
   model: ForecastModelStatus;
+}
+
+export interface ForecastDemoHistoryResult {
+  status: 'ready' | 'insufficient_data';
+  meter_id: number;
+  synthetic_source: 'forecast_demo';
+  required_hours: number;
+  accepted_rows: number;
+  duplicate_rows: number;
+  coverage_percent: number;
+  observed_hours: number;
+  maximum_gap_hours: number;
+  forecast_origin: string | null;
+  message: string;
 }
 
 export interface ProductForecastPoint {
@@ -168,6 +211,7 @@ export interface ProductForecastHistoryItem {
   id: number;
   model_name: string;
   method: string;
+  horizon_hours: ForecastHorizon;
   forecast_start: string | null;
   created_at: string;
 }
@@ -186,6 +230,7 @@ export interface AnalyticsSummary {
     id: number;
     model_name: string;
     method: string;
+    horizon_hours: number;
     created_at: string;
     forecast_start: string | null;
     peak_hourly_kwh: number | null;
@@ -232,10 +277,14 @@ export interface AlertConfig {
   high_consumption_threshold: number;
   cooldown_minutes: number;
   missing_data_minutes: number;
+  email_enabled: boolean;
+  email_delivery_available: boolean;
+  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | null;
 }
 
 export interface Recommendation {
   id: number;
+  alert_id?: number | null;
   category: 'peak_load' | 'data_quality';
   title: string;
   message: string;
@@ -256,12 +305,18 @@ export interface AdminUser extends User {
 
 export interface ModelReadiness {
   available: boolean;
+  enabled: boolean;
   warmed: boolean;
+  horizon_hours: ForecastHorizon;
   name: string;
   display_name: string;
   version: string;
   artifact_fingerprint: string | null;
   error: string | null;
+}
+
+export interface ModelReadinessSummary {
+  artifacts: ModelReadiness[];
 }
 
 export interface SystemHealth {
@@ -307,7 +362,7 @@ export interface SystemSettings {
   is_setup_complete: boolean;
   country: string;
   region: string;
-  electricity_provider: string;
+  electricity_provider: string | null;
   currency: string;
   peak_rate: number;
   off_peak_rate: number;
@@ -338,6 +393,9 @@ export interface AlertConfigResponse {
   threshold_kw: number;
   cooldown_minutes: number;
   missing_data_minutes: number;
+  email_enabled: boolean;
+  email_delivery_available: boolean;
+  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | null;
   created_at: string;
   updated_at: string;
 }
@@ -345,6 +403,19 @@ export interface AlertConfigResponse {
 export interface UserPreferences {
   theme?: string;
   language?: string;
+}
+
+export interface LegalConfiguration {
+  configured: boolean;
+  owner_name: string | null;
+  contact_email: string | null;
+  support_email: string | null;
+  effective_date: string | null;
+}
+
+export interface AccountDeletionCapabilities {
+  method: 'password' | 'google';
+  google_reauthentication_available: boolean;
 }
 
 export interface SiteCircuit {
