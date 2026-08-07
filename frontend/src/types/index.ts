@@ -251,12 +251,6 @@ export interface ActivityItem {
   timestamp: string;
 }
 
-export interface ConsumptionPoint {
-  date: string;
-  consumption: number;
-  predicted?: number;
-}
-
 // ============================================================
 // Alert Types
 // ============================================================

@@ -19,7 +19,7 @@ import {
 import AppLayout from '@/components/layout/app-layout';
 import { ConsumptionChart } from '@/components/consumption/consumption-chart';
 import { PeriodSelector } from '@/components/consumption/period-selector';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { API_BASE_URL, alertsApi, consumptionApi, forecastApi, getAccessToken, recommendationsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -256,14 +256,14 @@ export default function DashboardPage() {
         </section>
 
         <Card className="rounded-lg border-white/10 bg-[#111827]">
-          <CardHeader className="flex-row items-start justify-between gap-3">
+          <CardHeader>
             <div>
               <CardTitle className="text-sm text-white">Measured power</CardTitle>
               <p className="mt-1 text-xs text-slate-400">Average load grouped by {summary?.granularity?.replace('_', ' ') || 'period'} for {periodLabel(timeframe)}.</p>
             </div>
-            <Button aria-label="Refresh consumption" disabled={refreshing || loading} onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe, true)} size="icon" title="Refresh" variant="ghost">
+            <CardAction><Button aria-label="Refresh consumption" disabled={refreshing || loading} onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe, true)} size="icon" title="Refresh" variant="ghost">
               <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-            </Button>
+            </Button></CardAction>
           </CardHeader>
           <CardContent>
             {loading && !summary ? (
@@ -274,7 +274,7 @@ export default function DashboardPage() {
                 <div><p className="font-medium text-white">No readings in this period</p><p className="mt-1 text-sm text-slate-400">Connect a meter, import a CSV, or explicitly start the demo simulator.</p></div>
                 <div className="flex gap-2"><Link className={buttonVariants({ size: 'sm' })} href="/usage">Import history</Link><Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/settings?tab=data">Connect a meter</Link></div>
               </div>
-            ) : summary ? <ConsumptionChart summary={summary} /> : null}
+            ) : summary ? <ConsumptionChart summary={summary} variant="compact" /> : null}
           </CardContent>
         </Card>
 

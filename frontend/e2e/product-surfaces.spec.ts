@@ -160,3 +160,43 @@ test('dashboard monitoring exposes a controlled live reading without browser tok
   await expect(page.getByText('2.750 kW').first()).toBeVisible();
   expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: [], session: [] });
 });
+
+
+test('usage chart exposes truthful power, energy, range, and gap states', async ({ page }) => {
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'usage-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [{ id: 1, name: 'Primary meter', source_type: 'csv', is_primary: true, expected_interval_seconds: 3600, last_seen_at: '2026-07-04T00:00:00Z', push_key_configured: false }] });
+    if (pathname === '/api/v1/consumption/readings') return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (pathname === '/api/v1/consumption/period') return route.fulfill({ json: {
+      timeframe: 'month', site_name: 'Jury demonstration site', timezone: 'Africa/Casablanca',
+      period_start: '2026-07-01T00:00:00Z', period_end: '2026-07-05T00:00:00Z', granularity: 'day',
+      sample_count: 72, total_kwh: 36.2, estimated_cost: 51.4, currency: 'MAD', average_kw: 1.52,
+      peak_kw: 3.84, peak_at: '2026-07-04T18:00:00Z', coverage_pct: 75,
+      sources: [{ source: 'csv', count: 72 }],
+      freshness: { status: 'historical', age_seconds: 3600, expected_interval_seconds: 3600, last_seen_at: '2026-07-04T00:00:00Z', source: 'csv', quality: 'validated' },
+      points: [
+        { timestamp: '2026-07-01T00:00:00Z', average_kw: 1.2, min_kw: .6, max_kw: 2.1, energy_kwh: 10.4, sample_count: 24 },
+        { timestamp: '2026-07-02T00:00:00Z', average_kw: 1.5, min_kw: .7, max_kw: 2.8, energy_kwh: 12.1, sample_count: 24 },
+        { timestamp: '2026-07-04T00:00:00Z', average_kw: 1.8, min_kw: .8, max_kw: 3.84, energy_kwh: 13.7, sample_count: 24 },
+      ],
+    } });
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  await page.goto('/usage');
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Usage' })).toBeVisible();
+  await expect(page.getByText('Load and energy profile')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Power' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Observed min-max')).toBeVisible();
+  await expect(page.getByText(/1 measurement gap shown as a break/)).toBeVisible();
+  await expect(page.getByText('75.0% coverage')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Energy' }).click();
+  await expect(page.getByRole('button', { name: 'Energy' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Energy per bucket')).toBeVisible();
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(3);
+});

@@ -115,7 +115,7 @@ export default function SimulationPage() {
 
         <Card className="rounded-lg border-white/10 bg-[#111827]">
           <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Activity className="h-4 w-4 text-emerald-400" />Last 15 minutes</CardTitle><p className="text-xs text-slate-400">Every point remains labelled by its real source in the monitoring APIs.</p></CardHeader>
-          <CardContent>{summary && summary.points.length ? <ConsumptionChart summary={summary} /> : <div className="flex h-80 items-center justify-center text-sm text-slate-400">Start the simulator to generate the first demo reading.</div>}</CardContent>
+          <CardContent>{summary && summary.points.length ? <ConsumptionChart summary={summary} variant="compact" /> : <div className="flex h-80 items-center justify-center text-sm text-slate-400">Start the simulator to generate the first demo reading.</div>}</CardContent>
         </Card>
       </div>
     </AppLayout>
