@@ -1,0 +1,48 @@
+{
+  "experiment_name": "full_selected_v1",
+  "run_profile": "full",
+  "profile": {
+    "max_households": 2500,
+    "samples_per_household": 48,
+    "eval_origins": 24,
+    "epochs": 15,
+    "patience": 5
+  },
+  "selected_runs": [
+    {
+      "model": "global_tft",
+      "task": "day_24h",
+      "role": "primary"
+    },
+    {
+      "model": "global_nbeats_localized",
+      "task": "day_24h",
+      "role": "fallback"
+    },
+    {
+      "model": "global_tft",
+      "task": "week_168h",
+      "role": "primary"
+    },
+    {
+      "model": "global_nbeats_localized",
+      "task": "week_168h",
+      "role": "fallback"
+    },
+    {
+      "model": "global_nbeats_localized",
+      "task": "month_30d",
+      "role": "primary"
+    },
+    {
+      "model": "multicyclenet_adapted",
+      "task": "month_30d",
+      "role": "fallback"
+    }
+  ],
+  "n_selected_runs": 6,
+  "nbeats_localization": false,
+  "seed": 2026,
+  "year": 2013,
+  "dataset_directory": "/kaggle/input/datasets/jeanmidev/smart-meters-in-london/halfhourly_dataset/halfhourly_dataset"
+}

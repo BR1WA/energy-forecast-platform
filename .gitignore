@@ -93,3 +93,10 @@ test-results/
 logs_*.txt
 test.csv
 lint_results.txt
+
+# Local report rendering, browser captures, and deployment scratch files
+tmp/
+
+# Reference papers are kept locally; commit citations and analysis instead of
+# republishing third-party PDF files.
+docs/research/**/*.pdf
