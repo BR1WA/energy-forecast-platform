@@ -23,6 +23,7 @@ Registry & Content \\
 \breakcode{lcl_tft_serving_normalization_manifest.json} & Preserved-data audit, exact serving-normalization comparison, hashes, environment, and generated evidence \\
 \breakcode{lcl_tft_serving_normalization_comparison.csv} & Research-versus-serving metrics for the frozen 24-hour and 168-hour cold-start cohorts \\
 \breakcode{openapi_inventory_summary.json} & Exact current OpenAPI path and operation counts \\
+\breakcode{azure_deployment_evidence_2026-08-07.md} & Release commit, Azure resource boundary, HTTPS endpoints, readiness checks, scale settings, cost controls, and remaining cloud limitations \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -49,7 +50,7 @@ Forecast provenance & Persisted Forecast entity and history endpoint & Forecast 
 Alerts and actions & AlertConfig, Alert, Recommendation, workers & Alert state tests and worker health \\
 Analytics PDF export & Forecast UI and analytics PDF endpoint; legacy reports route redirects to Usage & Horizon-specific PDF tests \\
 Health/readiness & System live, ready, health, version endpoints & Docker health checks \\
-Public deployment & Reserved report section only & Not implemented \\
+Public deployment & Azure Container Apps, managed PostgreSQL, ACR, Key Vault, and budget & HTTPS, readiness, model warm-up, and authenticated administrator browser smoke test \\
 \bottomrule
 \end{longtable}
 

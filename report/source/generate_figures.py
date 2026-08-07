@@ -602,6 +602,52 @@ def uml_sequences():
     )
 
 
+def azure_deployment_topology():
+    fig, ax = canvas(11, 5.4)
+    ax.text(0.02, 0.95, "Verified Product V1 deployment on Microsoft Azure", fontsize=14, weight="bold", color=NAVY)
+    ax.text(0.02, 0.90, "Resource group rg-energyai-pfe - Italy North - verified 7 August 2026", fontsize=9.2, color=GREY)
+
+    resource_group = FancyBboxPatch(
+        (0.16, 0.10), 0.81, 0.75,
+        boxstyle="round,pad=0.012,rounding_size=0.018",
+        facecolor="#f8fafc", edgecolor=NAVY, linewidth=1.4,
+    )
+    ax.add_patch(resource_group)
+    ax.text(0.175, 0.825, "Azure resource boundary", fontsize=9.5, weight="bold", color=NAVY)
+
+    environment = FancyBboxPatch(
+        (0.21, 0.47), 0.56, 0.27,
+        boxstyle="round,pad=0.012,rounding_size=0.015",
+        facecolor="#edf5fb", edgecolor=BLUE, linewidth=1.2,
+    )
+    ax.add_patch(environment)
+    ax.text(0.225, 0.715, "Container Apps environment: cae-energyai-pfe", fontsize=8.5, weight="bold", color=BLUE)
+
+    box(ax, 0.25, 0.53, 0.20, 0.12, "Web Container App\nca-energyai-web\n0.5 CPU / 1 GiB / 0-1", fc="white", ec=BLUE, size=8.0, weight="bold")
+    box(ax, 0.53, 0.53, 0.20, 0.12, "API Container App\nca-energyai-api\n2 CPU / 4 GiB / 0-1", fc="white", ec=GREEN, size=8.0, weight="bold")
+    box(ax, 0.22, 0.20, 0.20, 0.13, "Private ACR\nacrenergyaipfe2691\nrelease image digests", fc="#fff8e9", ec=AMBER, size=8.0)
+    box(ax, 0.48, 0.20, 0.22, 0.13, "Managed PostgreSQL 16\npsql-energyai-br1wa-2691\n32 GiB / 7-day retention", fc="#eef8f3", ec=GREEN, size=8.0)
+    box(ax, 0.76, 0.20, 0.18, 0.13, "Key Vault\nkv-energyai-pfe-2691\nexternalized secrets", fc="#f5f0fb", ec="#75529b", size=8.0)
+
+    box(ax, 0.03, 0.53, 0.10, 0.12, "Public\nbrowser", fc=LIGHT, ec=NAVY, size=8.5, weight="bold")
+    box(ax, 0.80, 0.67, 0.14, 0.10, "Budget alerts\n80% actual\n100% forecast", fc="#fff8e9", ec=AMBER, size=7.8)
+
+    arrow(ax, 0.13, 0.59, 0.25, 0.59, color=BLUE)
+    ax.text(0.185, 0.615, "HTTPS", ha="center", fontsize=7.8, color=BLUE)
+    arrow(ax, 0.45, 0.59, 0.53, 0.59, color=BLUE)
+    ax.text(0.49, 0.615, "HTTPS API", ha="center", fontsize=7.4, color=BLUE)
+    arrow(ax, 0.63, 0.53, 0.59, 0.33, color=GREEN)
+    ax.text(0.64, 0.42, "TLS", fontsize=7.6, color=GREEN)
+    arrow(ax, 0.34, 0.33, 0.34, 0.53, color=AMBER, ls="--")
+    arrow(ax, 0.40, 0.31, 0.56, 0.53, color=AMBER, ls="--")
+    ax.text(0.35, 0.39, "image pulls", fontsize=7.3, color=AMBER)
+    arrow(ax, 0.80, 0.33, 0.70, 0.53, color="#75529b", ls="--")
+    ax.text(0.75, 0.42, "secrets", fontsize=7.3, color="#75529b")
+
+    ax.text(0.18, 0.055, "Managed HTTPS ingress and scale-to-zero were verified; cloud workers and external identity/email providers remain outside this boundary.", fontsize=8.1, color=GREY)
+    save(fig, DIA / "azure_deployment_topology.pdf")
+
+
 def main():
     project_timeline()
     leaky_vs_causal()
@@ -622,6 +668,7 @@ def main():
     use_case()
     class_domain()
     uml_sequences()
+    azure_deployment_topology()
     print(f"Generated figures in {FIG} and {DIA}")
 
 

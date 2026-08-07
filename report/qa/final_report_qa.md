@@ -1,107 +1,86 @@
-# Final Report QA — Targeted Finalization Pass
+# Final Report QA — Current-State Azure Update
 
 ## Build identification
 
-- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v1.pdf` (verified local deliverable; intentionally not versioned in Git).
-- Previous draft retained: `report/exports/PFE_ZOUITNI_Salah_Eddine_draft.pdf` was not overwritten.
+- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v3.pdf`.
+- Previous supervisor-review and draft PDFs are retained and were not overwritten.
 - Language: professional academic English, with the required French résumé.
-- Format: A4, 12 pt, one-sided PDF; 91 pages; 1,669,108 bytes.
-- SHA-256: `44394F66214A6805FDD28BB653B5EFF66835DA68F553034E924A081165E2599A`.
-- Build date: 1 August 2026.
-- Clean build: a fresh source-and-assets copy was compiled with MiKTeX pdfLaTeX, Biber, and the required stabilizing pdfLaTeX passes. The final figure correction was followed by two additional successful pdfLaTeX passes.
+- Format: A4, 12 pt, one-sided PDF; 99 pages; 1,711,157 bytes.
+- SHA-256: `DB7DBB7BB9EA69FBE84E916533B99850F19C7B1DF27B6D05354CBDB6210DC37A`.
+- Build date: 7 August 2026.
+- Build method: clean manual MiKTeX sequence in a fresh output directory using pdfLaTeX, Biber, and stabilizing pdfLaTeX passes. The final URL-layout correction was followed by two successful pdfLaTeX passes.
 
-## Serving-normalization evaluation decision
+## Scientific-evidence boundary
 
-The exact inference-only evaluation was possible from preserved local evidence. The original Low Carbon London CSV files were not needed and were not downloaded. No model was trained, fine-tuned, or replaced, and no research metric, checkpoint, or production artifact was overwritten.
+No model was trained, fine-tuned, replaced, or downloaded during this update. No frozen research metric, serving-normalization result, checkpoint, prepared artifact, or production model artifact was changed. The report continues to separate the frozen research-normalization results from the inference-only production-normalization re-evaluation.
 
-The following files under `models/lcl_global_forecasting/full_selected_v1/` supplied the required evidence:
+The exact serving-normalization evaluation remains supported by preserved local evidence under `models/lcl_global_forecasting/full_selected_v1/`; the original Low Carbon London CSV files were neither required nor downloaded. The detailed hashes, origins, environment, parity checks, and result files remain recorded in `report/evidence/lcl_tft_serving_normalization_manifest.json` and the associated CSV evidence files.
 
-- `data/hourly_raw.npy`: exact hourly values for 2,500 households over 8,760 hourly positions;
-- `data/hourly_calendar.npy`: preserved calendar features for the same 8,760 positions;
-- `data/households.json`: ordered household identities;
-- `data/known_households.npy` and `data/cold_households.npy`: disjoint, complete known/cold-start assignments;
-- `data/prepared.json`: shared train, validation, and test boundaries at 6,132, 7,008, and 8,760;
-- the frozen 24-origin protocol recoverable from the preserved training worker;
-- `runs/global_tft/day_24h/best.pt` and `runs/global_tft/week_168h/best.pt`: frozen checkpoints whose hashes match the packaged backend checkpoints.
+## Current Azure deployment evidence
 
-These artifacts permit exact reconstruction of the 336-hour histories, future targets, fixed origins, cold-start cohort, calendar inputs, and seasonal-naive targets. There is therefore no missing-artifact blocker for this evaluation.
+The report now records the controlled public PFE deployment verified on 7 August 2026:
 
-## Serving-normalization results
+- deployed source: exact `origin/main` commit `00a5592a4e84e0547ba56495ee00b551226f1db9`;
+- region and resource group: Italy North, `rg-energyai-pfe`;
+- frontend: Azure Container App `ca-energyai-web`, external HTTPS, HTTP 200;
+- API: Azure Container App `ca-energyai-api`, external HTTPS, liveness and readiness green;
+- models: both frozen 24-hour and 168-hour TFT artifacts reported available, enabled, and warmed;
+- persistence: PostgreSQL 16 server ready, 32 GiB storage, seven-day backup retention;
+- supporting services: private Azure Container Registry and Azure Key Vault;
+- end-to-end smoke test: real administrator authentication succeeded and the role-gated admin page reported database healthy, forecast ready, and process operational with no browser-console warning;
+- observed first API cold start: approximately 22 seconds, consistent with the configured zero-to-one replica range.
 
-The new results use the exact production rolling-history rule implemented by `backend/app/services/product_forecast_service.py::ProductForecastService._predict_tft`: compute the mean and population standard deviation over the latest 336 accepted hourly values, clamp the standard deviation to at least `1e-6`, normalize the history, inverse-transform the quantiles, clamp predictions at zero, and sort q10/q50/q90 independently at every lead time. A vectorized evaluation implementation passed CPU production-method parity checks at both horizons within 0.001 kWh.
+The evidence registry is `report/evidence/azure_deployment_evidence_2026-08-07.md`. It records public endpoints, container-image digests, resource configuration, smoke-test observations, cost controls, firewall cleanup, and the exact evidence boundary without storing secrets.
 
-| Metric | 24 h serving | 168 h serving |
-|---|---:|---:|
-| Evaluated households | 500 | 499 |
-| Evaluation windows | 11,871 | 11,830 |
-| Macro MAE (kWh) | 0.181945 | 0.194138 |
-| Median household MAE (kWh) | 0.142769 | 0.150560 |
-| p90 household MAE (kWh) | 0.362684 | 0.387758 |
-| Macro RMSE (kWh) | 0.322854 | 0.335025 |
-| Bias (kWh) | -0.061638 | -0.053130 |
-| Macro R² | 0.285221 | 0.244525 |
-| Global R² | 0.638839 | 0.581186 |
-| Seasonal-naive macro MAE (kWh) | 0.251540 | 0.249055 |
-| Households beating seasonal naive | 498/500 (99.60%) | 496/499 (99.40%) |
-| q10 pinball loss (kWh) | 0.029440 | 0.031123 |
-| q50 pinball loss (kWh) | 0.091103 | 0.096999 |
-| q90 pinball loss (kWh) | 0.061746 | 0.066166 |
-| Central-80% empirical coverage | 81.011% | 78.056% |
-| Mean interval width (kWh) | 0.571945 | 0.598749 |
-| Quantile-crossing rate | 0.000% | 0.000% |
+## Explicit cloud limitations retained
 
-The report keeps these results clearly separated from the frozen research-normalization results. The verified research headlines remain unchanged at macro MAE 0.184928 with 495/500 wins for 24 h and macro MAE 0.197322 with 491/499 wins for 168 h.
+The report does not claim full production maturity. It states that public registration, verification email, password-reset delivery, Google authentication, cloud background workers, durable avatar storage, centralized Log Analytics retention, custom-domain configuration, and workload-identity registry access are not configured. Backup restoration, load, disaster-recovery, formal accessibility, and penetration tests remain incomplete. The monthly budget is an alerting control, not an automatic shutdown policy.
 
-## Evaluation provenance
+## Current-state report corrections
 
-- Execution Git commit: `f6679d4b5f759511dcd8bec26745bb894633f66a`; the manifest records that the working tree was dirty because the evaluation script and report revision were uncommitted.
-- Environment: Windows 11; Python 3.13.11; NumPy 2.2.6; PyTorch 2.6.0+cu124; CUDA 12.4; NVIDIA GeForce RTX 3070 Laptop GPU; float16 autocast disabled.
-- Evaluation script SHA-256: `ffdd74c33a7403e6f3636104efbaf44c558dea6cd5de6fc2204af39e8f81f7f7`.
-- Production preprocessing source SHA-256: `312baaf589c5314cdfb747c99002a6203d2f6d9358f46476a12cb8aa1147dae3`.
-- Frozen checkpoint SHA-256 values: 24 h `60fedcdee375dc0b2973e55b9f4ec752da69c2a7e390e1f951ed5cbb7bc5a04d`; 168 h `80af16b25af9b912019c6e40cfdc491e2cf5173e5743144596801e28df695f93`.
-- Prepared-data hashes, exact origins, CPU/GPU parity checks, inference timings, and output paths are recorded in `report/evidence/lcl_tft_serving_normalization_manifest.json`.
-- New evidence outputs: the manifest above, `lcl_tft_serving_normalization_comparison.csv`, `lcl_tft_serving_day_24h_households.csv`, and `lcl_tft_serving_week_168h_households.csv` in `report/evidence/`.
-
-## Targeted report corrections
-
-- Running headers now use one controlled chapter mark; overlapping Chapter 5 and Chapter 6 headers and duplicated list/reference headings are removed.
-- The class diagram was re-laid out so relationship names and multiplicities occupy whitespace rather than boxes or attributes.
-- URL-style line breaking is restricted to meaningful separators, preventing long notebook, tag, route, CSV, and registry names from breaking character by character.
-- “An Recurrent Neural Network” was corrected to “A recurrent neural network.”
-- Model-name capitalization was checked and normalized in the touched text.
-- The unsupported 9 September 2026 date was removed. The defense date is consistently pending official confirmation; jury information remains unresolved.
-- The dedication page is excluded from this supervisor-review build because no dedication text was supplied.
-- The public-deployment section remains explicitly incomplete: there is no public URL, ingress, TLS termination, or verified cloud deployment.
-- The serving-normalization evidence and comparison table were added without changing the frozen research metrics.
+- English and French abstracts now distinguish the verified Azure core from incomplete cloud features.
+- Chapters 1, 6, and 7 now describe the local Compose profile and the public Azure topology separately.
+- Chapter 6 includes the verified Azure resource boundary, public endpoints, health evidence, administrator smoke test, cold-start observation, and deployment limitations.
+- Chapter 7 separates the 7 August deployment validation from the frozen scientific evaluation and updates product limitations and operational threats.
+- The general conclusion and Appendices A and C now reflect the actual deployed state and remaining hardening work.
+- The local Docker wording was clarified so it cannot be read as contradicting the public Azure deployment.
+- The two public Azure endpoints are now printed in full as well as embedded as clickable links.
+- A deployment-topology figure now separates the public browser path, Container Apps environment, API/database traffic, registry image supply, Key Vault secret supply, and subscription-level budget alerts.
+- The budget row now states that 25 is in the subscription billing currency rather than implying an unsupported currency.
+- The Docker test row now explicitly directs readers to the separate public-Azure validation result.
+- The French abstract now uses formal Azure scale-to-zero terminology instead of the ambiguous phrase “passer à zéro instance.”
+- The unsupported 9 September 2026 date remains removed. Defense date, jury information, and the institution-approved AI-tool declaration remain unresolved rather than invented.
+- The dedication remains excluded because no dedication text has been supplied.
 
 ## Compilation and textual QA
 
 - Fatal LaTeX errors: 0.
 - Undefined references: 0.
 - Undefined citations: 0.
-- Bibliography rerun warnings: 0.
-- Overfull boxes: 0.
+- Bibliography-rerun warnings: 0.
+- Overfull horizontal or vertical boxes: 0.
 - Duplicate PDF destinations: 0.
-- Informational underfull-box warnings: 93; page inspection found no clipping or objectionable spacing.
-- Ignored glue-shrink diagnostics from dense tables: 4; all affected tables remain bounded and readable.
-- Search results: `TODO` 0; `TBD` 0; malformed `??` references 0; duplicated “Contents Contents” 0; duplicated “References References” 0; “An Recurrent” 0; local Windows/Unix absolute paths 0; repository placeholders 0; `9 September 2026` 0.
+- Informational underfull horizontal boxes: 100; visual inspection found no objectionable spacing or clipping.
+- Dense-table glue-shrink diagnostics: 3; all affected tables remain bounded and readable.
+- Search results: `TODO` 0; `TBD` 0; malformed `??` references 0; duplicated “Contents Contents” 0; duplicated “References References” 0; “An Recurrent” 0; local Windows/Unix absolute paths 0; stale no-public-deployment claims 0; `9 September 2026` 0.
 - `TO BE CONFIRMED`: exactly 3 intentional administrative markers.
 
 ## Visual QA
 
-All 91 pages were rendered at 110 dpi and inspected in ten numbered contact sheets. Original-resolution or higher-resolution checks covered the cover, chapter openings, Chapter 5 research/serving tables, Chapter 5 and 6 running headers, application screenshots, the class diagram, the layered architecture, the rotated full-hash table, references, Docker instructions, and the AI-tool declaration. A persistence-layer text collision found during the first high-resolution pass was corrected, rebuilt, and re-inspected at 160 dpi.
+All 99 pages were rendered at 110 dpi and inspected in nine numbered contact sheets. Full-resolution checks covered the printed deployment endpoints, new Azure topology, revised deployment table, deployment-limitations continuation, product-limitations page, and rotated full-hash evidence table.
 
-Final verified conditions:
+Verified conditions:
 
 - no accidental blank pages;
 - no overlapping or duplicated running headers;
 - no cropped or clipped text, figures, tables, captions, or screenshots;
-- no relationship labels or multiplicities overlapping class boxes;
+- no class-diagram relationship labels or multiplicities overlapping boxes;
 - no content outside page margins;
 - no broken references or citations;
 - no inconsistent defense-date claim;
 - long technical identifiers break only at meaningful separators;
-- administrative placeholders are visible and confined to the intended fields.
+- the landscape evidence table is correctly rotated, bounded, and readable;
+- administrative placeholders are visible and limited to their intended fields.
 
 ## Remaining administrative placeholders
 
@@ -109,33 +88,23 @@ Final verified conditions:
 2. Jury names, grades, institutions, and roles.
 3. Exact Faculty/Master-approved AI-tool declaration.
 
-The dedication is not a placeholder in this draft; it has been removed. The report is technically ready for supervisor review but is not an institutionally final submission until the three items above are supplied or confirmed.
+The report is ready for supervisor review as a technically finalized current-state draft. It is not an institutionally final submission until the three administrative items above are confirmed.
 
-## Exact files modified or generated in this pass
+## Exact files modified or generated in this update
 
-- `report/source/evaluate_lcl_serving_normalization.py`
-- `report/evidence/lcl_tft_serving_normalization_manifest.json`
-- `report/evidence/lcl_tft_serving_normalization_comparison.csv`
-- `report/evidence/lcl_tft_serving_day_24h_households.csv`
-- `report/evidence/lcl_tft_serving_week_168h_households.csv`
-- `report/source/main.tex`
-- `report/source/config/preamble.tex`
-- `report/source/frontmatter/cover.tex`
-- `report/source/chapters/general_introduction.tex`
+- `report/source/frontmatter/abstracts.tex`
+- `report/source/generate_figures.py`
+- `report/assets/diagrams/azure_deployment_topology.pdf`
 - `report/source/chapters/chapter1.tex`
-- `report/source/chapters/chapter2.tex`
-- `report/source/chapters/chapter4.tex`
-- `report/source/chapters/chapter5.tex`
 - `report/source/chapters/chapter6.tex`
 - `report/source/chapters/chapter7.tex`
 - `report/source/chapters/general_conclusion.tex`
 - `report/source/appendices/appendix_a_traceability.tex`
-- `report/source/appendices/appendix_b_research_assets.tex`
-- `report/source/generate_figures.py`
-- `report/assets/diagrams/class_domain.pdf`
-- `report/assets/figures/energyai_layered_architecture.pdf`
+- `report/source/appendices/appendix_c_technical.tex`
 - `report/qa/missing_information.md`
+- `report/qa/current_report_text.txt`
 - `report/qa/final_report_qa.md`
-- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v1.pdf` (local deliverable; excluded from Git)
+- `report/evidence/azure_deployment_evidence_2026-08-07.md`
+- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v3.pdf`
 
-No commit, push, checkpoint replacement, model training, or external dataset download was performed.
+No push, checkpoint replacement, model training, or external-dataset download was performed.

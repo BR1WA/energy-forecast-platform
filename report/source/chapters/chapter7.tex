@@ -3,7 +3,7 @@
 
 \section{Validation scope and evidence date}
 
-The software-validation evidence in this chapter is frozen to the full application audit performed on 31 July 2026 and the Product V1 commit identified in the appendices. Historical validation reports are used only for chronology because test counts, routes, and capabilities changed over time. That audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes.
+The software-validation evidence in this chapter is frozen to the full application audit performed on 31 July 2026 and the Product V1 commit identified in the appendices. Historical validation reports are used only for chronology because test counts, routes, and capabilities changed over time. That audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes. A distinct deployment-validation pass was completed on 7 August 2026 against the Azure-hosted release at commit \texttt{00a5592a4e84e0547ba56495ee00b551226f1db9}; it did not rerun or alter any scientific experiment.
 
 \section{Backend validation}
 
@@ -30,7 +30,8 @@ Backend on isolated PostgreSQL & 100 passed, 0 skipped & Complete current backen
 Frontend lint and type checking & Passed & Static quality gates are green \\
 Frontend production build & Passed, 25 routes & Current route tree compiles for production \\
 Playwright six-project matrix & 107 passed, 1 WebKit interruption & Isolated rerun passed; matrix still contains a flaky gate \\
-Docker Compose & Core health checks green, workers running & Validated local deployment, not public production \\
+Docker Compose & Core health checks green, workers running & Local deployment validated; public status evaluated separately below \\
+Azure public deployment & HTTPS web/API, authenticated admin, managed PostgreSQL, both models warmed & Core cloud boundary verified; secondary workers and external providers remain disabled \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -45,15 +46,15 @@ The manifests also preserve limitations. London-cohort metrics are not a guarant
 
 The audit reviewed password hashing, JWT and refresh-token behavior, account-action tokens, Google identity gating, role checks, ownership filters, upload bounds, request validation, SSRF controls, and secret configuration. CI includes a full-history gitleaks job. No P0 authentication bypass or data-loss defect was identified.
 
-Two current security-quality concerns remain. First, the frontend application does not define security headers such as CSP, HSTS, frame policy, content-type options, or referrer policy; a future reverse proxy could provide some of them, but none is part of the verified Compose scope. Second, dependency policy is conditionally red: production npm dependencies report zero known vulnerabilities, while the full development graph reports nine high-severity advisories rooted in tooling. The development Python audit also identifies an advisory affecting pytest 8.4.2, with a fix in 9.0.3 while the project currently constrains pytest below 9.
+Two current security-quality concerns remain. First, the frontend application does not define its own complete security-header policy such as CSP, frame policy, content-type options, or referrer policy. Azure supplies managed HTTPS ingress, but transport security does not by itself establish a complete application-header policy. Second, dependency policy is conditionally red: production npm dependencies report zero known vulnerabilities, while the full development graph reports nine high-severity advisories rooted in tooling. The development Python audit also identifies an advisory affecting pytest 8.4.2, with a fix in 9.0.3 while the project currently constrains pytest below 9.
 
 These findings do not imply that nine high-severity packages are shipped to the browser. They do mean the configured CI dependency gate cannot be described as fully green.
 
-\section{Docker and service health}
+\section{Docker and deployed service health}
 
-After Docker Desktop was started, the six-service Compose stack built and ran. PostgreSQL, backend, and frontend reported healthy; alert, email, and avatar-cleanup workers remained running. Health endpoints returned successful responses and both forecasting artifacts were available. External SMTP authentication, inbox delivery, Google OAuth, public TLS, backup restoration, and cloud ingress were not retested.
+After Docker Desktop was started, the six-service Compose stack built and ran. PostgreSQL, backend, and frontend reported healthy; alert, email, and avatar-cleanup workers remained running. Health endpoints returned successful responses and both forecasting artifacts were available.
 
-Local operational readiness is therefore demonstrated for a controlled PFE presentation. Immutable public-release readiness remains conditional on dependency-gate resolution, browser-test stabilization, environment hardening, backup evidence, and external smoke tests.
+The separate Azure smoke test confirmed public TLS, HTTP 200 for the frontend, API liveness and readiness, managed-database readiness, warmed 24-hour and 168-hour models, and authenticated administrator access. The Container Apps revisions are limited to one replica and scale to zero when idle. External SMTP/inbox delivery, Google OAuth, cloud background workers, durable avatars, centralized log retention, and backup restoration were not validated. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production-hardening remains conditional on dependency-gate resolution, browser-test stabilization, security headers, durable storage, monitoring, worker deployment, restore evidence, load testing, and disaster-recovery procedures.
 
 \section{Requirement-to-test traceability}
 
@@ -89,7 +90,7 @@ TimePro and TimeMixer++ were attempted but lack completed leaderboard evidence. 
 
 \section{Product limitations}
 
-The current release needs a configured local environment and does not have a verified public URL. Security headers are absent from the application configuration. Browser-matrix flakiness and development dependency advisories need resolution. Formal accessibility, load, disaster-recovery, and multi-tenant penetration testing remain incomplete. The research tree also contains historical assets that should remain separated from the deployable product snapshot.
+The core release now has verified public web and API URLs, but that does not make every repository capability operational in the cloud. Public registration, email verification and password-reset delivery are disabled; Google authentication is disabled; background workers are absent; avatars are ephemeral; centralized log retention is not configured; and backup restoration has not been tested. The Azure-generated hostname is not a custom domain, the registry is not yet integrated through workload identity, and the budget is an alerting control rather than an automatic shutdown. Security headers, browser-matrix flakiness, and development dependency advisories still require attention. Formal accessibility, load, disaster-recovery, and multi-tenant penetration testing remain incomplete. The research tree also contains historical assets that should remain separated from the deployable product snapshot.
 
 \section{Threats to validity}
 
@@ -107,7 +108,7 @@ Construct & Accuracy/classification confused with forecasting value & Continuous
 External & London/IHEPC results transferred to Moroccan users & Cold-start household split; local-country evaluation still required \\
 Conclusion & Single seed, clock-influenced dynamic sampling, aggregation choice & Frozen seed and common protocol, macro/median/p90/win rate; bitwise retraining and multi-seed finalist study remain desirable \\
 Implementation & Third-party repository/version differences & Isolated workers and source notes; incomplete models excluded from rankings \\
-Operational & Healthy local stack interpreted as public production & Deployment section explicitly incomplete and external checks not claimed \\
+Operational & Public endpoint interpreted as complete production maturity & Exact Azure boundary recorded; disabled providers, workers, storage, monitoring, and recovery tests remain explicit \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -118,4 +119,4 @@ The project demonstrates a change in what counts as success. At the beginning, s
 
 The final TFT research results are credible because they satisfy several independent conditions: the target is continuous and future-indexed; all households share one causal chronology; households are evaluated in a cold-start cohort; the model beats a seasonal baseline for nearly all evaluated households; median, p90, bias, and interval diagnostics are reported; and the original checkpoints are hash-identified. The application adds strict loading and refuses unsupported horizons. The separate serving-normalization evaluation extends this evidence to the rolling transform on the same frozen cohort. These facts support a controlled demonstration and a defensible PFE contribution, but they do not establish geographic transfer or site-specific calibration.
 
-The remaining conditional findings also improve rather than weaken the report. They separate current evidence from future work and prevent a local academic prototype from being misrepresented as a globally deployed service.
+The remaining conditional findings also improve rather than weaken the report. They separate verified public availability from full production maturity and prevent a controlled academic deployment from being misrepresented as a globally validated service.

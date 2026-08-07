@@ -88,7 +88,7 @@ Every central model claim must map to a manifest or leaderboard, and every packa
 
 \section{System boundary and assumptions}
 
-EnergyAI currently operates as a local Docker Compose deployment. PostgreSQL, the backend, and the frontend have health checks; email, alert, and avatar-cleanup workers run as separate services. The report does not select a public cloud provider, claim a production URL, or assert that external deployment validation has passed. Likewise, validation metrics describe London and benchmark cohorts; they do not guarantee performance on a Moroccan household or organization without a local evaluation.
+EnergyAI retains a reproducible six-service Docker Compose configuration for local development and controlled demonstrations. In addition, the core release at Git commit \texttt{00a5592a4e84e0547ba56495ee00b551226f1db9} was deployed to Microsoft Azure on 7 August 2026. The verified cloud boundary comprises a public Next.js Container App, a public FastAPI Container App, Azure Database for PostgreSQL, Azure Container Registry, and Azure Key Vault. Azure-managed hostnames provide HTTPS for the web and API endpoints. The deployed worker scope is narrower than local Compose: email, alert, and avatar-cleanup workers are not active in the cloud release, public registration and provider-dependent email/Google flows are disabled, and avatar storage is ephemeral. Likewise, validation metrics describe London and benchmark cohorts; public availability does not guarantee performance on a Moroccan household or organization without a local evaluation.
 
 The cover page uses the official combined UMI/FSM logo and blue-orange motif published by the Faculty of Sciences of Meknes. The department and programme wording were verified against the current institutional programme pages, and the faculty identifies the academic supervisor as Pr. Ali Oubelkacem. No official defense-date evidence is preserved in the project, so the date remains an explicit administrative placeholder. The publicly available cover model is intended for doctoral theses rather than Master PFE reports; consequently, the English PFE wording is an evidence-based adaptation, while the jury composition also remains pending confirmation.
 
@@ -107,7 +107,7 @@ Misleading model comparison & Common cohorts, units, horizons, and baselines & L
 Unsupported product promise & Capability and readiness gates & Only 24 h and 168 h artifacts exposed \\
 Cross-user data exposure & Ownership-scoped queries and RBAC & PostgreSQL integration and authorization tests \\
 Corrupted or mismatched model & Manifest and SHA-256 verification & Strict load, finite output, and expected shape checks \\
-Research--serving transform mismatch & Explicit normalization contracts and end-to-end cohort re-evaluation requirement & Gap disclosed; efficacy gate remains conditional \\
+Research--serving transform mismatch & Explicit normalization contracts and frozen-cohort serving re-evaluation & Transform comparison completed; new-site efficacy remains conditional \\
 Dependency or browser gate failure & Automated quality and security audits & Current QA report including conditional findings \\
 Institutional non-compliance & Official template and administrative review & Placeholder closure before final submission \\
 \bottomrule

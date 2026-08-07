@@ -24,9 +24,11 @@ This file lists information that could not be established from the repository or
 
 ## Deployment and operational gaps
 
-- No public production URL, public TLS validation, or cloud-provider deployment evidence is available.
-- External SMTP authentication/inbox delivery, Google OAuth with a real provider, backup restoration, load testing, disaster recovery, formal accessibility testing, and multi-tenant penetration testing remain outside the verified evidence.
-- The deployment subsection is intentionally incomplete until public-deployment evidence exists.
+- The core Azure deployment is verified through public HTTPS web/API endpoints, managed PostgreSQL, a private registry, Key Vault secrets, model-readiness checks, and authenticated administrator access.
+- Public registration remains disabled because external SMTP delivery and the cloud email worker are not configured. Google OAuth is also disabled.
+- Alert, email, and avatar-cleanup workers are not deployed in Azure; uploaded avatars are not durably persisted.
+- The deployment uses Azure-generated hostnames, registry credentials rather than workload identity, and no centralized Log Analytics retention.
+- Backup retention is configured, but restoration, load testing, disaster recovery, formal accessibility testing, and multi-tenant penetration testing remain outside the verified evidence.
 
 ## Decisions requested before final submission
 
@@ -36,4 +38,4 @@ This file lists information that could not be established from the repository or
 4. Approve the neutral wording of the DEPM methodological audit.
 5. Approve or replace the draft AI-tool declaration.
 6. Decide whether interval recalibration or a Moroccan pilot study must be completed before defense.
-7. Provide public-deployment evidence only if public deployment is intended to become a claimed result.
+7. Decide whether a custom domain, provider-backed email registration, and the remaining cloud workers are required before the defense.

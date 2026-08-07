@@ -55,7 +55,7 @@ Frontend build & Next.js production compilation & Passed, 25 routes \\
 Browser E2E & Playwright six-project matrix & 107 passed; one WebKit interruption passed in isolation \\
 Model artifacts & Hash, strict load, inference shape, finite values & Both 24 h and 168 h validated \\
 Dependency security & npm and pip audits & Production npm clean; development-tool findings remain \\
-Deployment & Docker health and endpoint smoke & Local Compose healthy; public deployment not tested \\
+Deployment & Docker health plus Azure HTTPS/browser smoke & Local Compose healthy; public web/API, managed database, both models, and administrator login verified \\
 \bottomrule
 \end{longtable}
 
@@ -83,7 +83,7 @@ curl http://localhost:8000/api/v1/system/ready
 curl http://localhost:3000/
 \end{lstlisting}
 
-The final public deployment must additionally specify TLS termination, hostnames, security headers, secret management, backups, monitoring, update policy, and restore testing.
+The verified Azure deployment supplies managed TLS, Azure hostnames, private images, and externalized secrets. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, cloud workers, update/rollback policy, and a tested backup-restore procedure.
 
 \section{Report reproduction}
 
