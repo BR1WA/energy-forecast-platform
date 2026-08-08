@@ -286,3 +286,160 @@ test('all timeframe daily overview displays candidate ticks on desktop and remai
   await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(18);
   await expect(page.getByText('Energy per day bucket (kWh)')).toBeVisible();
 });
+
+
+test('usage page renders end-of-period projections for available and unavailable states', async ({ page }) => {
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'projection-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [{ id: 1, name: 'Primary meter', source_type: 'csv', is_primary: true, expected_interval_seconds: 3600, last_seen_at: '2026-07-23T12:00:00Z', push_key_configured: false }] });
+    if (pathname === '/api/v1/consumption/readings') return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (pathname === '/api/v1/consumption/period') {
+      const url = new URL(route.request().url());
+      const tf = url.searchParams.get('timeframe') || 'month';
+      if (tf === 'month') {
+        return route.fulfill({ json: {
+          timeframe: 'month', site_name: 'Projection Site', timezone: 'UTC',
+          period_start: '2026-07-01T00:00:00Z', period_end: '2026-07-15T12:00:00Z', granularity: 'day',
+          sample_count: 348, total_kwh: 84.3, estimated_cost: 110.0, currency: 'MAD', average_kw: 1.25,
+          peak_kw: 3.2, peak_at: '2026-07-10T14:00:00Z', coverage_pct: 98.5,
+          sources: [{ source: 'csv', count: 348 }],
+          freshness: { status: 'fresh', age_seconds: 60, expected_interval_seconds: 3600, last_seen_at: '2026-07-15T12:00:00Z', source: 'csv', quality: 'validated' },
+          points: [
+            { timestamp: '2026-07-01T00:00:00Z', average_kw: 1.2, min_kw: 0.5, max_kw: 3.0, energy_kwh: 28.0, sample_count: 24 },
+          ],
+          projection: {
+            is_available: true,
+            reason: null,
+            projected_kwh: 302.7,
+            projected_cost: 286.0,
+            budget_target: 280.0,
+            budget_status: 'projected_to_exceed',
+            currency: 'MAD',
+          },
+        } });
+      }
+      if (tf === 'today') {
+        return route.fulfill({ json: {
+          timeframe: 'today', site_name: 'Projection Site', timezone: 'UTC',
+          period_start: '2026-07-15T00:00:00Z', period_end: '2026-07-15T01:30:00Z', granularity: 'minute',
+          sample_count: 90, total_kwh: 3.0, estimated_cost: 3.0, currency: 'MAD', average_kw: 2.0,
+          peak_kw: 2.5, peak_at: '2026-07-15T01:00:00Z', coverage_pct: 100.0,
+          sources: [{ source: 'csv', count: 90 }],
+          freshness: { status: 'fresh', age_seconds: 60, expected_interval_seconds: 60, last_seen_at: '2026-07-15T01:30:00Z', source: 'csv', quality: 'validated' },
+          points: [],
+          projection: {
+            is_available: false,
+            reason: 'early_period',
+            projected_kwh: null,
+            projected_cost: null,
+            budget_target: null,
+            budget_status: null,
+            currency: null,
+          },
+        } });
+      }
+      return route.fulfill({ json: {
+        timeframe: 'all', site_name: 'Projection Site', timezone: 'UTC',
+        period_start: '2026-01-01T00:00:00Z', period_end: '2026-07-15T12:00:00Z', granularity: 'month',
+        sample_count: 1000, total_kwh: 1200.0, estimated_cost: 1500.0, currency: 'MAD', average_kw: 1.2,
+        peak_kw: 3.5, peak_at: null, coverage_pct: 100.0,
+        sources: [{ source: 'csv', count: 1000 }],
+        freshness: { status: 'historical', age_seconds: 3600, expected_interval_seconds: 3600, last_seen_at: null, source: 'csv', quality: 'validated' },
+        points: [],
+        projection: {
+          is_available: false,
+          reason: 'unsupported_timeframe',
+        },
+      } });
+    }
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  await page.goto('/usage');
+
+  // Month view shows End-of-period projection with budget exceedance
+  const projectionCard = page.locator('.rounded-lg', { hasText: 'End-of-period projection' });
+  await expect(projectionCard).toBeVisible();
+  await expect(projectionCard.getByText('Deterministic estimate based on measured usage and configured tariff rates.')).toBeVisible();
+  await expect(projectionCard.getByText('84.30 kWh')).toBeVisible();
+  await expect(projectionCard.getByText('~302.70 kWh')).toBeVisible();
+  await expect(projectionCard.getByText('~MAD 286.00')).toBeVisible();
+  await expect(projectionCard.getByText('MAD 280.00')).toBeVisible();
+  await expect(projectionCard.getByText('Projected to exceed budget')).toBeVisible();
+
+  // Switch to Today: early period state shows explanation message
+  await page.getByRole('tab', { name: 'Today' }).click();
+  await expect(page.locator('.rounded-lg', { hasText: 'End-of-period projection' })).toBeVisible();
+  await expect(page.getByText('Estimate available after more usage data is collected for this period.')).toBeVisible();
+
+  // Switch to All: projection card is not displayed for All
+  await page.getByRole('tab', { name: 'All' }).click();
+  await expect(page.getByText('End-of-period projection')).toHaveCount(0);
+});
+
+
+test('dashboard renders truthful monthly budget projection states without relabeling measured cost', async ({ page }) => {
+  let projectionAvailable = true;
+  let projectionReason: string | null = null;
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'dash-budget-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts/unacknowledged' || pathname === '/api/v1/alerts' || pathname === '/api/v1/recommendations') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/forecast/latest') return route.fulfill({ json: null });
+    if (pathname === '/api/v1/consumption/statistics') {
+      return route.fulfill({ json: {
+        coverage_pct: 95.0,
+        tariff: { currency: 'MAD', peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22 },
+        budget: {
+          target_mad: 280.0,
+          spent_mad: 84.2,
+          remaining_mad: 195.8,
+          progress_pct: 30.1,
+          projected_mad: projectionAvailable ? 302.7 : null,
+          projection_available: projectionAvailable,
+          projection_reason: projectionReason,
+        },
+      } });
+    }
+    if (pathname === '/api/v1/consumption/period') {
+      return route.fulfill({ json: {
+        timeframe: 'today', site_name: 'Site', timezone: 'UTC',
+        period_start: '2026-07-23T00:00:00Z', period_end: '2026-07-23T12:00:00Z', granularity: 'hour',
+        sample_count: 12, total_kwh: 10, estimated_cost: 11, currency: 'MAD', average_kw: 1.0, peak_kw: 2.0, peak_at: null,
+        coverage_pct: 95.0, sources: [], freshness: { status: 'fresh', last_seen_at: null, age_seconds: 0 }, points: [],
+      } });
+    }
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  // State 1: Projection available on Dashboard -> displays "Projected MAD 302.70 at 95.0% coverage"
+  await page.goto('/dashboard');
+  await expect(page.getByText('MAD 84.20 / 280.00')).toBeVisible();
+  await expect(page.getByText('Projected MAD 302.70 at 95.0% coverage')).toBeVisible();
+
+  // State 2: Projection unavailable (early_period) -> displays spent_mad without the word "Projected"
+  projectionAvailable = false;
+  projectionReason = 'early_period';
+  await page.reload();
+  await expect(page.getByText('MAD 84.20 / 280.00')).toBeVisible();
+  await expect(page.getByText('Estimate available after the first 24 hours of the month.')).toBeVisible();
+  await expect(page.locator('section[aria-label="Operational summary"]').getByText(/Projected/)).toHaveCount(0);
+
+  // State 3: Projection unavailable (insufficient_coverage)
+  projectionReason = 'insufficient_coverage';
+  await page.reload();
+  await expect(page.getByText('Projection paused because data coverage is below 50%.')).toBeVisible();
+  await expect(page.locator('section[aria-label="Operational summary"]').getByText(/Projected/)).toHaveCount(0);
+
+  // State 4: Projection unavailable (no_readings)
+  projectionReason = 'no_readings';
+  await page.reload();
+  await expect(page.getByText('No meter readings recorded yet this month.')).toBeVisible();
+  await expect(page.locator('section[aria-label="Operational summary"]').getByText(/Projected/)).toHaveCount(0);
+});

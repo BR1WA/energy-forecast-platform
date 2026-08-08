@@ -282,8 +282,30 @@ export default function DashboardPage() {
 
         <section className="grid gap-5 border-y border-white/10 py-5 lg:grid-cols-3" aria-label="Operational summary">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><CircleDollarSign className="h-4 w-4 text-emerald-400" />Monthly budget</h2>
-            {monthly?.budget.target_mad == null ? <p className="mt-3 text-sm text-slate-500">No monthly budget configured.</p> : <><p className="mt-3 text-lg font-semibold text-white">{monthly.tariff.currency} {monthly.budget.spent_mad.toFixed(2)} / {monthly.budget.target_mad.toFixed(2)}</p><p className="mt-1 text-xs text-slate-500">Projected {monthly.tariff.currency} {monthly.budget.projected_mad.toFixed(2)} at {monthly.coverage_pct.toFixed(1)}% coverage</p></>}
+            {monthly?.budget.target_mad == null ? (
+              <p className="mt-3 text-sm text-slate-500">No monthly budget configured.</p>
+            ) : (
+              <>
+                <p className="mt-3 text-lg font-semibold text-white">
+                  {monthly.tariff.currency} {monthly.budget.spent_mad.toFixed(2)} / {monthly.budget.target_mad.toFixed(2)}
+                </p>
+                {monthly.budget.projected_mad != null ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Projected {monthly.tariff.currency} {monthly.budget.projected_mad.toFixed(2)} at {monthly.coverage_pct.toFixed(1)}% coverage
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {monthly.budget.projection_reason === 'early_period'
+                      ? 'Estimate available after the first 24 hours of the month.'
+                      : monthly.budget.projection_reason === 'insufficient_coverage'
+                      ? 'Projection paused because data coverage is below 50%.'
+                      : monthly.budget.projection_reason === 'no_readings'
+                      ? 'No meter readings recorded yet this month.'
+                      : 'Spent so far this month.'}
+                  </p>
+                )}
+              </>
+            )}
             <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/settings?tab=budget">Tariff and budget settings</Link>
           </div>
           <div className="min-w-0 border-t border-white/10 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">

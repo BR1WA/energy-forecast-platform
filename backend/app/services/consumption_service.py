@@ -21,6 +21,14 @@ MAX_POWER_GAP_SECONDS = 2 * 60 * 60
 PERIOD_ALIASES = {"day": "today", "week": "7d"}
 PERIODS = {"live", "today", "7d", "month", "year", "all", "custom"}
 
+MINIMUM_PROJECTION_HOURS = {
+    "today": 2,
+    "7d": 12,
+    "week": 12,
+    "month": 24,
+}
+MINIMUM_PROJECTION_COVERAGE_PCT = 50.0
+
 
 def _as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
@@ -276,6 +284,18 @@ class ConsumptionService:
             }
             for timestamp, values in sorted(buckets.items())
         ]
+        budget = db.query(EnergyBudget).filter(EnergyBudget.user_id == user_id).first()
+        projection = self._calculate_projection(
+            timeframe,
+            total_kwh,
+            tariff_totals["total_cost"],
+            covered_seconds,
+            period_start,
+            period_end,
+            zone,
+            settings,
+            budget,
+        )
         sample_count = sum(source_counts.values())
         return {
             "timeframe": timeframe,
@@ -295,6 +315,88 @@ class ConsumptionService:
             "sources": [{"source": source, "count": count} for source, count in sorted(source_counts.items())],
             "freshness": freshness,
             "points": points,
+            "projection": projection,
+        }
+
+    def _calculate_projection(
+        self,
+        timeframe: str,
+        total_kwh: float,
+        total_cost: float,
+        covered_seconds: float,
+        period_start: datetime,
+        period_end: datetime,
+        zone: ZoneInfo,
+        settings: SiteSettings | None,
+        budget: EnergyBudget | None,
+    ) -> dict:
+        if timeframe not in ("today", "7d", "week", "month"):
+            return {"is_available": False, "reason": "unsupported_timeframe"}
+
+        local_start = period_start.astimezone(zone)
+        if timeframe == "today":
+            local_tomorrow = local_start.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            projection_target_end = local_tomorrow.astimezone(timezone.utc)
+        elif timeframe in ("7d", "week"):
+            local_monday = local_start.replace(hour=0, minute=0, second=0, microsecond=0)
+            local_next_monday = local_monday + timedelta(days=7)
+            projection_target_end = local_next_monday.astimezone(timezone.utc)
+        elif timeframe == "month":
+            next_month = 1 if local_start.month == 12 else local_start.month + 1
+            next_year = local_start.year + 1 if local_start.month == 12 else local_start.year
+            local_next_month = datetime(next_year, next_month, 1, 0, 0, 0, tzinfo=zone)
+            projection_target_end = local_next_month.astimezone(timezone.utc)
+        else:
+            return {"is_available": False, "reason": "unsupported_timeframe"}
+
+        elapsed_seconds = max(0.0, (period_end - period_start).total_seconds())
+        min_hours = MINIMUM_PROJECTION_HOURS.get(timeframe, 24)
+        if elapsed_seconds < min_hours * 3600:
+            return {"is_available": False, "reason": "early_period"}
+
+        if covered_seconds <= 0:
+            return {"is_available": False, "reason": "no_readings"}
+
+        coverage_pct = (covered_seconds / elapsed_seconds * 100) if elapsed_seconds > 0 else 0.0
+        if coverage_pct < MINIMUM_PROJECTION_COVERAGE_PCT:
+            return {"is_available": False, "reason": "insufficient_coverage"}
+
+        observed_average_kw = total_kwh / (covered_seconds / 3600)
+        remaining_seconds = max(0.0, (projection_target_end - period_end).total_seconds())
+        estimated_remaining_kwh = observed_average_kw * (remaining_seconds / 3600)
+        projected_kwh = total_kwh + estimated_remaining_kwh
+
+        estimated_remaining_cost = 0.0
+        if settings is not None and observed_average_kw > 0 and remaining_seconds > 0:
+            cursor = period_end
+            while cursor < projection_target_end:
+                local = cursor.astimezone(zone)
+                next_hour = (local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)).astimezone(timezone.utc)
+                segment_end = min(projection_target_end, next_hour)
+                segment_seconds = (segment_end - cursor).total_seconds()
+                segment_kwh = observed_average_kw * (segment_seconds / 3600)
+                rate = settings.peak_rate if _is_peak(local.hour, settings) else settings.off_peak_rate
+                estimated_remaining_cost += segment_kwh * rate
+                cursor = segment_end
+
+        projected_cost = total_cost + estimated_remaining_cost
+        currency = settings.currency if settings else "MAD"
+        budget_target = budget.monthly_budget_mad if (budget and timeframe == "month") else None
+        budget_status = None
+        if timeframe == "month":
+            if budget_target is not None and budget_target > 0:
+                budget_status = "projected_to_exceed" if projected_cost > budget_target else "within_budget"
+            else:
+                budget_status = "no_budget"
+
+        return {
+            "is_available": True,
+            "reason": None,
+            "projected_kwh": round(projected_kwh, 4),
+            "projected_cost": round(projected_cost, 2),
+            "budget_target": round(budget_target, 2) if budget_target is not None else None,
+            "budget_status": budget_status,
+            "currency": currency,
         }
 
     @staticmethod
@@ -309,9 +411,9 @@ class ConsumptionService:
     def _decode_cursor(cursor: str) -> tuple[datetime, int]:
         try:
             padded = cursor + "=" * (-len(cursor) % 4)
-            payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+            payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
             return _as_utc(datetime.fromisoformat(payload["timestamp"])), int(payload["id"])
-        except (ValueError, TypeError, KeyError, json.JSONDecodeError, binascii.Error, UnicodeDecodeError) as exc:
+        except Exception as exc:
             raise ValueError("Invalid reading cursor") from exc
 
     def get_readings_page(
@@ -405,6 +507,7 @@ class ConsumptionService:
             "freshness": {"status": "empty", "age_seconds": None, "expected_interval_seconds": None,
                           "last_seen_at": None, "source": None, "quality": None},
             "points": [],
+            "projection": {"is_available": False, "reason": "no_readings"},
         }
 
     @staticmethod
@@ -522,7 +625,18 @@ class ConsumptionService:
         budget_query = db.query(EnergyBudget).filter(EnergyBudget.user_id == user_id)
         budget = budget_query.filter(EnergyBudget.site_id == site_id).first() if site_id is not None else budget_query.first()
         budget_target = budget.monthly_budget_mad if budget else None
-        projected_cost = totals["total_cost"] / days_elapsed * days_in_month if totals["total_cost"] else 0.0
+        projection = self._calculate_projection(
+            "month",
+            totals["total_kwh"],
+            totals["total_cost"],
+            totals["covered_seconds"],
+            default_start.astimezone(timezone.utc),
+            period_end.astimezone(timezone.utc),
+            default_zone,
+            default_settings,
+            budget,
+        )
+        projected_cost = round(projection["projected_cost"], 2) if projection["is_available"] and projection["projected_cost"] is not None else None
         tariff = {
             "currency": default_settings.currency,
             "peak_rate": default_settings.peak_rate,
@@ -551,7 +665,9 @@ class ConsumptionService:
                 "spent_mad": round(totals["total_cost"], 2),
                 "remaining_mad": round(max(0.0, budget_target - totals["total_cost"]), 2) if budget_target is not None else None,
                 "progress_pct": round(totals["total_cost"] / budget_target * 100, 1) if budget_target and budget_target > 0 else None,
-                "projected_mad": round(projected_cost, 2),
+                "projected_mad": projected_cost,
+                "projection_available": projection["is_available"],
+                "projection_reason": projection["reason"],
             },
         }
 
@@ -562,7 +678,10 @@ class ConsumptionService:
             "average_daily_kwh": 0.0, "days_elapsed": 0, "days_in_month": 0,
             "coverage_pct": 0.0, "peak_kwh": 0.0, "off_peak_kwh": 0.0,
             "daily": [], "tariff": {},
-            "budget": {"target_mad": None, "spent_mad": 0.0, "remaining_mad": None, "progress_pct": None, "projected_mad": 0.0},
+            "budget": {
+                "target_mad": None, "spent_mad": 0.0, "remaining_mad": None, "progress_pct": None,
+                "projected_mad": None, "projection_available": False, "projection_reason": "no_readings",
+            },
         }
 
     def get_monthly_summary(

@@ -69,6 +69,16 @@ class ConsumptionFreshness(BaseModel):
     quality: str | None
 
 
+class ConsumptionProjection(BaseModel):
+    is_available: bool
+    reason: str | None = None
+    projected_kwh: float | None = None
+    projected_cost: float | None = None
+    budget_target: float | None = None
+    budget_status: str | None = None
+    currency: str | None = None
+
+
 class ConsumptionPeriodSummary(BaseModel):
     timeframe: str
     period_start: datetime
@@ -87,6 +97,7 @@ class ConsumptionPeriodSummary(BaseModel):
     sources: List[ConsumptionSourceCount]
     freshness: ConsumptionFreshness
     points: List[ConsumptionPoint]
+    projection: ConsumptionProjection | None = None
 
 
 class ConsumptionReadingItem(BaseModel):

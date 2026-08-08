@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -375,6 +376,248 @@ def test_calendar_week_and_timeframe_boundaries_across_timezones_and_dst():
 
         sum_year = consumption_service.get_period_summary(db, user.id, "year", now=now_mon)
         assert sum_year["period_start"] == "2026-01-01T00:00:00+00:00"  # Jan 1st 00:00 GMT (UTC+0)
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_deterministic_end_of_period_projections():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(bind=engine)
+    db = sessionmaker(bind=engine)()
+    try:
+        user = User(email="projections@example.com", password_hash=hash_password("password123"), role="user", is_active=True)
+        db.add(user)
+        db.commit()
+        site = ensure_default_site(db, user.id)
+        site.timezone = "UTC"
+        meter = get_default_meter(db, user.id)
+        settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).one()
+        settings.peak_rate = 2.0
+        settings.off_peak_rate = 1.0
+        settings.peak_start_hour = 6
+        settings.peak_end_hour = 22
+        settings.currency = "MAD"
+        budget = EnergyBudget(user_id=user.id, site_id=site.id, monthly_budget_mad=100.0)
+        db.add(budget)
+        db.commit()
+
+        # 1. Early period gate for Today (< 2 hours elapsed)
+        now_early_today = datetime(2026, 7, 15, 1, 30, tzinfo=timezone.utc)
+        sum_early_today = consumption_service.get_period_summary(db, user.id, "today", now=now_early_today)
+        assert sum_early_today["projection"]["is_available"] is False
+        assert sum_early_today["projection"]["reason"] == "early_period"
+
+        # 2. No readings recorded in period
+        now_noon_today = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
+        sum_no_readings = consumption_service.get_period_summary(db, user.id, "today", now=now_noon_today)
+        assert sum_no_readings["projection"]["is_available"] is False
+        assert sum_no_readings["projection"]["reason"] == "no_readings"
+
+        # 3. Add readings for Today: 12 hours elapsed (00:00 to 12:00), 100% coverage, steady 2.0 kW load
+        # In UTC: 00:00 to 06:00 is off-peak (6h * 2kW = 12 kWh, cost = 12 * 1.0 = 12 MAD)
+        # 06:00 to 12:00 is peak (6h * 2kW = 12 kWh, cost = 12 * 2.0 = 24 MAD)
+        # Total so far: 24 kWh, 36 MAD.
+        # Remaining Today: 12:00 to 22:00 is peak (10h * 2kW = 20 kWh, cost = 20 * 2.0 = 40 MAD)
+        # 22:00 to 24:00 is off-peak (2h * 2kW = 4 kWh, cost = 4 * 1.0 = 4 MAD)
+        # Estimated remaining: 24 kWh, 44 MAD.
+        # Projected day total: 48 kWh, 80 MAD.
+        for h in range(13):
+            ts = datetime(2026, 7, 15, h, 0, tzinfo=timezone.utc)
+            db.add(SmartMeterReading(
+                meter_id=meter.id, timestamp=ts, gap=2.0, grp=0.1, voltage=230,
+                intensity=8.7, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0,
+                source="csv", quality="validated",
+            ))
+        db.commit()
+
+        sum_today = consumption_service.get_period_summary(db, user.id, "today", now=now_noon_today)
+        assert sum_today["projection"]["is_available"] is True
+        assert sum_today["projection"]["reason"] is None
+        assert abs(sum_today["total_kwh"] - 24.0) < 0.01
+        assert abs(sum_today["estimated_cost"] - 36.0) < 0.01
+        assert abs(sum_today["projection"]["projected_kwh"] - 48.0) < 0.01
+        assert abs(sum_today["projection"]["projected_cost"] - 80.0) < 0.01
+        assert sum_today["projection"]["currency"] == "MAD"
+
+        # 4. Partial hour tariff boundary crossing:
+        # If period_end is 21:30 (crosses peak boundary at 22:00 with remaining 2.5h until midnight)
+        # Remaining: 21:30 to 22:00 (0.5h peak = 1 kWh * 2.0 = 2 MAD) + 22:00 to 24:00 (2h off-peak = 4 kWh * 1.0 = 4 MAD) = 6 MAD remaining.
+        now_partial = datetime(2026, 7, 15, 21, 30, tzinfo=timezone.utc)
+        db.add(SmartMeterReading(
+            meter_id=meter.id, timestamp=now_partial, gap=2.0, grp=0.1, voltage=230,
+            intensity=8.7, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0,
+            source="csv", quality="validated",
+        ))
+        db.commit()
+        sum_partial = consumption_service.get_period_summary(db, user.id, "today", now=now_partial)
+        assert sum_partial["projection"]["is_available"] is True
+        # Remaining cost from 21:30 to 24:00 is exactly 6.0 MAD
+        expected_remaining_cost = (0.5 * 2.0 * 2.0) + (2.0 * 2.0 * 1.0)
+        assert abs((sum_partial["projection"]["projected_cost"] - sum_partial["estimated_cost"]) - expected_remaining_cost) < 0.01
+
+        # 5. Valid zero consumption with real coverage
+        # Create a zero-load user
+        user_zero = User(email="zero@example.com", password_hash=hash_password("password123"), role="user", is_active=True)
+        db.add(user_zero)
+        db.commit()
+        site_zero = ensure_default_site(db, user_zero.id)
+        meter_zero = get_default_meter(db, user_zero.id)
+        for h in range(13):
+            ts = datetime(2026, 7, 15, h, 0, tzinfo=timezone.utc)
+            db.add(SmartMeterReading(
+                meter_id=meter_zero.id, timestamp=ts, gap=0.0, grp=0.0, voltage=230,
+                intensity=0.0, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0,
+                source="csv", quality="validated",
+            ))
+        db.commit()
+        sum_zero = consumption_service.get_period_summary(db, user_zero.id, "today", now=now_noon_today)
+        assert sum_zero["projection"]["is_available"] is True
+        assert sum_zero["projection"]["projected_kwh"] == 0.0
+        assert sum_zero["projection"]["projected_cost"] == 0.0
+
+        # 6. Insufficient coverage (< 50%)
+        # User with 1-hour coverage in a 10-hour period (gap > MAX_POWER_GAP_SECONDS)
+        user_gap = User(email="gap@example.com", password_hash=hash_password("password123"), role="user", is_active=True)
+        db.add(user_gap)
+        db.commit()
+        site_gap = ensure_default_site(db, user_gap.id)
+        meter_gap = get_default_meter(db, user_gap.id)
+        db.add_all([
+            SmartMeterReading(meter_id=meter_gap.id, timestamp=datetime(2026, 7, 15, 0, 0, tzinfo=timezone.utc), gap=2.0, grp=0.0, voltage=230, intensity=8.7, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0, source="csv", quality="validated"),
+            SmartMeterReading(meter_id=meter_gap.id, timestamp=datetime(2026, 7, 15, 1, 0, tzinfo=timezone.utc), gap=2.0, grp=0.0, voltage=230, intensity=8.7, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0, source="csv", quality="validated"),
+        ])
+        db.commit()
+        # Query at 10:00 (10 hours elapsed, but only 1 hour covered -> coverage 10% < 50%)
+        now_10am = datetime(2026, 7, 15, 10, 0, tzinfo=timezone.utc)
+        sum_gap = consumption_service.get_period_summary(db, user_gap.id, "today", now=now_10am)
+        assert sum_gap["projection"]["is_available"] is False
+        assert sum_gap["projection"]["reason"] == "insufficient_coverage"
+
+        # 7. Week projection and DST week (Europe/London 167h / 169h)
+        site.timezone = "Europe/London"
+        # Sunday March 29, 2026 at 12:00 BST (DST change occurred on Sunday 01:00 GMT -> 02:00 BST, week is 167 hours)
+        now_dst_sun = datetime(2026, 3, 29, 11, 0, tzinfo=timezone.utc)
+        sum_week_dst = consumption_service.get_period_summary(db, user.id, "7d", now=now_dst_sun)
+        # Since user has no readings in March 2026, reason is no_readings
+        assert sum_week_dst["projection"]["is_available"] is False
+        assert sum_week_dst["projection"]["reason"] == "no_readings"
+
+        # 8. Month budget status: within_budget, projected_to_exceed, no_budget
+        # Add 3 days of readings to month (July 1 to July 4, 72 hours elapsed >= 24h gate)
+        for h in range(73):
+            ts = datetime(2026, 7, 1, 0, 0, tzinfo=timezone.utc) + timedelta(hours=h)
+            db.add(SmartMeterReading(
+                meter_id=meter.id, timestamp=ts, gap=1.0, grp=0.1, voltage=230,
+                intensity=4.3, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0,
+                source="csv", quality="validated",
+            ))
+        db.commit()
+        site.timezone = "UTC"
+        now_july4 = datetime(2026, 7, 4, 0, 0, tzinfo=timezone.utc)
+        budget.monthly_budget_mad = 2000.0
+        db.commit()
+        sum_month_within = consumption_service.get_period_summary(db, user.id, "month", now=now_july4)
+        assert sum_month_within["projection"]["is_available"] is True
+        assert sum_month_within["projection"]["budget_status"] == "within_budget"
+        assert sum_month_within["projection"]["budget_target"] == 2000.0
+
+        # Now set budget to low amount so it is projected to exceed
+        budget.monthly_budget_mad = 50.0
+        db.commit()
+        sum_month_exceed = consumption_service.get_period_summary(db, user.id, "month", now=now_july4)
+        assert sum_month_exceed["projection"]["is_available"] is True
+        assert sum_month_exceed["projection"]["budget_status"] == "projected_to_exceed"
+
+        # Now remove budget
+        db.delete(budget)
+        db.commit()
+        sum_month_nobudget = consumption_service.get_period_summary(db, user.id, "month", now=now_july4)
+        assert sum_month_nobudget["projection"]["is_available"] is True
+        assert sum_month_nobudget["projection"]["budget_status"] == "no_budget"
+
+        # 9. Month duration across 28, 29, 30, and 31-day months
+        # Test helper directly for various months
+        proj_feb28 = consumption_service._calculate_projection(
+            "month", 10.0, 10.0, 86400, datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+            datetime(2026, 2, 2, 0, 0, tzinfo=timezone.utc), ZoneInfo("UTC"), settings, None,
+        )
+        # 1 day elapsed (10 kWh), 27 days remaining at 10 kWh/day -> 280 kWh projected total
+        assert abs(proj_feb28["projected_kwh"] - 280.0) < 0.01
+
+        proj_feb29 = consumption_service._calculate_projection(
+            "month", 10.0, 10.0, 86400, datetime(2028, 2, 1, 0, 0, tzinfo=timezone.utc),
+            datetime(2028, 2, 2, 0, 0, tzinfo=timezone.utc), ZoneInfo("UTC"), settings, None,
+        )
+        # Leap year 2028: 1 day elapsed (10 kWh), 28 days remaining at 10 kWh/day -> 290 kWh projected total
+        assert abs(proj_feb29["projected_kwh"] - 290.0) < 0.01
+
+        proj_apr30 = consumption_service._calculate_projection(
+            "month", 10.0, 10.0, 86400, datetime(2026, 4, 1, 0, 0, tzinfo=timezone.utc),
+            datetime(2026, 4, 2, 0, 0, tzinfo=timezone.utc), ZoneInfo("UTC"), settings, None,
+        )
+        assert abs(proj_apr30["projected_kwh"] - 300.0) < 0.01
+
+        proj_jul31 = consumption_service._calculate_projection(
+            "month", 10.0, 10.0, 86400, datetime(2026, 7, 1, 0, 0, tzinfo=timezone.utc),
+            datetime(2026, 7, 2, 0, 0, tzinfo=timezone.utc), ZoneInfo("UTC"), settings, None,
+        )
+        assert abs(proj_jul31["projected_kwh"] - 310.0) < 0.01
+
+        # 10. Single source of truth: Usage month projection == Dashboard monthly budget calculation
+        # When called with identical period bounds, load, and settings, _calculate_projection produces identical values.
+        budget_truth = EnergyBudget(user_id=user.id, site_id=site.id, monthly_budget_mad=2000.0)
+        proj_usage = consumption_service._calculate_projection(
+            "month", sum_month_within["total_kwh"], sum_month_within["estimated_cost"],
+            72 * 3600, datetime(2026, 7, 1, 0, 0, tzinfo=timezone.utc),
+            now_july4, ZoneInfo("UTC"), settings, budget_truth,
+        )
+        assert proj_usage["is_available"] is True
+        assert proj_usage["budget_status"] == "within_budget"
+        assert abs(sum_month_within["projection"]["projected_cost"] - proj_usage["projected_cost"]) < 0.01
+
+        # When month is fully elapsed with only 3 days of readings (coverage 9.8% < 50%), Dashboard marks projection_available as False with reason "insufficient_coverage"
+        sum_dash_month = consumption_service.get_monthly_summary(db, user.id, "2026-07")
+        assert sum_dash_month["budget"]["projection_available"] is False
+        assert sum_dash_month["budget"]["projection_reason"] == "insufficient_coverage"
+        assert sum_dash_month["budget"]["projected_mad"] is None
+        assert sum_dash_month["budget"]["spent_mad"] == sum_dash_month["total_cost"]
+
+        # 11. Dashboard behavior when projection is unavailable:
+        # A. early_period (e.g. July 1 at 10:00 -> 10 hours elapsed < 24h gate)
+        # Note: readings start at July 1 00:00. At 10:00, 10 hours elapsed.
+        now_dash_early = datetime(2026, 7, 1, 10, 0, tzinfo=timezone.utc)
+        # We test via _calculate_projection directly for July 1 10:00
+        proj_dash_early = consumption_service._calculate_projection(
+            "month", 10.0, 15.0, 36000, datetime(2026, 7, 1, 0, 0, tzinfo=timezone.utc),
+            now_dash_early, ZoneInfo("UTC"), settings, None,
+        )
+        assert proj_dash_early["is_available"] is False
+        assert proj_dash_early["reason"] == "early_period"
+
+        # B. insufficient_coverage (< 50%)
+        proj_dash_lowcov = consumption_service._calculate_projection(
+            "month", 10.0, 15.0, 36000, datetime(2026, 7, 1, 0, 0, tzinfo=timezone.utc),
+            datetime(2026, 7, 5, 0, 0, tzinfo=timezone.utc), ZoneInfo("UTC"), settings, None,
+        )
+        assert proj_dash_lowcov["is_available"] is False
+        assert proj_dash_lowcov["reason"] == "insufficient_coverage"
+
+        # C. no_readings
+        empty_dash_month = consumption_service._empty_month("2026-07")
+        assert empty_dash_month["budget"]["projected_mad"] is None
+        assert empty_dash_month["budget"]["projection_available"] is False
+        assert empty_dash_month["budget"]["projection_reason"] == "no_readings"
+        assert empty_dash_month["budget"]["spent_mad"] == 0.0
+
+        # 12. Year and All return unsupported_timeframe
+        sum_year = consumption_service.get_period_summary(db, user.id, "year", now=now_july4)
+        assert sum_year["projection"]["is_available"] is False
+        assert sum_year["projection"]["reason"] == "unsupported_timeframe"
+
+        sum_all = consumption_service.get_period_summary(db, user.id, "all", now=now_july4)
+        assert sum_all["projection"]["is_available"] is False
+        assert sum_all["projection"]["reason"] == "unsupported_timeframe"
     finally:
         db.close()
         Base.metadata.drop_all(bind=engine)

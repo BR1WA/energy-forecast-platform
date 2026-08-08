@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarRange, Download, FileCheck2, RefreshCw, Rows3, Upload } from 'lucide-react';
+import { AlertTriangle, Calculator, CalendarRange, CheckCircle2, Download, FileCheck2, RefreshCw, Rows3, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import AppLayout from '@/components/layout/app-layout';
@@ -164,6 +164,68 @@ export default function UsagePage() {
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[['Energy', `${(summary?.total_kwh ?? 0).toFixed(2)} kWh`], ['Estimated cost', `${summary?.currency ?? 'MAD'} ${(summary?.estimated_cost ?? 0).toFixed(2)}`], ['Peak load', `${(summary?.peak_kw ?? 0).toFixed(3)} kW`], ['Coverage', `${(summary?.coverage_pct ?? 0).toFixed(1)}%`]].map(([label, value]) => <div className="min-h-24 rounded-lg border border-white/10 bg-[#111827] p-4" key={label}><p className="text-xs text-slate-500">{label}</p><p className="mt-4 text-xl font-semibold text-white">{loading ? '...' : value}</p></div>)}
         </section>
+
+        {['today', '7d', 'month'].includes(timeframe) && summary?.projection && (
+          <Card className="rounded-lg border-white/10 bg-[#111827]">
+            <CardHeader>
+              <div>
+                <CardTitle className="flex items-center gap-2 text-sm text-white">
+                  <Calculator className="h-4 w-4 text-cyan-400" />
+                  End-of-period projection
+                </CardTitle>
+                <p className="mt-1 text-xs text-slate-400">
+                  Deterministic estimate based on measured usage and configured tariff rates.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {summary.projection.is_available ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  <div className="rounded-md border border-white/10 bg-slate-950/60 p-3">
+                    <p className="text-xs text-slate-500">Consumed so far</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{summary.total_kwh.toFixed(2)} kWh</p>
+                    <p className="mt-1 text-xs text-slate-400">{summary.currency} {summary.estimated_cost.toFixed(2)}</p>
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-slate-950/60 p-3">
+                    <p className="text-xs text-slate-500">{timeframe === 'today' ? 'Estimated day total' : timeframe === 'month' ? 'Estimated month total' : 'Estimated week total'}</p>
+                    <p className="mt-1 text-lg font-semibold text-cyan-300">~{summary.projection.projected_kwh?.toFixed(2)} kWh</p>
+                    <p className="mt-1 text-xs text-slate-400">Run-rate extrapolation</p>
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-slate-950/60 p-3">
+                    <p className="text-xs text-slate-500">Estimated cost</p>
+                    <p className="mt-1 text-lg font-semibold text-emerald-300">~{summary.projection.currency} {summary.projection.projected_cost?.toFixed(2)}</p>
+                    <p className="mt-1 text-xs text-slate-400">Tariff-weighted</p>
+                  </div>
+                  {timeframe === 'month' && (
+                    <div className="rounded-md border border-white/10 bg-slate-950/60 p-3">
+                      <p className="text-xs text-slate-500">Monthly budget</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{summary.projection.budget_target != null ? `${summary.projection.currency} ${summary.projection.budget_target.toFixed(2)}` : 'No budget'}</p>
+                      <p className="mt-1 text-xs">
+                        {summary.projection.budget_status === 'projected_to_exceed' ? (
+                          <span className="inline-flex items-center gap-1 font-medium text-amber-400"><AlertTriangle className="h-3.5 w-3.5" />Projected to exceed budget</span>
+                        ) : summary.projection.budget_status === 'within_budget' ? (
+                          <span className="inline-flex items-center gap-1 font-medium text-emerald-400"><CheckCircle2 className="h-3.5 w-3.5" />Within budget</span>
+                        ) : (
+                          <span className="text-slate-500">No budget configured</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-md border border-white/10 bg-slate-950/40 p-4 text-xs text-slate-400">
+                  {summary.projection.reason === 'early_period'
+                    ? 'Estimate available after more usage data is collected for this period.'
+                    : summary.projection.reason === 'insufficient_coverage'
+                    ? 'Data coverage is below 50%; projection is paused to prevent misleading figures.'
+                    : summary.projection.reason === 'no_readings'
+                    ? 'No readings recorded yet in this period.'
+                    : 'Estimate is currently unavailable for this period.'}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="rounded-lg border-white/10 bg-[#111827]">
           <CardHeader><div><CardTitle className="text-sm">Load and energy profile</CardTitle><p className="mt-1 text-xs text-slate-400">{summary ? `${summary.sample_count.toLocaleString()} samples from ${summary.sources.map((source) => source.source).join(', ') || 'no source'}, grouped by ${summary.granularity.replace('_', ' ')}.` : 'Choose a period to inspect its readings.'}</p></div><CardAction><Button aria-label="Refresh history" disabled={loading} onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe)} size="icon" title="Refresh" variant="ghost"><RefreshCw className={loading ? 'animate-spin' : ''} /></Button></CardAction></CardHeader>

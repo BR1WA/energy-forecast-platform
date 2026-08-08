@@ -61,6 +61,16 @@ export interface ConsumptionPoint {
   sample_count: number;
 }
 
+export interface ConsumptionProjection {
+  is_available: boolean;
+  reason?: string | null;
+  projected_kwh?: number | null;
+  projected_cost?: number | null;
+  budget_target?: number | null;
+  budget_status?: 'within_budget' | 'projected_to_exceed' | 'no_budget' | null;
+  currency?: string | null;
+}
+
 export interface ConsumptionPeriodSummary {
   timeframe: ConsumptionTimeframe;
   period_start: string;
@@ -86,6 +96,7 @@ export interface ConsumptionPeriodSummary {
     quality: string | null;
   };
   points: ConsumptionPoint[];
+  projection?: ConsumptionProjection | null;
 }
 
 export interface ConsumptionReading {

@@ -515,7 +515,7 @@ export const consumptionApi = {
     average_daily_kwh: number;
     coverage_pct: number;
     tariff: { currency: string; peak_rate: number; off_peak_rate: number; peak_start_hour: number; peak_end_hour: number };
-    budget: { target_mad: number | null; spent_mad: number; remaining_mad: number | null; progress_pct: number | null; projected_mad: number };
+    budget: { target_mad: number | null; spent_mad: number; remaining_mad: number | null; progress_pct: number | null; projected_mad: number | null; projection_available?: boolean; projection_reason?: string | null };
     previous_month: { month: string; total_kwh: number; total_cost: number };
     comparison_pct: number | null;
   }> =>
