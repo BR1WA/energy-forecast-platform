@@ -200,3 +200,88 @@ test('usage chart exposes truthful power, energy, range, and gap states', async 
   await expect(page.getByText('Energy per bucket')).toBeVisible();
   await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(3);
 });
+
+
+test('all timeframe displays aggregated monthly history with distinct month labels', async ({ page }) => {
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'all-timeframe-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [{ id: 1, name: 'Primary meter', source_type: 'csv', is_primary: true, expected_interval_seconds: 3600, last_seen_at: '2026-03-31T00:00:00Z', push_key_configured: false }] });
+    if (pathname === '/api/v1/consumption/readings') return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (pathname === '/api/v1/consumption/period') return route.fulfill({ json: {
+      timeframe: 'all', site_name: 'Historical multi-year site', timezone: 'UTC',
+      period_start: '2026-01-01T00:00:00Z', period_end: '2026-03-31T23:59:59Z', granularity: 'month',
+      sample_count: 2160, total_kwh: 450.0, estimated_cost: 675.0, currency: 'MAD', average_kw: 1.25,
+      peak_kw: 3.5, peak_at: '2026-02-15T12:00:00Z', coverage_pct: 100,
+      sources: [{ source: 'csv', count: 2160 }],
+      freshness: { status: 'historical', age_seconds: 3600, expected_interval_seconds: 3600, last_seen_at: '2026-03-31T23:59:59Z', source: 'csv', quality: 'validated' },
+      points: [
+        { timestamp: '2026-01-01T00:00:00Z', average_kw: 1.1, min_kw: 0.5, max_kw: 2.8, energy_kwh: 150.0, sample_count: 744 },
+        { timestamp: '2026-02-01T00:00:00Z', average_kw: 1.3, min_kw: 0.6, max_kw: 3.5, energy_kwh: 140.0, sample_count: 672 },
+        { timestamp: '2026-03-01T00:00:00Z', average_kw: 1.2, min_kw: 0.5, max_kw: 3.0, energy_kwh: 160.0, sample_count: 744 },
+      ],
+    } });
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  await page.goto('/usage');
+  await page.getByRole('tab', { name: 'All' }).click();
+  await expect(page.getByRole('button', { name: 'Energy' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Energy per month bucket (kWh)')).toBeVisible();
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(3);
+  await expect(page.locator('svg.recharts-surface text').filter({ hasText: /Jan 26/ })).toBeVisible();
+  await expect(page.locator('svg.recharts-surface text').filter({ hasText: /Feb 26/ })).toBeVisible();
+  await expect(page.locator('svg.recharts-surface text').filter({ hasText: /Mar 26/ })).toBeVisible();
+});
+
+
+test('all timeframe daily overview displays candidate ticks on desktop and remains responsive on mobile', async ({ page }) => {
+  const dailyPoints = Array.from({ length: 18 }, (_, i) => {
+    const day = (i + 1).toString().padStart(2, '0');
+    return {
+      timestamp: `2026-07-${day}T00:00:00Z`,
+      average_kw: 1.2 + (i % 5) * 0.1,
+      min_kw: 0.5,
+      max_kw: 2.0 + (i % 4) * 0.2,
+      energy_kwh: 15.0 + i,
+      sample_count: 24,
+    };
+  });
+
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'daily-all-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [{ id: 1, name: 'Primary meter', source_type: 'csv', is_primary: true, expected_interval_seconds: 3600, last_seen_at: '2026-07-18T00:00:00Z', push_key_configured: false }] });
+    if (pathname === '/api/v1/consumption/readings') return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (pathname === '/api/v1/consumption/period') return route.fulfill({ json: {
+      timeframe: 'all', site_name: 'Daily 18-day site', timezone: 'UTC',
+      period_start: '2026-07-01T14:37:00Z', period_end: '2026-07-18T23:59:59Z', granularity: 'day',
+      sample_count: 432, total_kwh: 270.0, estimated_cost: 350.0, currency: 'MAD', average_kw: 1.35,
+      peak_kw: 2.8, peak_at: '2026-07-10T12:00:00Z', coverage_pct: 100,
+      sources: [{ source: 'csv', count: 432 }],
+      freshness: { status: 'historical', age_seconds: 3600, expected_interval_seconds: 3600, last_seen_at: '2026-07-18T23:59:59Z', source: 'csv', quality: 'validated' },
+      points: dailyPoints,
+    } });
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  // Desktop viewport: 18 daily bars render with clear candidate date labels
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto('/usage');
+  await page.getByRole('tab', { name: 'All' }).click();
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(18);
+  await expect(page.getByText('Energy per day bucket (kWh)')).toBeVisible();
+  await expect(page.locator('svg.recharts-surface')).toBeVisible();
+  await expect(page.locator('.recharts-xAxis-ticks')).toBeAttached();
+
+  // Mobile viewport: chart renders 18 bars responsively without crashing or horizontal overflow
+  await page.setViewportSize({ width: 360, height: 640 });
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(18);
+  await expect(page.getByText('Energy per day bucket (kWh)')).toBeVisible();
+});

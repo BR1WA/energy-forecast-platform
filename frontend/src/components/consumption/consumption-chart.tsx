@@ -70,11 +70,13 @@ function formatTick(value: number, summary: ConsumptionPeriodSummary) {
   const date = new Date(value);
   const options: Intl.DateTimeFormatOptions = summary.timeframe === 'live' || summary.timeframe === 'today'
     ? { hour: '2-digit', minute: '2-digit' }
-    : summary.timeframe === 'year' || summary.timeframe === 'all'
+    : summary.timeframe === 'year' || summary.granularity === 'month'
       ? { month: 'short', year: '2-digit' }
       : summary.granularity === 'hour'
         ? { weekday: 'short', hour: '2-digit' }
-        : { day: '2-digit', month: 'short' };
+        : summary.granularity === 'minute' || summary.granularity === '15_minutes'
+          ? { hour: '2-digit', minute: '2-digit' }
+          : { day: '2-digit', month: 'short' };
   try {
     return new Intl.DateTimeFormat(undefined, { ...options, timeZone: summary.timezone }).format(date);
   } catch {
@@ -168,6 +170,8 @@ export function ConsumptionChart({ summary, variant = 'compact' }: ConsumptionCh
     ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
     : 'border-amber-400/25 bg-amber-400/10 text-amber-200';
 
+  const candidateTicks = data.length <= 31 ? data.map((point) => point.timestampMs) : undefined;
+
   useEffect(() => {
     setMode(defaultMode(summary.timeframe));
   }, [summary.timeframe]);
@@ -217,11 +221,12 @@ export function ConsumptionChart({ summary, variant = 'compact' }: ConsumptionCh
               dataKey="timestampMs"
               domain={['dataMin', 'dataMax']}
               fontSize={11}
-              minTickGap={32}
+              minTickGap={20}
               scale="time"
               stroke="#64748b"
               tickFormatter={(value) => formatTick(Number(value), summary)}
               tickLine={false}
+              ticks={candidateTicks}
               type="number"
             />
             <YAxis

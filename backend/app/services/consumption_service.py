@@ -141,12 +141,37 @@ class ConsumptionService:
             return "day", 86400
         if seconds <= 2 * 366 * 86400:
             return "week", 7 * 86400
-        return "month", 30 * 86400
+        return "month", 0
 
     @staticmethod
-    def _bucket_timestamp(timestamp: datetime, period_start: datetime, bucket_seconds: int) -> datetime:
-        offset = max(0, (_as_utc(timestamp) - period_start).total_seconds())
-        return period_start + timedelta(seconds=int(offset // bucket_seconds) * bucket_seconds)
+    def _bucket_timestamp(
+        timestamp: datetime,
+        granularity: str,
+        zone: ZoneInfo,
+        period_start: datetime,
+        bucket_seconds: int,
+    ) -> datetime:
+        reading_utc = _as_utc(timestamp)
+        local_dt = reading_utc.astimezone(zone)
+        if granularity == "month":
+            local_bucket = local_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            return local_bucket.astimezone(timezone.utc)
+        elif granularity == "day":
+            local_bucket = local_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            return local_bucket.astimezone(timezone.utc)
+        elif granularity == "hour":
+            local_bucket = local_dt.replace(minute=0, second=0, microsecond=0)
+            return local_bucket.astimezone(timezone.utc)
+        elif granularity == "15_minutes":
+            local_bucket = local_dt.replace(minute=(local_dt.minute // 15) * 15, second=0, microsecond=0)
+            return local_bucket.astimezone(timezone.utc)
+        elif granularity == "minute":
+            local_bucket = local_dt.replace(second=0, microsecond=0)
+            return local_bucket.astimezone(timezone.utc)
+        else:
+            offset = max(0, (reading_utc - period_start).total_seconds())
+            return period_start + timedelta(seconds=int(offset // bucket_seconds) * bucket_seconds)
+
 
     def get_period_summary(
         self,
@@ -201,7 +226,7 @@ class ConsumptionService:
         for reading in records:
             timestamp = _as_utc(reading.timestamp)
             if period_start <= timestamp <= period_end:
-                bucket = buckets[self._bucket_timestamp(timestamp, period_start, bucket_seconds)]
+                bucket = buckets[self._bucket_timestamp(timestamp, granularity, zone, period_start, bucket_seconds)]
                 bucket["sum_kw"] += reading.gap
                 bucket["count"] += 1
                 bucket["min_kw"] = reading.gap if bucket["min_kw"] is None else min(bucket["min_kw"], reading.gap)
@@ -233,7 +258,7 @@ class ConsumptionService:
                             self._add_interval(
                                 tariff_totals, clipped_start, clipped_end, clipped_energy, settings, zone
                             )
-                        energy_bucket = buckets[self._bucket_timestamp(clipped_start, period_start, bucket_seconds)]
+                        energy_bucket = buckets[self._bucket_timestamp(clipped_start, granularity, zone, period_start, bucket_seconds)]
                         energy_bucket["energy_kwh"] += clipped_energy
             last_reading = reading
 
