@@ -134,6 +134,16 @@ class UserResponse(BaseModel):
     preferences: Optional[Dict[str, Any]] = None
     email_verified_at: Optional[datetime] = None
 
+
+class AccountLifecycleStatus(str, Enum):
+    pending_verification = "pending_verification"
+    active = "active"
+    disabled = "disabled"
+
+
+class AdminUserResponse(UserResponse):
+    lifecycle_status: AccountLifecycleStatus
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -512,6 +522,9 @@ class SystemHealth(BaseModel):
 
     status: str
     total_users: int
+    active_users: int
+    pending_users: int
+    disabled_users: int
     total_forecasts: int
     database_status: str
     forecast_status: str

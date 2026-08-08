@@ -29,11 +29,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { adminApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import type { AdminUser, ModelReadiness, SystemHealth } from '@/types';
+import type { AccountLifecycleStatus, AdminUser, ModelReadiness, SystemHealth } from '@/types';
 
 
 function Fact({ label, value, healthy }: { label: string; value: string | number; healthy?: boolean }) {
   return <div className="border-l-2 border-indigo-400/60 pl-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">{healthy === undefined ? null : healthy ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <XCircle className="h-4 w-4 text-red-400" />}{value}</p></div>;
+}
+
+const LIFECYCLE_LABELS: Record<AccountLifecycleStatus, string> = {
+  pending_verification: 'Pending verification',
+  active: 'Active',
+  disabled: 'Disabled',
+};
+
+function lifecycleStatus(entry: AdminUser): AccountLifecycleStatus {
+  if (entry.lifecycle_status) return entry.lifecycle_status;
+  if (!entry.email_verified_at) return 'pending_verification';
+  return entry.is_active ? 'active' : 'disabled';
+}
+
+function lifecycleBadgeClass(status: AccountLifecycleStatus): string {
+  if (status === 'active') return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300';
+  if (status === 'pending_verification') return 'border-amber-400/30 bg-amber-400/10 text-amber-300';
+  return 'border-slate-500/30 bg-slate-500/10 text-slate-400';
 }
 
 export default function AdminPage() {
@@ -42,6 +60,7 @@ export default function AdminPage() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [models, setModels] = useState<ModelReadiness[]>([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | AccountLifecycleStatus>('all');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [role, setRole] = useState<'admin' | 'user'>('user');
@@ -74,9 +93,17 @@ export default function AdminPage() {
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return users;
-    return users.filter((entry) => `${entry.full_name || ''} ${entry.email}`.toLowerCase().includes(query));
-  }, [search, users]);
+    return users.filter((entry) => {
+      const matchesQuery = !query || `${entry.full_name || ''} ${entry.email}`.toLowerCase().includes(query);
+      const matchesStatus = statusFilter === 'all' || lifecycleStatus(entry) === statusFilter;
+      return matchesQuery && matchesStatus;
+    });
+  }, [search, statusFilter, users]);
+
+  const lifecycleCounts = useMemo(() => users.reduce((counts, entry) => {
+    counts[lifecycleStatus(entry)] += 1;
+    return counts;
+  }, { active: 0, pending_verification: 0, disabled: 0 } as Record<AccountLifecycleStatus, number>), [users]);
 
   const openEditor = (entry: AdminUser) => {
     setEditing(entry);
@@ -103,7 +130,13 @@ export default function AdminPage() {
     try {
       const updated = await adminApi.updateUser(entry.id, { is_active: !entry.is_active });
       setUsers((current) => current.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
-      toast.success(updated.is_active ? 'User activated.' : 'User deactivated.');
+      if (lifecycleStatus(updated) === 'pending_verification') {
+        toast.success(updated.is_active
+          ? 'User enabled; email verification is still required.'
+          : 'User disabled; verification remains pending.');
+      } else {
+        toast.success(updated.is_active ? 'User activated.' : 'User deactivated.');
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to update this user.');
     } finally {
@@ -119,8 +152,11 @@ export default function AdminPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-white"><Shield className="h-6 w-6 text-indigo-400" />Administration</h1><p className="mt-1 text-sm text-slate-400">User access and read-only release readiness</p></div><Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} title="Refresh administration data" aria-label="Refresh administration data"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button></header>
 
-        <section className="grid gap-5 border-y border-white/10 bg-white/[0.025] px-4 py-5 sm:grid-cols-2 lg:grid-cols-5">
-          <Fact label="Users" value={health?.total_users ?? users.length} />
+        <section className="grid gap-5 border-y border-white/10 bg-white/[0.025] px-4 py-5 sm:grid-cols-2 lg:grid-cols-4">
+          <Fact label="Total users" value={health?.total_users ?? users.length} />
+          <Fact label="Active users" value={health?.active_users ?? lifecycleCounts.active} />
+          <Fact label="Pending verification" value={health?.pending_users ?? lifecycleCounts.pending_verification} />
+          <Fact label="Disabled users" value={health?.disabled_users ?? lifecycleCounts.disabled} />
           <Fact label="Product forecasts" value={health?.total_forecasts ?? 0} />
           <Fact label="Database" value={health?.database_status || 'Unknown'} healthy={health?.database_status === 'healthy'} />
           <Fact label="Forecast runtime" value={health?.forecast_status || 'Unknown'} healthy={health?.forecast_status === 'ready'} />
@@ -130,11 +166,20 @@ export default function AdminPage() {
         <Tabs defaultValue="users">
           <TabsList><TabsTrigger value="users"><Users className="h-4 w-4" />Users</TabsTrigger><TabsTrigger value="system"><Activity className="h-4 w-4" />System</TabsTrigger></TabsList>
           <TabsContent value="users" className="mt-5 space-y-4">
-            <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users" className="pl-9" /></div>
+            <div className="flex max-w-2xl flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users" className="pl-9" /></div>
+              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | AccountLifecycleStatus)}>
+                <SelectTrigger className="w-full sm:w-52" aria-label="Filter users by status"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="pending_verification">Pending verification</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="disabled">Disabled</SelectItem></SelectContent>
+              </Select>
+            </div>
             <div className="overflow-x-auto border border-white/10">
               <Table><TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead><TableHead className="w-24 text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
-                {filtered.map((entry) => <TableRow key={entry.id}><TableCell><p className="font-medium text-white">{entry.full_name || 'Unnamed user'}</p><p className="text-xs text-slate-500">{entry.email}</p></TableCell><TableCell><Badge variant="outline" className="capitalize">{entry.role}</Badge></TableCell><TableCell><span className={entry.is_active ? 'text-emerald-300' : 'text-slate-500'}>{entry.is_active ? 'Active' : 'Disabled'}</span></TableCell><TableCell className="text-slate-400">{new Date(entry.created_at).toLocaleDateString()}</TableCell><TableCell><div className="flex justify-end gap-1"><Button size="icon-sm" variant="ghost" onClick={() => openEditor(entry)} title="Edit role" aria-label={`Edit ${entry.email}`}><Edit2 className="h-4 w-4" /></Button><Button size="icon-sm" variant="ghost" onClick={() => void toggleActive(entry)} disabled={saving || entry.id === user.id} title={entry.is_active ? 'Disable user' : 'Activate user'} aria-label={`${entry.is_active ? 'Disable' : 'Activate'} ${entry.email}`}>{entry.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}</Button></div></TableCell></TableRow>)}
-                {!filtered.length && !loading ? <TableRow><TableCell colSpan={5} className="py-12 text-center text-slate-500">No users match this search.</TableCell></TableRow> : null}
+                {filtered.map((entry) => {
+                  const status = lifecycleStatus(entry);
+                  return <TableRow key={entry.id}><TableCell><p className="font-medium text-white">{entry.full_name || 'Unnamed user'}</p><p className="text-xs text-slate-500">{entry.email}</p></TableCell><TableCell><Badge variant="outline" className="capitalize">{entry.role}</Badge></TableCell><TableCell><Badge variant="outline" className={lifecycleBadgeClass(status)}>{LIFECYCLE_LABELS[status]}</Badge></TableCell><TableCell className="text-slate-400">{new Date(entry.created_at).toLocaleDateString()}</TableCell><TableCell><div className="flex justify-end gap-1"><Button size="icon-sm" variant="ghost" onClick={() => openEditor(entry)} title="Edit role" aria-label={`Edit ${entry.email}`}><Edit2 className="h-4 w-4" /></Button><Button size="icon-sm" variant="ghost" onClick={() => void toggleActive(entry)} disabled={saving || entry.id === user.id} title={entry.is_active ? 'Disable account' : 'Enable account'} aria-label={`${entry.is_active ? 'Disable' : 'Enable'} ${entry.email}`}>{entry.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}</Button></div></TableCell></TableRow>;
+                })}
+                {!filtered.length && !loading ? <TableRow><TableCell colSpan={5} className="py-12 text-center text-slate-500">No users match the current search and status filter.</TableCell></TableRow> : null}
               </TableBody></Table>
             </div>
           </TabsContent>

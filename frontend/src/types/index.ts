@@ -304,9 +304,12 @@ export interface Recommendation {
 // Admin Types
 // ============================================================
 export interface AdminUser extends User {
-  forecast_count: number;
+  lifecycle_status?: AccountLifecycleStatus;
+  forecast_count?: number;
   last_login?: string;
 }
+
+export type AccountLifecycleStatus = 'pending_verification' | 'active' | 'disabled';
 
 export interface ModelReadiness {
   available: boolean;
@@ -330,6 +333,9 @@ export interface SystemHealth {
   cpu_usage: number;
   memory_usage: number;
   total_users: number;
+  active_users?: number;
+  pending_users?: number;
+  disabled_users?: number;
   total_forecasts: number;
   database_status: string;
   forecast_status: string;

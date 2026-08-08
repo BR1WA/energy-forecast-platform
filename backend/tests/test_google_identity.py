@@ -109,6 +109,7 @@ def test_new_google_user_gets_the_same_one_site_ownership_workflow():
     assert "refresh_token" not in response.json()
     user = db.query(User).filter_by(email="new-google@example.com").one()
     assert user.is_setup_complete is False
+    assert user.email_verified_at is not None
     site = db.query(Site).filter_by(user_id=user.id).one()
     meter = db.query(Meter).filter_by(site_id=site.id, is_primary=True).one()
     assert meter.name == "Primary meter"

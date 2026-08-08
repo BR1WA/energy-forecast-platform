@@ -9,7 +9,7 @@ from typing import List
 
 from app.database import get_db
 from app.models import User, Forecast, Alert, EmailOutbox
-from app.schemas import UserResponse, UserUpdate, SystemHealth
+from app.schemas import AccountLifecycleStatus, AdminUserResponse, UserResponse, UserUpdate, SystemHealth
 from app.services.auth_service import require_role
 from app.services.audit_service import record_audit_event
 from app.services.product_forecast_service import PRODUCT_MODEL_NAMES, product_forecast_service
@@ -19,6 +19,42 @@ router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
 # Track server start time
 _start_time = time.time()
+
+
+def _lifecycle_status(user: User) -> AccountLifecycleStatus:
+    """Return the mutually exclusive administrative account lifecycle state."""
+    if user.email_verified_at is None:
+        return AccountLifecycleStatus.pending_verification
+    if user.is_active:
+        return AccountLifecycleStatus.active
+    return AccountLifecycleStatus.disabled
+
+
+def _admin_user_response(user: User) -> AdminUserResponse:
+    safe_user = UserResponse.model_validate(user)
+    return AdminUserResponse(
+        **safe_user.model_dump(),
+        lifecycle_status=_lifecycle_status(user),
+    )
+
+
+def _lifecycle_counts(db: Session) -> dict[str, int]:
+    """Count the exhaustive, non-overlapping account lifecycle states."""
+    pending_users = db.query(User).filter(User.email_verified_at.is_(None)).count()
+    active_users = db.query(User).filter(
+        User.email_verified_at.is_not(None),
+        User.is_active.is_(True),
+    ).count()
+    disabled_users = db.query(User).filter(
+        User.email_verified_at.is_not(None),
+        User.is_active.is_(False),
+    ).count()
+    return {
+        "total_users": pending_users + active_users + disabled_users,
+        "active_users": active_users,
+        "pending_users": pending_users,
+        "disabled_users": disabled_users,
+    }
 
 
 @router.post("/email-outbox/{outbox_id}/retry")
@@ -44,17 +80,17 @@ def retry_email_outbox(
     return {"id": row.id, "status": row.status}
 
 
-@router.get("/users", response_model=List[UserResponse])
+@router.get("/users", response_model=List[AdminUserResponse])
 def list_users(
     current_user: User = Depends(require_role(["admin"])),
     db: Session = Depends(get_db),
 ):
     """List all users (admin only)."""
     users = db.query(User).order_by(User.created_at.desc()).all()
-    return [UserResponse.model_validate(u) for u in users]
+    return [_admin_user_response(user) for user in users]
 
 
-@router.put("/users/{user_id}", response_model=UserResponse)
+@router.put("/users/{user_id}", response_model=AdminUserResponse)
 def update_user(
     user_id: int,
     data: UserUpdate,
@@ -75,7 +111,9 @@ def update_user(
     )
     if removing_admin_access:
         active_admins = db.query(User).filter(
-            User.role == "admin", User.is_active.is_(True)
+            User.role == "admin",
+            User.email_verified_at.is_not(None),
+            User.is_active.is_(True),
         ).count()
         if active_admins <= 1:
             raise HTTPException(
@@ -99,7 +137,7 @@ def update_user(
     )
     db.commit()
     db.refresh(user)
-    return UserResponse.model_validate(user)
+    return _admin_user_response(user)
 
 
 @router.delete("/users/{user_id}")
@@ -151,9 +189,11 @@ def system_health(
 
     model = product_forecast_service.warmup()
 
+    lifecycle_counts = _lifecycle_counts(db)
+
     return SystemHealth(
         status="operational" if db_status == "healthy" and model["available"] and model["warmed"] else "degraded",
-        total_users=db.query(User).count(),
+        **lifecycle_counts,
         total_forecasts=db.query(Forecast).filter(Forecast.model_name.in_(PRODUCT_MODEL_NAMES)).count(),
         database_status=db_status,
         forecast_status="ready" if model["available"] and model["warmed"] else "not_ready",
@@ -173,12 +213,12 @@ def get_stats(
     db: Session = Depends(get_db),
 ):
     """Get platform statistics (admin only)."""
-    total_users = db.query(User).count()
+    lifecycle_counts = _lifecycle_counts(db)
     total_forecasts = db.query(Forecast).count()
     total_alerts = db.query(Alert).count()
 
     return {
-        "total_users": total_users,
+        **lifecycle_counts,
         "total_forecasts": total_forecasts,
         "total_alerts": total_alerts,
         "users_by_role": {

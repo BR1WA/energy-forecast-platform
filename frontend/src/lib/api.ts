@@ -408,7 +408,7 @@ export const adminApi = {
   updateUser: (
     id: string,
     data: Partial<User>
-  ): Promise<User> =>
+  ): Promise<AdminUser> =>
     apiFetch(`/api/v1/admin/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
