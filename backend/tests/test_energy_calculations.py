@@ -312,3 +312,69 @@ def test_calendar_aware_daily_and_monthly_bucketing_and_dst_transitions():
     finally:
         db.close()
         Base.metadata.drop_all(bind=engine)
+
+
+def test_calendar_week_and_timeframe_boundaries_across_timezones_and_dst():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(bind=engine)
+    db = sessionmaker(bind=engine)()
+    try:
+        user = User(email="week-test@example.com", password_hash=hash_password("password123"), role="user", is_active=True)
+        db.add(user)
+        db.commit()
+        site = ensure_default_site(db, user.id)
+        site.timezone = "Europe/London"
+        meter = get_default_meter(db, user.id)
+
+        # 1. Monday at 10:00 BST (2026-07-20 09:00 UTC) -> period starts Monday 00:00 BST (2026-07-19 23:00 UTC)
+        now_mon = datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)
+        sum_mon = consumption_service.get_period_summary(db, user.id, "7d", now=now_mon)
+        assert sum_mon["period_start"] == "2026-07-19T23:00:00+00:00"
+        assert sum_mon["period_end"] == "2026-07-20T09:00:00+00:00"
+
+        # Also verify the 'week' alias produces the exact same calendar week boundaries
+        sum_mon_alias = consumption_service.get_period_summary(db, user.id, "week", now=now_mon)
+        assert sum_mon_alias["period_start"] == "2026-07-19T23:00:00+00:00"
+
+        # 2. Wednesday at 14:00 BST (2026-07-22 13:00 UTC) -> period starts Monday 00:00 BST (2026-07-19 23:00 UTC)
+        now_wed = datetime(2026, 7, 22, 13, 0, tzinfo=timezone.utc)
+        sum_wed = consumption_service.get_period_summary(db, user.id, "7d", now=now_wed)
+        assert sum_wed["period_start"] == "2026-07-19T23:00:00+00:00"
+
+        # 3. Sunday at 23:00 BST (2026-07-26 22:00 UTC) -> period still starts same Monday 00:00 BST (2026-07-19 23:00 UTC)
+        now_sun = datetime(2026, 7, 26, 22, 0, tzinfo=timezone.utc)
+        sum_sun = consumption_service.get_period_summary(db, user.id, "7d", now=now_sun)
+        assert sum_sun["period_start"] == "2026-07-19T23:00:00+00:00"
+
+        # 4. Year boundary: Thursday Jan 1, 2026 at 10:00 UTC (10:00 GMT) -> Monday belongs to previous year (Dec 29, 2025)
+        now_jan1 = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+        sum_jan1 = consumption_service.get_period_summary(db, user.id, "7d", now=now_jan1)
+        assert sum_jan1["period_start"] == "2025-12-29T00:00:00+00:00"
+
+        # 5. Site timezone respect: Asia/Tokyo (UTC+9)
+        site.timezone = "Asia/Tokyo"
+        # Wednesday July 22, 2026 at 15:00 JST (06:00 UTC) -> Monday July 20 at 00:00 JST (2026-07-19 15:00 UTC)
+        now_tokyo = datetime(2026, 7, 22, 6, 0, tzinfo=timezone.utc)
+        sum_tokyo = consumption_service.get_period_summary(db, user.id, "7d", now=now_tokyo)
+        assert sum_tokyo["period_start"] == "2026-07-19T15:00:00+00:00"
+        assert sum_tokyo["timezone"] == "Asia/Tokyo"
+
+        # 6. DST transition week: Europe/London on Sunday March 29, 2026 at 12:00 BST (11:00 UTC)
+        site.timezone = "Europe/London"
+        now_dst = datetime(2026, 3, 29, 11, 0, tzinfo=timezone.utc)
+        sum_dst = consumption_service.get_period_summary(db, user.id, "7d", now=now_dst)
+        # Monday March 23 was GMT (UTC+0) -> 2026-03-23T00:00:00+00:00
+        assert sum_dst["period_start"] == "2026-03-23T00:00:00+00:00"
+
+        # 7. Verify today, month, year are intact
+        sum_today = consumption_service.get_period_summary(db, user.id, "today", now=now_mon)
+        assert sum_today["period_start"] == "2026-07-19T23:00:00+00:00"  # today local midnight
+
+        sum_month = consumption_service.get_period_summary(db, user.id, "month", now=now_mon)
+        assert sum_month["period_start"] == "2026-06-30T23:00:00+00:00"  # July 1st 00:00 BST
+
+        sum_year = consumption_service.get_period_summary(db, user.id, "year", now=now_mon)
+        assert sum_year["period_start"] == "2026-01-01T00:00:00+00:00"  # Jan 1st 00:00 GMT (UTC+0)
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)

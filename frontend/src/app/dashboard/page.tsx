@@ -52,7 +52,7 @@ function periodLabel(timeframe: ConsumptionTimeframe) {
   return {
     live: 'the last 15 minutes',
     today: 'today',
-    '7d': 'the last 7 calendar days',
+    '7d': 'this week',
     month: 'this month',
     year: 'this year',
     all: 'all recorded history',

@@ -109,8 +109,8 @@ class ConsumptionService:
             period_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
             period_end = now_utc
         elif timeframe == "7d":
-            local_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
-            period_start, period_end = local_start.astimezone(timezone.utc), now_utc
+            local_monday = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=local_now.weekday())
+            period_start, period_end = local_monday.astimezone(timezone.utc), now_utc
         elif timeframe == "month":
             period_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
             period_end = now_utc

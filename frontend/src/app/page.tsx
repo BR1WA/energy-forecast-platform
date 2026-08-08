@@ -12,7 +12,7 @@ import { authApi } from '@/lib/api';
 
 const workflows = [
   { icon: Upload, title: 'Bring meter readings', text: 'Import a validated CSV, send authenticated push samples, or explicitly start the labelled simulator.' },
-  { icon: ChartNoAxesCombined, title: 'Track every timeframe', text: 'Monitor Live, Today, 7 days, Month, Year, All history, or a custom period with source and freshness.' },
+  { icon: ChartNoAxesCombined, title: 'Track every timeframe', text: 'Monitor Live, Today, Week, Month, Year, All history, or a custom period with source and freshness.' },
   { icon: BellRing, title: 'Act on measured evidence', text: 'High-load and missing-data rules create reviewable incidents and deterministic client actions.' },
 ];
 

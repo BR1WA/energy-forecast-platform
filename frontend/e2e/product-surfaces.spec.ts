@@ -189,6 +189,7 @@ test('usage chart exposes truthful power, energy, range, and gap states', async 
 
   await page.goto('/usage');
   await expect(page.getByRole('main').getByRole('heading', { name: 'Usage' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Week' })).toBeVisible();
   await expect(page.getByText('Load and energy profile')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Power' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Observed min-max')).toBeVisible();

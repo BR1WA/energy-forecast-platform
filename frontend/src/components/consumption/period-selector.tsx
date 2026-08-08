@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 const PERIODS: Array<{ value: ConsumptionTimeframe; label: string }> = [
   { value: 'live', label: 'Live' },
   { value: 'today', label: 'Today' },
-  { value: '7d', label: '7 days' },
+  { value: '7d', label: 'Week' },
   { value: 'month', label: 'Month' },
   { value: 'year', label: 'Year' },
   { value: 'all', label: 'All' },
