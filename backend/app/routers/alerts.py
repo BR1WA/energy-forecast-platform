@@ -55,7 +55,8 @@ def _serialize(alert: Alert) -> dict:
     }
 
 
-@router.get("/", response_model=list[AlertResponse])
+@router.get("/", response_model=list[AlertResponse], include_in_schema=False)
+@router.get("", response_model=list[AlertResponse])
 def list_alerts(
     state_filter: Literal["all", "open", "acknowledged", "resolved"] = Query("all", alias="state"),
     limit: int = Query(50, ge=1, le=100),

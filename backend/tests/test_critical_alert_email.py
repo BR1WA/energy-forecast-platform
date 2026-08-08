@@ -326,6 +326,38 @@ def test_config_exposes_eligibility_and_rejects_invalid_opt_in(db, monkeypatch):
         app.dependency_overrides.pop(get_db, None)
 
 
+def test_alert_collection_paths_are_direct_under_https_proxy_headers(db):
+    user, _, _, _ = _account(
+        db,
+        email="canonical-alerts@example.com",
+        verified=True,
+        email_enabled=False,
+    )
+    Session = sessionmaker(bind=db.get_bind())
+
+    def override_get_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    headers = {
+        "Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}",
+        "X-Forwarded-Proto": "https",
+        "Host": "api.example.test",
+    }
+    try:
+        for path in ("/api/v1/alerts", "/api/v1/alerts/"):
+            response = client.get(path, headers=headers, follow_redirects=False)
+            assert response.status_code == 200
+            assert "location" not in response.headers
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
 def test_acknowledge_resolve_and_reopen_do_not_resend(db, monkeypatch):
     settings = _settings()
     monkeypatch.setattr(alert_module, "get_settings", lambda: settings)

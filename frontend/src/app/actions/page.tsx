@@ -28,6 +28,11 @@ import { parseDate } from '@/lib/utils';
 import type { Alert, AlertConfig, Recommendation } from '@/types';
 
 type ActionFilter = 'attention' | 'monitoring' | 'completed' | 'all';
+type EmailCapabilityState =
+  | { status: 'loading' }
+  | { status: 'available' }
+  | { status: 'unavailable'; reason: 'mail_disabled' | 'email_unverified' }
+  | { status: 'unknown' };
 
 const severityStyles: Record<Alert['severity'], string> = {
   low: 'border-blue-400/30 text-blue-300',
@@ -54,6 +59,17 @@ function RecommendationEvidence({ item }: { item: Recommendation }) {
   return <p className="rounded border border-white/[0.06] bg-black/10 p-3 text-xs text-slate-400">Action evidence: {observed} kW measured against {threshold} kW.</p>;
 }
 
+function emailCapabilityFromConfig(config: AlertConfig): EmailCapabilityState {
+  if (config.email_delivery_available) return { status: 'available' };
+  if (config.email_delivery_unavailable_reason !== 'mail_disabled' && config.email_delivery_unavailable_reason !== 'email_unverified') {
+    return { status: 'unknown' };
+  }
+  return {
+    status: 'unavailable',
+    reason: config.email_delivery_unavailable_reason,
+  };
+}
+
 export default function ActionsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -63,30 +79,39 @@ export default function ActionsPage() {
     missing_data_minutes: 60,
     email_enabled: false,
     email_delivery_available: false,
-    email_delivery_unavailable_reason: 'mail_disabled',
+    email_delivery_unavailable_reason: null,
   });
+  const [emailCapability, setEmailCapability] = useState<EmailCapabilityState>({ status: 'loading' });
+  const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
   const [filter, setFilter] = useState<ActionFilter>('attention');
-  const [loading, setLoading] = useState(true);
+  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [updatingAlert, setUpdatingAlert] = useState<string | null>(null);
   const [updatingRecommendation, setUpdatingRecommendation] = useState<number | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [nextAlerts, nextRecommendations, nextConfig] = await Promise.all([
-        alertsApi.getAlerts('all'),
-        recommendationsApi.getAll(true),
-        alertsApi.getConfig(),
-      ]);
-      setAlerts(nextAlerts.sort((a, b) => parseDate(b.created_at).getTime() - parseDate(a.created_at).getTime()));
-      setRecommendations(nextRecommendations);
-      setConfig(nextConfig);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not load actions.');
-    } finally {
-      setLoading(false);
-    }
+    setAlertsLoading(true);
+    setRecommendationsLoading(true);
+    setEmailCapability({ status: 'loading' });
+
+    const alertsRequest = alertsApi.getAlerts('all')
+      .then((nextAlerts) => setAlerts(nextAlerts.sort((a, b) => parseDate(b.created_at).getTime() - parseDate(a.created_at).getTime())))
+      .catch((error) => toast.error(error instanceof Error ? error.message : 'Could not load incidents.'))
+      .finally(() => setAlertsLoading(false));
+    const recommendationsRequest = recommendationsApi.getAll(true)
+      .then(setRecommendations)
+      .catch((error) => toast.error(error instanceof Error ? error.message : 'Could not load recommendations.'))
+      .finally(() => setRecommendationsLoading(false));
+    const configRequest = alertsApi.getConfig()
+      .then((nextConfig) => {
+        setConfig(nextConfig);
+        setEmailCapability(emailCapabilityFromConfig(nextConfig));
+        setHasLoadedConfig(true);
+      })
+      .catch(() => setEmailCapability({ status: 'unknown' }));
+
+    await Promise.allSettled([alertsRequest, recommendationsRequest, configRequest]);
   }, []);
 
   useEffect(() => {
@@ -101,9 +126,10 @@ export default function ActionsPage() {
     return linked;
   }, [recommendations]);
 
+  const loadedAlertIds = useMemo(() => new Set(alerts.map((alert) => alert.id)), [alerts]);
   const unlinkedRecommendations = useMemo(
-    () => recommendations.filter((item) => item.alert_id == null),
-    [recommendations],
+    () => recommendations.filter((item) => item.alert_id == null || !loadedAlertIds.has(String(item.alert_id))),
+    [loadedAlertIds, recommendations],
   );
 
   const visibleAlerts = useMemo(() => alerts.filter((alert) => {
@@ -156,6 +182,10 @@ export default function ActionsPage() {
   };
 
   const saveRules = async () => {
+    if (!hasLoadedConfig) {
+      toast.error('Action rules are temporarily unavailable.');
+      return;
+    }
     const values = [config.high_consumption_threshold, config.cooldown_minutes, config.missing_data_minutes];
     if (values.some((value) => !Number.isFinite(Number(value))) || config.high_consumption_threshold <= 0 || config.cooldown_minutes < 5 || config.missing_data_minutes < 5) {
       toast.error('Use a positive threshold and intervals of at least five minutes.');
@@ -163,7 +193,9 @@ export default function ActionsPage() {
     }
     setSaving(true);
     try {
-      setConfig(await alertsApi.configureAlerts(config));
+      const nextConfig = await alertsApi.configureAlerts(config);
+      setConfig(nextConfig);
+      setEmailCapability(emailCapabilityFromConfig(nextConfig));
       toast.success('Action rules saved.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not save action rules.');
@@ -201,6 +233,19 @@ export default function ActionsPage() {
     );
   };
 
+  const contentLoading = alertsLoading || recommendationsLoading;
+  const emailStatusMessage = emailCapability.status === 'loading'
+    ? 'Checking email delivery availability...'
+    : emailCapability.status === 'unknown'
+      ? 'Email delivery status is temporarily unavailable.'
+      : emailCapability.status === 'unavailable'
+        ? emailCapability.reason === 'email_unverified'
+          ? 'Verify your email to enable email alerts.'
+          : 'Email delivery is unavailable.'
+        : config.email_enabled
+          ? 'Enabled for newly created critical incidents.'
+          : 'Off. Opt in to receive newly created critical incidents by email.';
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-7xl space-y-6">
@@ -220,7 +265,7 @@ export default function ActionsPage() {
               ))}
             </div>
 
-            {loading ? (
+            {contentLoading && alerts.length === 0 && recommendations.length === 0 ? (
               <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-400" /></div>
             ) : visibleAlerts.length || visibleUnlinked.length ? (
               <div className="space-y-4">
@@ -260,22 +305,18 @@ export default function ActionsPage() {
           <Card className="h-fit rounded-lg border-white/[0.08] bg-[#111827]/80">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base text-white"><Settings className="h-4 w-4 text-blue-400" />Action rules</CardTitle></CardHeader>
             <CardContent className="space-y-5">
-              <div className="space-y-2"><Label htmlFor="threshold">High load threshold (kW)</Label><Input id="threshold" type="number" min="0.1" max="20" step="0.1" value={config.high_consumption_threshold} onChange={(event) => setConfig((value) => ({ ...value, high_consumption_threshold: Number(event.target.value) }))} /></div>
-              <div className="space-y-2"><Label htmlFor="cooldown">Repeat cooldown (minutes)</Label><Input id="cooldown" type="number" min="5" max="1440" step="5" value={config.cooldown_minutes} onChange={(event) => setConfig((value) => ({ ...value, cooldown_minutes: Number(event.target.value) }))} /></div>
-              <div className="space-y-2"><Label htmlFor="missing-data">Missing push data after (minutes)</Label><Input id="missing-data" type="number" min="5" max="10080" step="5" value={config.missing_data_minutes} onChange={(event) => setConfig((value) => ({ ...value, missing_data_minutes: Number(event.target.value) }))} /></div>
+              <div className="space-y-2"><Label htmlFor="threshold">High load threshold (kW)</Label><Input disabled={!hasLoadedConfig} id="threshold" type="number" min="0.1" max="20" step="0.1" value={config.high_consumption_threshold} onChange={(event) => setConfig((value) => ({ ...value, high_consumption_threshold: Number(event.target.value) }))} /></div>
+              <div className="space-y-2"><Label htmlFor="cooldown">Repeat cooldown (minutes)</Label><Input disabled={!hasLoadedConfig} id="cooldown" type="number" min="5" max="1440" step="5" value={config.cooldown_minutes} onChange={(event) => setConfig((value) => ({ ...value, cooldown_minutes: Number(event.target.value) }))} /></div>
+              <div className="space-y-2"><Label htmlFor="missing-data">Missing push data after (minutes)</Label><Input disabled={!hasLoadedConfig} id="missing-data" type="number" min="5" max="10080" step="5" value={config.missing_data_minutes} onChange={(event) => setConfig((value) => ({ ...value, missing_data_minutes: Number(event.target.value) }))} /></div>
               <div className="space-y-3 border-t border-white/10 pt-4">
                 <div className="flex items-start gap-3">
-                  <input aria-describedby="critical-email-status" checked={config.email_enabled} className="mt-1 h-4 w-4 accent-blue-500" disabled={!config.email_delivery_available} id="critical-email-enabled" onChange={(event) => setConfig((value) => ({ ...value, email_enabled: event.target.checked }))} type="checkbox" />
+                  <input aria-describedby="critical-email-status" checked={config.email_enabled} className="mt-1 h-4 w-4 accent-blue-500" disabled={emailCapability.status !== 'available'} id="critical-email-enabled" onChange={(event) => setConfig((value) => ({ ...value, email_enabled: event.target.checked }))} type="checkbox" />
                   <div><Label className="flex items-center gap-2" htmlFor="critical-email-enabled"><Mail className="h-4 w-4 text-blue-400" />Email critical incidents</Label><p className="mt-1 text-xs leading-5 text-slate-500">All incidents remain available in the app.</p></div>
                 </div>
-                <p id="critical-email-status" className={config.email_delivery_available ? 'text-xs text-slate-400' : 'text-xs text-amber-300'}>
-                  {config.email_delivery_available
-                    ? config.email_enabled ? 'Enabled for newly created critical incidents.' : 'Off. Opt in to receive newly created critical incidents by email.'
-                    : config.email_delivery_unavailable_reason === 'email_unverified' ? 'Verify your email before enabling delivery.' : 'Email delivery is unavailable; incidents remain in the app.'}
-                </p>
+                <p id="critical-email-status" className={emailCapability.status === 'available' || emailCapability.status === 'loading' ? 'text-xs text-slate-400' : 'text-xs text-amber-300'}>{emailStatusMessage}</p>
               </div>
               <p className="flex gap-2 text-xs leading-5 text-slate-500"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />High load is checked on ingestion. Missing push data is checked by the alert worker.</p>
-              <Button className="w-full" onClick={() => void saveRules()} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}Save rules</Button>
+              <Button className="w-full" onClick={() => void saveRules()} disabled={saving || !hasLoadedConfig}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}Save rules</Button>
             </CardContent>
           </Card>
         </div>
