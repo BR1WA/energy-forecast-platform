@@ -66,7 +66,8 @@ can be advertised by the API.
 ### Monitoring and analytics
 
 - Live authenticated monitoring over WebSocket plus historical REST views.
-- Live, Today, 7 days, Month, Year, All, and Custom time ranges.
+- Live, current Today, current Week, current Month, current Year, All, and Custom time ranges using site-local calendar boundaries.
+- Coverage-gated Today/Week/Month estimates, monthly-budget status, and explicit previous-month daily-average comparison.
 - Energy, peak load, estimated tariff cost, freshness, coverage, and gap context.
 - Source-aware readings for CSV, push API, simulator, and forecast-demo data.
 - Bounded raw-reading pagination and monthly CSV/PDF exports.
@@ -105,7 +106,8 @@ can be advertised by the API.
 - Access-token plus rotating HttpOnly refresh-cookie sessions.
 - Email verification and password recovery when delivery is configured.
 - Server-verified Google identity/link/unlink flow behind an operator gate.
-- Profile and normalized WebP avatar management with durable cleanup jobs.
+- Profile images accept validated JPEG, PNG, WebP, HEIC, and HEIF input, then normalize it to sanitized WebP with bounded dimensions and durable cleanup jobs.
+- Administrative lifecycle reporting distinguishes pending verification, active, and disabled accounts without bypassing verification.
 - Owner archive/export and reauthenticated irreversible account deletion.
 - Admin-only user access control, aggregate statistics, audit visibility, and
   read-only model/system readiness.
@@ -347,8 +349,9 @@ snapshot reported:
 | Backend with SQLite | 96 passed; 4 explicit PostgreSQL-only skips |
 | Backend with isolated PostgreSQL | 100 passed; 0 skipped |
 | Frontend lint, type check, production build | Passed; 25 routes generated |
-| Playwright six-project matrix | 107/108 passed; the isolated WebKit reload rerun passed |
+| Playwright six-project matrix | 180/180 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
 | Production npm dependency audit | 0 known vulnerabilities |
+| Production Python dependency audit | 0 known vulnerabilities |
 | Compose runtime | Six services running; core health checks passed |
 | Forecast readiness | 24-hour and 168-hour artifacts warmed and ready |
 

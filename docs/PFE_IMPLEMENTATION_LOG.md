@@ -4,6 +4,31 @@
 **Baseline:** `7f131a5`  
 **Plan:** `docs/PRODUCT_IMPLEMENTATION_PLAN_2026-07-20.md`
 
+## 2026-08-09 - Jury release hardening
+
+### Completed
+
+- Preserved calendar-aware Today, Week, Month, Year, and All semantics and added populated 167-hour and 169-hour DST projection regressions.
+- Added coverage-gated Dashboard comparison against the completed previous month's daily average, exact previous-month kWh/cost, budget variance, and a next-action summary.
+- Distinguished pending-verification, active, and disabled accounts in Admin presentation and mutually exclusive platform statistics without changing the verification architecture.
+- Made email capability independent from alerts/recommendations loading and introduced an explicit unknown/error state.
+- Added decoded HEIC/HEIF avatar support with MIME/content validation, decompression and dimension protections, EXIF normalization, and sanitized WebP output.
+- Added Google account creation to Registration through the existing server state/nonce flow and removed the unused client-secret requirement from the Google Identity Services configuration contract.
+- Patched newly disclosed transitive `js-yaml` and `nanoid` advisories with narrow npm overrides.
+
+### Verification
+
+- Backend: 106 passed, 4 intentional skips.
+- Frontend lint, TypeScript, and production build: passed; 25 routes generated.
+- Browser matrix: 180/180 passed across six desktop and mobile profiles.
+- Python and npm production dependency audits: no known vulnerabilities.
+- Docker Compose configuration: valid.
+
+### Deployment boundary
+
+- Azure remains on the validated `8c519b6` revision until the final release candidate and external Google client configuration are approved and complete.
+- No database reset, destructive migration, checkpoint replacement, retraining, or frozen-metric change occurred.
+
 ## 2026-07-20 - Release Initialization
 
 ### Completed

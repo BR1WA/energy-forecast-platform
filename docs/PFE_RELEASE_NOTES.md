@@ -1,7 +1,7 @@
 # PFE Release Notes
 
-**Branch:** `release/pfe`
-**Release validation date:** 2026-07-20
+**Branch:** `main`
+**Release validation date:** 2026-08-09
 **Product scope:** one user, one site, one primary meter
 
 ## Demonstration Walkthrough
@@ -10,7 +10,7 @@
 2. Choose CSV import, push API, or the explicitly labelled simulator as the data source.
 3. Use Dashboard for source, freshness, consumption, cost, peak, budget, forecast,
    alert, and recommendation summaries.
-4. Use Consumption for Live, Today, 7 days, Month, Year, All, or Custom history and
+4. Use Usage for Live, current Today, current Week, current Month, current Year, All, or Custom history and
    drill down through paginated raw readings.
 5. Generate a 24-hour forecast. The Global TFT runs only when the 336-hour input,
    95% coverage, three-hour gap, and finite-value gates pass. Otherwise the UI shows
@@ -22,12 +22,25 @@
 8. Sign in as an admin to manage user roles/activation and inspect database and
    fixed-model readiness. No training or model activation controls are exposed.
 
+## 9 August 2026 release candidate
+
+- Calendar ranges now use site-local day, Monday-to-Sunday week, month, and year boundaries; All uses true calendar buckets and distinct adaptive date labels.
+- Deterministic Today, Week, and Month estimates are coverage-gated, tariff-aware, and kept separate from the frozen 24-hour and 168-hour Global TFT forecasts.
+- Dashboard presents measured usage, truthful monthly budget outlook, the completed previous month's exact usage/cost and daily-average comparison, model forecast, and next evidence-backed action.
+- Admin lifecycle status and mutually exclusive statistics now distinguish pending verification, active, and disabled users while preserving the existing verification gate.
+- Actions distinguishes loading, available, unavailable, and unknown email capability; alerts and recommendations fail independently rather than turning API errors into an SMTP-disabled claim.
+- Avatar uploads now decode validated HEIC/HEIF input under the existing 2 MB and 2048-pixel limits and normalize every accepted image to sanitized WebP.
+- Google account creation is available from Registration through the existing server-verified state/nonce and ID-token flow once the operator configures a matching browser client ID.
+
 ## Release Evidence
 
-- Local backend suite: 44 passed.
+- Local backend suite: 106 passed, 4 intentionally skipped because optional runtime conditions were absent.
 - Docker test image: 43 passed, 1 skipped because Torch is deliberately excluded
   from the CI test target; the Torch inference test passed in the local full suite.
-- Frontend lint, TypeScript check, and production build: passed; 16 routes built.
+- Frontend lint, TypeScript check, and production build: passed; 25 routes built.
+- Playwright: 180/180 passed across Chromium, Firefox, WebKit, 360 px, 390 px iPhone, and 768 px profiles.
+- Populated Europe/London DST projection tests passed for both a 167-hour spring-forward week and a 169-hour fall-back week.
+- `npm audit --audit-level=high` and `pip-audit -r requirements.txt`: no known vulnerabilities.
 - Fresh PostgreSQL database migrated from the initial revision to Alembic head.
 - Isolated Docker runtime returned `alive` and `ready`; the Global TFT warmed with
   artifact SHA-256 `60fedcdee375dc0b2973e55b9f4ec752da69c2a7e390e1f951ed5cbb7bc5a04d`.
@@ -43,11 +56,9 @@
 
 ## Known Limitations
 
-- The production forecast horizon is 24 hours. Week and month forecasting remain
-  Product V1 work and must use independently validated artifacts.
+- Production forecasting supports independently packaged 24-hour and 168-hour checkpoints. There is no month-ahead model and no year-end projection.
 - Simulator readings are synthetic and always carry the simulator source label.
-- Email verification, password reset email, alert email, Google authentication, and
-  Gemini features are intentionally deferred; the PFE UI makes no claim that they work.
+- Email verification, password reset, and opted-in critical-alert delivery depend on the deployed SMTP worker. Google authentication remains operator-gated until its Azure and Google Cloud origins are verified. Apple and Gemini integrations are not part of this release.
 - Avatar files use local storage, and the simulator loop assumes one backend process.
   These are acceptable for the single-instance PFE deployment, not horizontal scale.
 - The packaged TFT is a global model. Its uncertainty interval is native model output
