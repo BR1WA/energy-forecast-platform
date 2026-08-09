@@ -79,7 +79,8 @@ can be advertised by the API.
   timestamp validation.
 - Per-meter push API keys with one-time reveal, rotation, idempotency, and
   last-seen state.
-- An explicitly labelled simulator for demonstrations and development.
+- An explicitly labelled deterministic simulator for demonstrations and development. A first start on an empty meter prepares 30 days of 15-minute household history; an already-running session catches up forward after a backend sleep, while old, CSV, push, and deliberately stopped gaps remain untouched.
+- A confirmed “Reset demo data” action replaces only `source="simulation"` rows with the same seeded scenario and preserves measured/imported readings.
 - One private site and one primary meter per normal user in Product V1.
 
 ### Forecasting
