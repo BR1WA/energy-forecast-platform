@@ -9,7 +9,7 @@ import { ConsumptionChart } from '@/components/consumption/consumption-chart';
 import { PeriodSelector } from '@/components/consumption/period-selector';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { consumptionApi, ingestionApi } from '@/lib/api';
+import { consumptionApi, ingestionApi, simulationApi } from '@/lib/api';
 import type { ConsumptionPeriodSummary, ConsumptionReading, ConsumptionTimeframe, PrimaryMeter } from '@/types';
 
 function localInputValue(date: Date) {
@@ -26,6 +26,7 @@ export default function UsagePage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<{ mapped_columns: string[]; valid_rows: number; rejected_rows: number; errors: Array<{ row: number; message: string }> } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [simulatorRunning, setSimulatorRunning] = useState(false);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [readings, setReadings] = useState<ConsumptionReading[]>([]);
@@ -67,6 +68,7 @@ export default function UsagePage() {
 
   useEffect(() => {
     ingestionApi.getMeters().then((meters) => setMeter(meters[0] ?? null)).catch(() => setMeter(null));
+    simulationApi.getStatus().then((nextStatus) => setSimulatorRunning(nextStatus.is_running)).catch(() => setSimulatorRunning(false));
     const now = new Date();
     setCustomStart(localInputValue(new Date(now.getTime() - 7 * 86400_000)));
     setCustomEnd(localInputValue(now));
@@ -120,6 +122,19 @@ export default function UsagePage() {
     if (!meter || !csvFile || !preview?.valid_rows) return;
     setImporting(true);
     try {
+      const simulatorStatus = await simulationApi.getStatus();
+      setSimulatorRunning(simulatorStatus.is_running);
+      if (simulatorStatus.is_running) {
+        const shouldStop = window.confirm(
+          'The demo simulator is currently running. Importing measured data while simulation continues may mix synthetic and imported readings. Stop the simulator and continue?',
+        );
+        if (!shouldStop) return;
+
+        await simulationApi.stop();
+        setSimulatorRunning(false);
+        toast.info('Demo simulator stopped. Historical simulation readings were preserved.');
+      }
+
       const result = await ingestionApi.importCsv(meter.id, csvFile);
       toast.success(`Imported ${result.accepted_rows} reading(s); ${result.duplicate_rows} duplicate(s) skipped.`);
       if (result.rejected_rows) toast.warning(`${result.rejected_rows} row(s) were rejected.`);
@@ -239,9 +254,10 @@ export default function UsagePage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-lg border-white/10 bg-[#111827]">
+        <Card className="rounded-lg border-white/10 bg-[#111827]" id="csv-import">
           <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Upload className="h-4 w-4 text-cyan-400" />Import CSV history</CardTitle><p className="text-xs text-slate-400">UTF-8 CSV, maximum 5 MB and 10,000 rows. Required columns: timestamp with timezone and active_power_kw. GAP and Datetime aliases are accepted.</p></CardHeader>
           <CardContent className="space-y-4">
+            {simulatorRunning && <div className="flex items-start gap-2 rounded-lg border border-amber-300/20 bg-amber-400/[0.06] p-3 text-xs leading-5 text-amber-100"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /><p>The demo simulator is running. You can preview a CSV now; before import, you will be asked to stop the live demo feed. Existing simulation history will be preserved.</p></div>}
             <div className="flex flex-col gap-3 rounded-lg border border-cyan-400/15 bg-cyan-400/[0.035] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-cyan-100">Need forecast-ready demo history?</p><p className="mt-1 text-xs leading-5 text-slate-400">Download 337 hourly points covering the latest 336 complete hours, then preview and import them below.</p></div><a className={buttonVariants({ size: 'sm', variant: 'outline' })} download href="/samples/forecast-ready"><Download className="h-4 w-4" />Download sample</a></div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center"><input accept=".csv,text/csv" className="block min-w-0 flex-1 text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-white" onChange={(event) => event.target.files?.[0] && previewCsv(event.target.files[0])} type="file" /><Button disabled={!csvFile || !preview?.valid_rows || importing} onClick={importCsv}>{importing ? 'Importing...' : 'Import validated rows'}</Button></div>
             {preview && <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-300"><p className="flex items-center gap-1.5 text-emerald-300"><FileCheck2 className="h-4 w-4" />{preview.valid_rows} valid, {preview.rejected_rows} rejected</p><p className="mt-2 text-slate-400">Mapped columns: {preview.mapped_columns.join(', ')}</p>{preview.errors.length > 0 && <div className="mt-3 max-h-28 overflow-y-auto text-amber-200">{preview.errors.map((item) => <p key={`${item.row}-${item.message}`}>Row {item.row}: {item.message}</p>)}</div>}</div>}

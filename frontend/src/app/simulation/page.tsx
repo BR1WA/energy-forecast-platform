@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Activity,
   Clock3,
@@ -12,6 +13,7 @@ import {
   ShieldCheck,
   Square,
   TestTube2,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -41,10 +43,11 @@ function compactDate(value: string | null | undefined) {
 }
 
 export default function SimulationPage() {
+  const router = useRouter();
   const [status, setStatus] = useState<SimulationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [changingState, setChangingState] = useState<'start' | 'stop' | 'reset' | null>(null);
+  const [changingState, setChangingState] = useState<'start' | 'stop' | 'reset' | 'real-data' | null>(null);
   const [summary, setSummary] = useState<ConsumptionPeriodSummary | null>(null);
   const [baseLoadKw, setBaseLoadKw] = useState(1.2);
   const [variationPercent, setVariationPercent] = useState(10);
@@ -119,6 +122,21 @@ export default function SimulationPage() {
     }
   };
 
+  const stopDemoAndUseRealData = async () => {
+    setChangingState('real-data');
+    try {
+      if (isRunning) {
+        const nextStatus = await simulationApi.stop();
+        setStatus(nextStatus);
+        toast.success('Demo simulator stopped. Historical simulation readings were preserved.');
+      }
+      router.push('/usage#csv-import');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to stop the demo simulator.');
+      setChangingState(null);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-6xl space-y-5">
@@ -159,9 +177,11 @@ export default function SimulationPage() {
                 <Button aria-label="Stop demo" disabled={loading || !isRunning || changingState !== null} onClick={() => changeState('stop')} title="Stop" variant="destructive"><Square />Stop</Button>
               </div>
               <Button className="w-full border-amber-300/20 text-amber-200 hover:bg-amber-400/10" disabled={loading || changingState !== null} onClick={() => changeState('reset')} variant="outline"><RotateCcw />{changingState === 'reset' ? 'Regenerating…' : 'Reset demo data'}</Button>
+              <Button className="w-full" disabled={loading || changingState !== null} onClick={stopDemoAndUseRealData} variant="secondary"><Upload />{changingState === 'real-data' ? 'Opening CSV import…' : 'Stop demo and use real data'}</Button>
               <div className="space-y-2 text-xs leading-5 text-slate-500">
                 <p>Starting makes the simulator the active writer. Push API writes are blocked until it stops.</p>
                 <p>Stopping is intentional: that time remains a visible gap when you start again.</p>
+                <p>Switching to real data stops only the live feed. Existing simulation history and source labels remain intact.</p>
               </div>
             </CardContent>
           </Card>
