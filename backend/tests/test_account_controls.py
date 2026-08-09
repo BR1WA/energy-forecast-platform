@@ -28,6 +28,7 @@ from app.models import (
     Forecast,
     OAuthChallenge,
     RefreshToken,
+    SimulationSession,
     SmartMeterReading,
     User,
 )
@@ -41,6 +42,7 @@ from app.services.avatar_storage import (
     schedule_avatar_cleanup,
 )
 from app.services.site_service import ensure_default_site, get_default_meter
+from app.services.simulation_service import simulation_service
 
 
 ORIGIN = "http://localhost:3000"
@@ -299,6 +301,15 @@ def test_local_account_deletion_requires_confirmation_and_removes_owned_data(acc
         ))
         db.commit()
 
+        started = simulation_service.start_simulation(db, user.id)
+        assert started["bootstrap_accepted_rows"] == 2881
+        reading_count = (
+            db.query(SmartMeterReading)
+            .filter_by(meter_id=get_default_meter(db, user.id).id)
+            .count()
+        )
+        assert reading_count >= 2881
+
         missing_confirmation = client.request(
             "DELETE", "/api/v1/account", headers=_headers(user), json={"current_password": "password123"},
         )
@@ -318,6 +329,7 @@ def test_local_account_deletion_requires_confirmation_and_removes_owned_data(acc
         db.expire_all()
         assert db.get(User, user_id) is None
         assert db.get(User, other_id) is not None
+        assert db.query(SimulationSession).filter_by(user_id=user_id).count() == 0
         assert db.query(EmailOutbox).filter_by(user_id=user_id).count() == 0
         assert not avatar_path.exists()
         retained = db.query(AuditEvent).filter_by(event_type="account.deleted").one()

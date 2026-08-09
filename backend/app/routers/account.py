@@ -6,17 +6,17 @@ from typing import Iterator
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import AuditEvent, AuthIdentity, EmailOutbox, OAuthChallenge, Site, User
+from app.models import AuthIdentity, User
 from app.routers import auth as auth_router
 from app.schemas import AccountDeletionCapabilities, AccountDeletionRequest, GoogleChallengeResponse
 from app.services.account_export_service import build_account_archive
+from app.services.account_deletion_service import delete_account_data
 from app.services.audit_service import record_audit_event
-from app.services.auth_service import get_current_user, revoke_user_sessions, verify_password
+from app.services.auth_service import get_current_user, verify_password
 from app.services.avatar_storage import (
     avatar_object_key,
     get_avatar_storage,
@@ -148,20 +148,11 @@ def delete_account(
             )
 
     user_id = current_user.id
-    site_ids = [row[0] for row in db.query(Site.id).filter(Site.user_id == user_id).all()]
     old_object_key = avatar_object_key(current_user.avatar_url)
     if old_object_key:
         schedule_avatar_cleanup(db, old_object_key, "account_deleted")
 
-    revoke_user_sessions(db, user_id)
-    db.query(EmailOutbox).filter(EmailOutbox.user_id == user_id).delete(synchronize_session=False)
-    db.query(OAuthChallenge).filter(OAuthChallenge.user_id == user_id).delete(synchronize_session=False)
-    audit_filter = or_(AuditEvent.actor_user_id == user_id, AuditEvent.target_user_id == user_id)
-    if site_ids:
-        audit_filter = or_(audit_filter, AuditEvent.site_id.in_(site_ids))
-    db.query(AuditEvent).filter(audit_filter).delete(synchronize_session=False)
-    db.delete(current_user)
-    db.flush()
+    delete_account_data(db, user_id)
     record_audit_event(
         db,
         "account.deleted",
