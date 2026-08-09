@@ -144,7 +144,6 @@ class Settings(BaseSettings):
             required = {
                 "PUBLIC_FRONTEND_URL": self.PUBLIC_FRONTEND_URL,
                 "GOOGLE_CLIENT_ID": self.GOOGLE_CLIENT_ID,
-                "GOOGLE_CLIENT_SECRET": self.GOOGLE_CLIENT_SECRET,
             }
             absent = [name for name, value in required.items() if not value.strip()]
             if absent:

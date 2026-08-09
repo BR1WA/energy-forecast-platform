@@ -79,11 +79,27 @@ def test_enabled_google_accepts_complete_configuration():
         GOOGLE_AUTH_ENABLED=True,
         PUBLIC_FRONTEND_URL="https://energy.example.com",
         GOOGLE_CLIENT_ID="public-client-id",
-        GOOGLE_CLIENT_SECRET="private-client-secret",
         **LEGAL_CONFIGURATION,
     )
 
     settings.validate_secrets()
+
+
+def test_enabled_google_requires_public_frontend_and_browser_client_id():
+    settings = Settings(
+        _env_file=None,
+        DEBUG=False,
+        JWT_SECRET_KEY="fP7m2zQ9vN4cR8xL6kT3wY1sH5jD0bG7eA2uC9iM",  # gitleaks:allow -- deterministic test-only value
+        ADMIN_PASSWORD="initial-admin-V8f2qW7p",
+        GOOGLE_AUTH_ENABLED=True,
+        **LEGAL_CONFIGURATION,
+    )
+
+    with pytest.raises(RuntimeError) as caught:
+        settings.validate_secrets()
+
+    assert "PUBLIC_FRONTEND_URL" in str(caught.value)
+    assert "GOOGLE_CLIENT_ID" in str(caught.value)
 
 
 def test_production_rejects_missing_legal_identity():

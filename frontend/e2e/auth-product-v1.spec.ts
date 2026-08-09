@@ -117,6 +117,35 @@ test('Google login is capability-gated and uses a controlled credential flow', a
   expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: [], session: [] });
 });
 
+test('Google signup remains available independently of verification email delivery', async ({ page }) => {
+  await page.addInitScript(() => {
+    let credentialCallback: ((value: { credential: string }) => void) | undefined;
+    window.google = {
+      accounts: {
+        id: {
+          initialize(options) { credentialCallback = options.callback; },
+          prompt() { credentialCallback?.({ credential: 'controlled-google-signup-credential' }); },
+        },
+      },
+    };
+  });
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ status: 401, json: {} });
+    if (pathname === '/api/v1/auth/capabilities') return route.fulfill({ json: { email_delivery_enabled: false, google_auth_enabled: true, google_client_id: 'browser-client.apps.example.test' } });
+    if (pathname === '/api/v1/auth/google/challenge') return route.fulfill({ json: { state: 'signup-state-value-123456789012345', nonce: 'signup-nonce-value-123456789012345', expires_in_seconds: 300 } });
+    if (pathname === '/api/v1/auth/google') return route.fulfill({ json: { access_token: 'memory-google-signup-token', token_type: 'bearer', user: { ...USER, is_setup_complete: false } } });
+    return route.fulfill({ status: 404, json: {} });
+  });
+
+  await page.goto('/register');
+  await expect(page.getByText('You can still continue securely with Google.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create account' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect(page).toHaveURL(/\/setup/);
+  expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: [], session: [] });
+});
+
 test('local login keeps the refresh credential out of JSON and browser storage', async ({ page }) => {
   let loginBody = '';
   await page.route(`${API}/**`, async (route) => {
