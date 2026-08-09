@@ -95,7 +95,6 @@ class Settings(BaseSettings):
     AVATAR_CLEANUP_RETRY_SECONDS: int = 60
     REFRESH_COOKIE_DOMAIN: str = ""
     GOOGLE_CLIENT_ID: str = ""
-    GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_CHALLENGE_EXPIRE_MINUTES: int = 10
 
     # Public policy identity. These may be empty only in local DEBUG mode;

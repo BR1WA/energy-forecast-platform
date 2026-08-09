@@ -162,8 +162,8 @@ repeatable database/avatar fixture verifier is
 - SMTP/provider credentials: stop the mail worker, update the secret manager or
   deployment environment, restart, verify readiness, send a controlled message,
   then retry eligible dead letters.
-- Google client credential: disable `GOOGLE_AUTH_ENABLED`, rotate the server/client
-  IDs together, deploy backend and frontend, run a controlled login/link/unlink
+- Google browser client: disable `GOOGLE_AUTH_ENABLED`, rotate the Google Identity
+  Services Web client, update both client-ID settings, run a controlled login/link/unlink
   journey, then re-enable. Local-password users remain able to sign in.
 - Feature disable: email, Google authentication, and the optional 168-hour model
   have independent configuration gates. Disable the affected capability and keep
