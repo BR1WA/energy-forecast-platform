@@ -3,19 +3,19 @@
 
 \section{Validation scope and evidence date}
 
-The software-validation evidence in this chapter is frozen to the full application audit performed on 31 July 2026 and the Product V1 commit identified in the appendices. Historical validation reports are used only for chronology because test counts, routes, and capabilities changed over time. That audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes. A distinct deployment-validation pass was completed on 7 August 2026 against the Azure-hosted release at commit \texttt{00a5592a4e84e0547ba56495ee00b551226f1db9}; it did not rerun or alter any scientific experiment.
+The software-validation evidence in this chapter begins with the full application audit performed on 31 July 2026 and ends with the jury-release gate on 9 August 2026. Historical reports are retained for chronology because test counts, routes, and capabilities changed over time. The audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes. The final Azure validation targeted commit \texttt{af467989694322ef76a5402a367893ea01f5e1dd}; it did not rerun or alter any scientific experiment.
 
 \section{Backend validation}
 
-The backend suite passed 96 tests with four expected PostgreSQL-only skips under SQLite. A uniquely named disposable PostgreSQL database was then created on the running server, migrated from an empty schema through all 17 Alembic revisions, tested, and removed in cleanup. The complete result was 100 passed and zero skipped in 42.78 seconds, with one warning.
+The final local backend suite passed 106 tests with four expected PostgreSQL-only skips under SQLite. In the earlier full audit, a uniquely named disposable PostgreSQL database was created on the running server, migrated from an empty schema through all 17 Alembic revisions, tested, and removed in cleanup. That production-equivalent result remains 100 passed and zero skipped in 42.78 seconds, with one warning. No schema migration changed between the validated baseline and the jury release.
 
 The PostgreSQL run is the stronger result because it exercises locking and database behavior that SQLite cannot reproduce. It also confirms that migrations can construct the schema from empty state. The audit did not mutate the live product database.
 
-No coverage percentage is claimed. The audit reports that \texttt{pytest-cov} was not installed in the active environment even though it was declared in the development requirements. Test count and coverage are different measures; 100 passing tests do not prove that every path is exercised.
+No coverage percentage is claimed. Test count and coverage are different measures; passing suites do not prove that every path is exercised.
 
 \section{Frontend and browser validation}
 
-ESLint passed, TypeScript type checking passed, and the production build completed with 25 routes. The Playwright matrix executed across desktop Chromium, Firefox, WebKit, and three responsive projects. It recorded 107 passing tests and one WebKit failure in a reload/session scenario. The same failing case passed in isolation, 1/1. The evidence therefore indicates a flaky browser gate rather than a reproduced application defect, but the release gate remains conditional because CI has zero retries.
+ESLint passed, TypeScript type checking passed, and the production build completed with 25 routes. The final Playwright matrix executed across desktop Chromium, Firefox, WebKit, and three responsive projects and passed 180 of 180 tests. It covers 360-pixel, 390-pixel iPhone, and 768-pixel responsive profiles in addition to desktop browsers. Populated 167-hour and 169-hour local-week tests also exercise daylight-saving boundaries rather than only empty-period behavior.
 
 \begin{table}[H]
 \centering
@@ -25,13 +25,13 @@ ESLint passed, TypeScript type checking passed, and the production build complet
 \toprule
 Area & Result & Interpretation \\
 \midrule
-Backend on SQLite & 96 passed, 4 skipped & Fast local suite; PostgreSQL-only behavior excluded \\
-Backend on isolated PostgreSQL & 100 passed, 0 skipped & Complete current backend evidence \\
+Backend on SQLite & 106 passed, 4 skipped & Final local suite; PostgreSQL-only behavior excluded \\
+Backend on isolated PostgreSQL & 100 passed, 0 skipped & Historical full-audit evidence; schema unchanged \\
 Frontend lint and type checking & Passed & Static quality gates are green \\
 Frontend production build & Passed, 25 routes & Current route tree compiles for production \\
-Playwright six-project matrix & 107 passed, 1 WebKit interruption & Isolated rerun passed; matrix still contains a flaky gate \\
+Playwright six-project matrix & 180 passed, 0 failed & Desktop and three responsive profiles green \\
 Docker Compose & Core health checks green, workers running & Local deployment validated; public status evaluated separately below \\
-Azure public deployment & HTTPS web/API, authenticated admin, managed PostgreSQL, both models warmed & Core cloud boundary verified; secondary workers and external providers remain disabled \\
+Azure public deployment & HTTPS web/API, email worker, managed PostgreSQL, both models warmed & Email and Google capability verified; alert/avatar workers remain absent \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -46,15 +46,13 @@ The manifests also preserve limitations. London-cohort metrics are not a guarant
 
 The audit reviewed password hashing, JWT and refresh-token behavior, account-action tokens, Google identity gating, role checks, ownership filters, upload bounds, request validation, SSRF controls, and secret configuration. CI includes a full-history gitleaks job. No P0 authentication bypass or data-loss defect was identified.
 
-Two current security-quality concerns remain. First, the frontend application does not define its own complete security-header policy such as CSP, frame policy, content-type options, or referrer policy. Azure supplies managed HTTPS ingress, but transport security does not by itself establish a complete application-header policy. Second, dependency policy is conditionally red: production npm dependencies report zero known vulnerabilities, while the full development graph reports nine high-severity advisories rooted in tooling. The development Python audit also identifies an advisory affecting pytest 8.4.2, with a fix in 9.0.3 while the project currently constrains pytest below 9.
-
-These findings do not imply that nine high-severity packages are shipped to the browser. They do mean the configured CI dependency gate cannot be described as fully green.
+One current security-quality concern remains: the frontend application does not define its own complete security-header policy such as CSP, frame policy, content-type options, or referrer policy. Azure supplies managed HTTPS ingress, but transport security does not by itself establish a complete application-header policy. After dependency overrides and lockfile normalization, the final npm audit and the production Python requirements audit reported zero known vulnerabilities. Google integration uses only the public client ID; no provider secret is required or stored by EnergyAI.
 
 \section{Docker and deployed service health}
 
 After Docker Desktop was started, the six-service Compose stack built and ran. PostgreSQL, backend, and frontend reported healthy; alert, email, and avatar-cleanup workers remained running. Health endpoints returned successful responses and both forecasting artifacts were available.
 
-The separate Azure smoke test confirmed public TLS, HTTP 200 for the frontend, API liveness and readiness, managed-database readiness, warmed 24-hour and 168-hour models, and authenticated administrator access. The Container Apps revisions are limited to one replica and scale to zero when idle. External SMTP/inbox delivery, Google OAuth, cloud background workers, durable avatars, centralized log retention, and backup restoration were not validated. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production-hardening remains conditional on dependency-gate resolution, browser-test stabilization, security headers, durable storage, monitoring, worker deployment, restore evidence, load testing, and disaster-recovery procedures.
+The final Azure smoke test confirmed public TLS and HTTP 200 for the principal public pages, API liveness and readiness, managed-database connectivity, warmed 24-hour and 168-hour models, ready SMTP capability, and a healthy one-replica email worker. Google identity is published for external users, and the live account chooser opened for the exact Azure origin without creating a test user. The web and API retain zero-to-one scaling; the email worker remains at one replica. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production hardening remains conditional on security headers, durable avatar storage, centralized monitoring, Azure alert/avatar workers, restore evidence, load testing, and disaster-recovery procedures.
 
 \section{Requirement-to-test traceability}
 
@@ -90,7 +88,7 @@ TimePro and TimeMixer++ were attempted but lack completed leaderboard evidence. 
 
 \section{Product limitations}
 
-The core release now has verified public web and API URLs, but that does not make every repository capability operational in the cloud. Public registration, email verification and password-reset delivery are disabled; Google authentication is disabled; background workers are absent; avatars are ephemeral; centralized log retention is not configured; and backup restoration has not been tested. The Azure-generated hostname is not a custom domain, the registry is not yet integrated through workload identity, and the budget is an alerting control rather than an automatic shutdown. Security headers, browser-matrix flakiness, and development dependency advisories still require attention. Formal accessibility, load, disaster-recovery, and multi-tenant penetration testing remain incomplete. The research tree also contains historical assets that should remain separated from the deployable product snapshot.
+The release has verified public web and API URLs, email registration and delivery capability, a healthy email worker, and a production Google identity origin, but that does not make every repository capability operational in the cloud. Alert and avatar-cleanup workers are absent; avatars are ephemeral; centralized log retention is not configured; and backup restoration has not been tested. The Azure-generated hostname is not a custom domain, the registry is not yet integrated through workload identity, and the budget is an alerting control rather than an automatic shutdown. Application security headers still require review. Formal accessibility, load, disaster-recovery, sustained provider, and multi-tenant penetration testing remain incomplete. The research tree also contains historical assets that should remain separated from the deployable product snapshot.
 
 \section{Threats to validity}
 
@@ -108,7 +106,7 @@ Construct & Accuracy/classification confused with forecasting value & Continuous
 External & London/IHEPC results transferred to Moroccan users & Cold-start household split; local-country evaluation still required \\
 Conclusion & Single seed, clock-influenced dynamic sampling, aggregation choice & Frozen seed and common protocol, macro/median/p90/win rate; bitwise retraining and multi-seed finalist study remain desirable \\
 Implementation & Third-party repository/version differences & Isolated workers and source notes; incomplete models excluded from rankings \\
-Operational & Public endpoint interpreted as complete production maturity & Exact Azure boundary recorded; disabled providers, workers, storage, monitoring, and recovery tests remain explicit \\
+Operational & Public endpoint interpreted as complete production maturity & Exact Azure boundary recorded; absent workers, ephemeral storage, monitoring, and recovery tests remain explicit \\
 \bottomrule
 \end{tabularx}
 \end{table}

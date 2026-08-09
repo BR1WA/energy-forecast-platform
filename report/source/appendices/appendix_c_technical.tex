@@ -50,12 +50,13 @@ Layer & Technique & Current evidence \\
 \endhead
 Schemas/services & Unit and focused integration tests & Validation, auth, settings, forecast, alert, report, and account behavior \\
 Database/API & Full pytest suite on PostgreSQL & 100 passed, 0 skipped \\
+Database/API & Final local pytest suite & 106 passed, 4 PostgreSQL-only skips \\
 Frontend static & ESLint and TypeScript & Both passed \\
 Frontend build & Next.js production compilation & Passed, 25 routes \\
-Browser E2E & Playwright six-project matrix & 107 passed; one WebKit interruption passed in isolation \\
+Browser E2E & Playwright six-project matrix & 180 passed, 0 failed \\
 Model artifacts & Hash, strict load, inference shape, finite values & Both 24 h and 168 h validated \\
-Dependency security & npm and pip audits & Production npm clean; development-tool findings remain \\
-Deployment & Docker health plus Azure HTTPS/browser smoke & Local Compose healthy; public web/API, managed database, both models, and administrator login verified \\
+Dependency security & npm and production pip audits & Zero known vulnerabilities \\
+Deployment & Docker health plus Azure HTTPS/browser smoke & Public web/API, email worker, managed database, both models, SMTP capability, and Google origin verified \\
 \bottomrule
 \end{longtable}
 
@@ -83,7 +84,7 @@ curl http://localhost:8000/api/v1/system/ready
 curl http://localhost:3000/
 \end{lstlisting}
 
-The verified Azure deployment supplies managed TLS, Azure hostnames, private images, and externalized secrets. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, cloud workers, update/rollback policy, and a tested backup-restore procedure.
+The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure. The retained \texttt{v1-8c519b6} revisions provide the immediate rollback target.
 
 \section{Report reproduction}
 

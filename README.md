@@ -13,10 +13,11 @@ forecasts—without hiding missing data, model fallbacks, or deployment limits.
 
 ![EnergyAI dashboard](report/assets/screenshots/dashboard.png)
 
-> **Release status:** Product V1 is ready for controlled academic demonstration
-> and supervisor/jury review. The application has been validated locally with
-> Docker Compose, PostgreSQL, both packaged forecasting artifacts, and automated
-> browser coverage. It is not presented as a publicly hosted production service.
+> **Release status:** Product V1 is publicly deployed on Microsoft Azure for
+> controlled academic demonstration and supervisor/jury review. The verified
+> release includes HTTPS web/API access, managed PostgreSQL, both packaged
+> forecasting artifacts, transactional email delivery, and Google signup. It is
+> not presented as a globally validated or fully hardened production service.
 
 ## Contents
 
@@ -105,7 +106,8 @@ can be advertised by the API.
 
 - Access-token plus rotating HttpOnly refresh-cookie sessions.
 - Email verification and password recovery when delivery is configured.
-- Server-verified Google identity/link/unlink flow behind an operator gate.
+- Server-verified Google identity/link/unlink flow; the public Azure release is
+  configured with a production Google Web OAuth client.
 - Profile images accept validated JPEG, PNG, WebP, HEIC, and HEIF input, then normalize it to sanitized WebP with bounded dimensions and durable cleanup jobs.
 - Administrative lifecycle reporting distinguishes pending verification, active, and disabled accounts without bypassing verification.
 - Owner archive/export and reauthenticated irreversible account deletion.
@@ -346,7 +348,7 @@ snapshot reported:
 
 | Gate | Result |
 |---|---|
-| Backend with SQLite | 96 passed; 4 explicit PostgreSQL-only skips |
+| Backend with SQLite | 106 passed; 4 explicit PostgreSQL-only skips |
 | Backend with isolated PostgreSQL | 100 passed; 0 skipped |
 | Frontend lint, type check, production build | Passed; 25 routes generated |
 | Playwright six-project matrix | 180/180 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
@@ -355,10 +357,10 @@ snapshot reported:
 | Compose runtime | Six services running; core health checks passed |
 | Forecast readiness | 24-hour and 168-hour artifacts warmed and ready |
 
-This is dated evidence, not a substitute for running the gates on the release
-commit. The audit also documented a full-development dependency gate and a
-non-reproduced WebKit reload interruption that should be cleared or formally
-handled before publishing an immutable public release.
+This combines the historical isolated-PostgreSQL evidence with the final local
+release gate executed on 9 August 2026. The latter also passed production npm and
+Python dependency audits with zero known vulnerabilities and completed the full
+180-test browser matrix without interruption.
 
 Read the [full application audit](docs/PFE_FULL_APP_AUDIT_2026-07-31.md) and
 [Product V1 validation evidence](docs/PRODUCT_V1_G7_VALIDATION_EVIDENCE.md) for
@@ -382,12 +384,15 @@ the exact environment, boundaries, and operator-owned checks.
 
 ## Known boundaries
 
-The following are outside the verified Product V1 public-deployment claim:
+The following remain outside the verified Product V1 public-deployment claim:
 
-- No public cloud URL, ingress, TLS termination, CDN, or production load test is
-  included in this repository.
-- SMTP inbox delivery and Google OAuth console/origin configuration require
-  operator-owned staging acceptance before their feature flags are enabled.
+- No custom domain, CDN, or production load test is included; the verified public
+  deployment uses Azure-managed HTTPS hostnames.
+- SMTP delivery, the cloud email worker, and Google OAuth origin configuration are
+  enabled and smoke-tested in Azure, but sustained provider delivery and recovery
+  behavior have not been load-tested.
+- Azure alert and avatar-cleanup workers are not deployed, and avatars are not yet
+  stored in durable object storage.
 - Monthly forecasting is not a production capability.
 - There are no utility pull connectors, subscriptions, billing, remote appliance
   control, battery dispatch, or automated demand response.

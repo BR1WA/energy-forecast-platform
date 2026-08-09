@@ -1,97 +1,88 @@
-# Final Report QA — Current-State Azure Update
+# Final Report QA — Jury Release Update
 
 ## Build identification
 
-- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v3.pdf`.
-- Previous supervisor-review and draft PDFs are retained and were not overwritten.
+- Planned output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v4.pdf`.
+- Previous supervisor-review and draft PDFs are retained and will not be overwritten.
 - Language: professional academic English, with the required French résumé.
-- Format: A4, 12 pt, one-sided PDF; 99 pages; 1,711,157 bytes.
-- SHA-256: `DB7DBB7BB9EA69FBE84E916533B99850F19C7B1DF27B6D05354CBDB6210DC37A`.
-- Build date: 7 August 2026.
-- Build method: clean manual MiKTeX sequence in a fresh output directory using pdfLaTeX, Biber, and stabilizing pdfLaTeX passes. The final URL-layout correction was followed by two successful pdfLaTeX passes.
+- Build date: 9 August 2026.
 
 ## Scientific-evidence boundary
 
-No model was trained, fine-tuned, replaced, or downloaded during this update. No frozen research metric, serving-normalization result, checkpoint, prepared artifact, or production model artifact was changed. The report continues to separate the frozen research-normalization results from the inference-only production-normalization re-evaluation.
+No model was trained, fine-tuned, replaced, or downloaded during this update. No
+frozen research metric, serving-normalization result, checkpoint, prepared
+artifact, or production model artifact changed. The report continues to separate
+the frozen research-normalization results from the inference-only production-
+normalization re-evaluation.
 
-The exact serving-normalization evaluation remains supported by preserved local evidence under `models/lcl_global_forecasting/full_selected_v1/`; the original Low Carbon London CSV files were neither required nor downloaded. The detailed hashes, origins, environment, parity checks, and result files remain recorded in `report/evidence/lcl_tft_serving_normalization_manifest.json` and the associated CSV evidence files.
+The exact serving-normalization evaluation remains supported by preserved local
+evidence under `models/lcl_global_forecasting/full_selected_v1/`; the original Low
+Carbon London CSV files were neither required nor downloaded. Hashes, origins,
+environment, parity checks, and result files remain recorded in
+`report/evidence/lcl_tft_serving_normalization_manifest.json`.
 
 ## Current Azure deployment evidence
 
-The report now records the controlled public PFE deployment verified on 7 August 2026:
+The report records the jury release verified on 9 August 2026:
 
-- deployed source: exact `origin/main` commit `00a5592a4e84e0547ba56495ee00b551226f1db9`;
-- region and resource group: Italy North, `rg-energyai-pfe`;
-- frontend: Azure Container App `ca-energyai-web`, external HTTPS, HTTP 200;
-- API: Azure Container App `ca-energyai-api`, external HTTPS, liveness and readiness green;
-- models: both frozen 24-hour and 168-hour TFT artifacts reported available, enabled, and warmed;
-- persistence: PostgreSQL 16 server ready, 32 GiB storage, seven-day backup retention;
-- supporting services: private Azure Container Registry and Azure Key Vault;
-- end-to-end smoke test: real administrator authentication succeeded and the role-gated admin page reported database healthy, forecast ready, and process operational with no browser-console warning;
-- observed first API cold start: approximately 22 seconds, consistent with the configured zero-to-one replica range.
+- deployed source: exact `origin/main` commit
+  `af467989694322ef76a5402a367893ea01f5e1dd`;
+- frontend revision: `ca-energyai-web--v1-af46798`, healthy;
+- API revision: `ca-energyai-api--v1-af46798`, healthy;
+- email-worker revision: `ca-energyai-email-worker--v1-af46798`, one healthy replica;
+- frontend digest: `sha256:085ca6ef85c7170da811c385d3a9647f3561a875724ebb96f8c5cb9d5612ce68`;
+- backend digest: `sha256:b90e1d9a1939546a85318f959d52d4188adfeafb303b3e2a373c2e9009ac871b`;
+- public pages: web, Login, Register, Privacy, and Terms returned HTTP 200;
+- database: managed PostgreSQL 16 ready;
+- models: both frozen 24-hour and 168-hour TFT artifacts available, enabled, and warmed;
+- email: SMTP capability ready and the email worker healthy;
+- Google: external application in production; live account chooser opened for the
+  exact Azure origin without creating a user;
+- responsive smoke: desktop and 390 x 844 registration views had no horizontal overflow;
+- rollback: the coordinated `v1-8c519b6` web/API/email-worker revisions remain inactive,
+  healthy, and available.
 
-The evidence registry is `report/evidence/azure_deployment_evidence_2026-08-07.md`. It records public endpoints, container-image digests, resource configuration, smoke-test observations, cost controls, firewall cleanup, and the exact evidence boundary without storing secrets.
+The evidence registry is
+`report/evidence/azure_deployment_evidence_2026-08-09.md`. It records the resource
+boundary, immutable image digests, Google project/client boundary, health evidence,
+rollback target, and remaining limitations without storing secrets.
+
+## Current quality gates
+
+- Backend local suite: 106 passed, 4 explicit PostgreSQL-only skips.
+- Historical isolated-PostgreSQL suite: 100 passed, 0 skipped; schema unchanged.
+- Frontend ESLint and TypeScript: passed.
+- Next.js production build: passed; 25 routes.
+- Playwright six-project matrix: 180 passed, 0 failed.
+- Populated DST-week tests: 167-hour and 169-hour cases passed.
+- npm audit: zero known vulnerabilities.
+- production Python requirements audit: zero known vulnerabilities.
+- Docker-specific `npm ci`: passed after lockfile normalization.
 
 ## Explicit cloud limitations retained
 
-The report does not claim full production maturity. It states that public registration, verification email, password-reset delivery, Google authentication, cloud background workers, durable avatar storage, centralized Log Analytics retention, custom-domain configuration, and workload-identity registry access are not configured. Backup restoration, load, disaster-recovery, formal accessibility, and penetration tests remain incomplete. The monthly budget is an alerting control, not an automatic shutdown policy.
+The report does not claim full production maturity. Azure alert and avatar-cleanup
+workers, durable avatar storage, centralized Log Analytics retention, a custom
+domain, and workload-identity registry access remain absent. Backup restoration,
+load, disaster-recovery, sustained provider, formal accessibility, and penetration
+tests remain incomplete. The monthly budget is an alerting control, not an automatic
+shutdown policy. Model evidence remains London-cohort evidence rather than a
+Moroccan-site performance guarantee.
 
-## Current-state report corrections
-
-- English and French abstracts now distinguish the verified Azure core from incomplete cloud features.
-- Chapters 1, 6, and 7 now describe the local Compose profile and the public Azure topology separately.
-- Chapter 6 includes the verified Azure resource boundary, public endpoints, health evidence, administrator smoke test, cold-start observation, and deployment limitations.
-- Chapter 7 separates the 7 August deployment validation from the frozen scientific evaluation and updates product limitations and operational threats.
-- The general conclusion and Appendices A and C now reflect the actual deployed state and remaining hardening work.
-- The local Docker wording was clarified so it cannot be read as contradicting the public Azure deployment.
-- The two public Azure endpoints are now printed in full as well as embedded as clickable links.
-- A deployment-topology figure now separates the public browser path, Container Apps environment, API/database traffic, registry image supply, Key Vault secret supply, and subscription-level budget alerts.
-- The budget row now states that 25 is in the subscription billing currency rather than implying an unsupported currency.
-- The Docker test row now explicitly directs readers to the separate public-Azure validation result.
-- The French abstract now uses formal Azure scale-to-zero terminology instead of the ambiguous phrase “passer à zéro instance.”
-- The unsupported 9 September 2026 date remains removed. Defense date, jury information, and the institution-approved AI-tool declaration remain unresolved rather than invented.
-- The dedication remains excluded because no dedication text has been supplied.
-
-## Compilation and textual QA
-
-- Fatal LaTeX errors: 0.
-- Undefined references: 0.
-- Undefined citations: 0.
-- Bibliography-rerun warnings: 0.
-- Overfull horizontal or vertical boxes: 0.
-- Duplicate PDF destinations: 0.
-- Informational underfull horizontal boxes: 100; visual inspection found no objectionable spacing or clipping.
-- Dense-table glue-shrink diagnostics: 3; all affected tables remain bounded and readable.
-- Search results: `TODO` 0; `TBD` 0; malformed `??` references 0; duplicated “Contents Contents” 0; duplicated “References References” 0; “An Recurrent” 0; local Windows/Unix absolute paths 0; stale no-public-deployment claims 0; `9 September 2026` 0.
-- `TO BE CONFIRMED`: exactly 3 intentional administrative markers.
-
-## Visual QA
-
-All 99 pages were rendered at 110 dpi and inspected in nine numbered contact sheets. Full-resolution checks covered the printed deployment endpoints, new Azure topology, revised deployment table, deployment-limitations continuation, product-limitations page, and rotated full-hash evidence table.
-
-Verified conditions:
-
-- no accidental blank pages;
-- no overlapping or duplicated running headers;
-- no cropped or clipped text, figures, tables, captions, or screenshots;
-- no class-diagram relationship labels or multiplicities overlapping boxes;
-- no content outside page margins;
-- no broken references or citations;
-- no inconsistent defense-date claim;
-- long technical identifiers break only at meaningful separators;
-- the landscape evidence table is correctly rotated, bounded, and readable;
-- administrative placeholders are visible and limited to their intended fields.
-
-## Remaining administrative placeholders
+## Administrative placeholders
 
 1. Official defense date.
 2. Jury names, grades, institutions, and roles.
 3. Exact Faculty/Master-approved AI-tool declaration.
 
-The report is ready for supervisor review as a technically finalized current-state draft. It is not an institutionally final submission until the three administrative items above are confirmed.
+The unsupported tentative 9 September 2026 date remains removed. The dedication
+remains excluded because no dedication text was supplied.
 
-## Exact files modified or generated in this update
+## Exact files in this update
 
+- `README.md`
+- `docs/PRODUCT_V1_RELEASE_NOTES.md`
+- `frontend/package-lock.json`
 - `report/source/frontmatter/abstracts.tex`
 - `report/source/generate_figures.py`
 - `report/assets/diagrams/azure_deployment_topology.pdf`
@@ -104,7 +95,50 @@ The report is ready for supervisor review as a technically finalized current-sta
 - `report/qa/missing_information.md`
 - `report/qa/current_report_text.txt`
 - `report/qa/final_report_qa.md`
-- `report/evidence/azure_deployment_evidence_2026-08-07.md`
-- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v3.pdf`
+- `report/evidence/azure_deployment_evidence_2026-08-09.md`
+- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v4.pdf`
 
-No push, checkpoint replacement, model training, or external-dataset download was performed.
+## Compilation and textual QA
+
+- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v4.pdf`.
+- Format: A4, 12 pt, one-sided PDF; 97 pages; 1,711,087 bytes.
+- SHA-256: `2690A92C2200C3ED71A29F4873DBD5E9DEDB36FBBB600D14CEE5669BB84558AC`.
+- Build method: clean manual MiKTeX sequence in a fresh output directory using
+  pdfLaTeX, Biber, and stabilizing pdfLaTeX passes. `latexmk` was unavailable
+  because the installed MiKTeX has no Perl script engine.
+- Fatal LaTeX errors: 0.
+- Undefined references: 0.
+- Undefined citations: 0.
+- Overfull horizontal or vertical boxes: 0.
+- Duplicate PDF destinations: 0.
+- `TODO`: 0; `TBD`: 0; malformed `??` references: 0.
+- Duplicated “Contents Contents” and “References References”: 0.
+- “An Recurrent”: 0.
+- Local Windows/Unix absolute paths: 0.
+- Stale disabled-registration/Google/deployment claims: 0.
+- `9 September 2026`: 0.
+- `TO BE CONFIRMED`: exactly 3 intentional administrative markers.
+
+## Visual QA
+
+All 97 pages were rendered at 110 dpi and inspected in nine numbered contact
+sheets. Full-resolution checks covered the revised Azure topology, Azure resource
+table, validation summary, evidence registries, requirement matrix, rotated hash
+table, cover, and AI-tool declaration. The evidence wording was shortened after
+the first inspection to eliminate a nearly empty appendix continuation page.
+
+Verified conditions:
+
+- no accidental blank pages;
+- no overlapping or duplicated running headers;
+- no cropped or clipped text, figures, tables, captions, or screenshots;
+- no class-diagram relationship labels or multiplicities overlapping boxes;
+- no content outside page margins;
+- no broken references or citations;
+- long technical identifiers break only at meaningful separators;
+- the landscape evidence table is rotated, bounded, and readable;
+- administrative placeholders are visible and limited to their intended fields.
+
+The report is ready for supervisor review as a technically finalized current-state
+draft. It is not institutionally final until the three administrative items above
+are confirmed.

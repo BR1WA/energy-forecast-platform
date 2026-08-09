@@ -24,6 +24,7 @@ Registry & Content \\
 \breakcode{lcl_tft_serving_normalization_comparison.csv} & Research-versus-serving metrics for the frozen 24-hour and 168-hour cold-start cohorts \\
 \breakcode{openapi_inventory_summary.json} & Exact current OpenAPI path and operation counts \\
 \breakcode{azure_deployment_evidence_2026-08-07.md} & Release commit, Azure resource boundary, HTTPS endpoints, readiness checks, scale settings, cost controls, and remaining cloud limitations \\
+\breakcode{azure_deployment_evidence_2026-08-09.md} & Jury release commit, immutable image digests, email and Google capability, responsive smoke tests, retained rollback revisions, and remaining limitations \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -50,10 +51,10 @@ Forecast provenance & Persisted Forecast entity and history endpoint & Forecast 
 Alerts and actions & AlertConfig, Alert, Recommendation, workers & Alert state tests and worker health \\
 Analytics PDF export & Forecast UI and analytics PDF endpoint; legacy reports route redirects to Usage & Horizon-specific PDF tests \\
 Health/readiness & System live, ready, health, version endpoints & Docker health checks \\
-Public deployment & Azure Container Apps, managed PostgreSQL, ACR, Key Vault, and budget & HTTPS, readiness, model warm-up, and authenticated administrator browser smoke test \\
+Public deployment & Azure Container Apps, managed PostgreSQL, ACR, Key Vault, Google identity, and budget & HTTPS, readiness, model warm-up, email-worker health, OAuth origin handshake, and responsive browser smoke tests \\
 \bottomrule
 \end{longtable}
 
 \section{Administrative information still required}
 
-The official combined UMI/FSM logo, Faculty of Sciences identity, Department of Computer Science, Master SDIA wording, and supervisor title have been incorporated. Before final submission, the following still require confirmation: an official Master PFE cover template, because the public faculty model is specific to doctoral theses; the jury names, grades, institutions, and roles; any required supervisor-laboratory or host-organization line; the official defense date; the current formatting and citation rules; and the required AI-tool disclosure wording.
+Verified UMI/FSM identity, department, programme, and supervisor information have been incorporated. Still pending are the official Master PFE cover and formatting rules (the public faculty model is doctoral), jury composition, any required laboratory or host line, the defense date, and the approved AI-tool disclosure.
