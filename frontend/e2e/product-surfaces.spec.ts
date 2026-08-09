@@ -203,6 +203,62 @@ test('persistent simulator explains history and confirms simulator-only reset', 
   await expect.poll(() => resetCalled).toBe(true);
   await expect(page.getByText('720 hours')).toBeVisible();
   await expect(page.getByText('History available')).toBeVisible();
+  await page.getByRole('button', { name: 'Stop demo and use real data' }).click();
+  await expect(page).toHaveURL(/\/usage#csv-import$/);
+});
+
+
+test('CSV import stops a running simulator after confirmation and preserves the preview flow', async ({ page }) => {
+  let simulatorRunning = true;
+  const writeOrder: string[] = [];
+  await page.route(`${API}/**`, async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'csv-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [{ id: 1, name: 'Primary meter', source_type: 'simulation', is_primary: true, expected_interval_seconds: 900, last_seen_at: '2026-08-09T12:00:00Z', push_key_configured: false }] });
+    if (pathname === '/api/v1/simulation/status') return route.fulfill({ json: { is_running: simulatorRunning } });
+    if (pathname === '/api/v1/simulation/stop') {
+      writeOrder.push('stop');
+      simulatorRunning = false;
+      return route.fulfill({ json: { is_running: false } });
+    }
+    if (pathname === '/api/v1/ingestion/meters/1/csv/preview') {
+      return route.fulfill({ json: { mapped_columns: ['timestamp', 'active_power_kw'], valid_rows: 1, rejected_rows: 0, errors: [] } });
+    }
+    if (pathname === '/api/v1/ingestion/meters/1/csv/import') {
+      writeOrder.push('import');
+      return route.fulfill({ json: { accepted_rows: 1, duplicate_rows: 0, rejected_rows: 0 } });
+    }
+    if (pathname === '/api/v1/consumption/readings') return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (pathname === '/api/v1/consumption/period') return route.fulfill({ json: {
+      timeframe: 'month', site_name: 'CSV handoff site', timezone: 'UTC',
+      period_start: '2026-08-01T00:00:00Z', period_end: '2026-08-09T12:00:00Z', granularity: 'day',
+      sample_count: 0, total_kwh: 0, estimated_cost: 0, currency: 'MAD', average_kw: 0,
+      peak_kw: 0, peak_at: null, coverage_pct: 0, expected_samples: 0, sources: [],
+      freshness: { status: 'empty', age_seconds: null, expected_interval_seconds: 900, last_seen_at: null, source: null, quality: null },
+      points: [],
+    } });
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  await page.goto('/usage#csv-import');
+  await expect(page.getByText('The demo simulator is running. You can preview a CSV now')).toBeVisible();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'measured-readings.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('timestamp,active_power_kw\n2026-08-09T12:00:00Z,1.2\n'),
+  });
+  await expect(page.getByText('1 valid, 0 rejected')).toBeVisible();
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toBe('The demo simulator is currently running. Importing measured data while simulation continues may mix synthetic and imported readings. Stop the simulator and continue?');
+    await dialog.accept();
+  });
+  await page.getByRole('button', { name: 'Import validated rows' }).click();
+  await expect.poll(() => writeOrder).toEqual(['stop', 'import']);
+  await expect(page.getByText('Imported 1 reading(s); 0 duplicate(s) skipped.')).toBeVisible();
 });
 
 
