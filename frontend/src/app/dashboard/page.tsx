@@ -13,12 +13,16 @@ import {
   PlugZap,
   RefreshCw,
   ListChecks,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
   Zap,
 } from 'lucide-react';
 
 import AppLayout from '@/components/layout/app-layout';
 import { ConsumptionChart } from '@/components/consumption/consumption-chart';
 import { PeriodSelector } from '@/components/consumption/period-selector';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { API_BASE_URL, alertsApi, consumptionApi, forecastApi, getAccessToken, recommendationsApi } from '@/lib/api';
@@ -65,6 +69,26 @@ function monthLabel(value: string | undefined) {
   const [year, month] = value.split('-').map(Number);
   return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })
     .format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+function friendlySource(source: string) {
+  return {
+    simulation: 'Synthetic demo',
+    forecast_demo: 'Synthetic forecast demo',
+    push: 'Meter push API',
+    csv: 'Imported CSV',
+    legacy: 'Legacy history',
+  }[source] || source;
+}
+
+function peakTimeLabel(value: string | null | undefined) {
+  if (!value) return 'an unknown time';
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(value));
 }
 
 export default function DashboardPage() {
@@ -198,7 +222,7 @@ export default function DashboardPage() {
   const latestPower = timeframe === 'live' && liveReading
     ? liveReading.active_power_kw
     : summary?.points.at(-1)?.average_kw ?? 0;
-  const sourceLabel = summary?.sources.map((source) => source.source).join(', ') || 'No source';
+  const sourceLabel = summary?.sources.map((source) => friendlySource(source.source)).join(', ') || 'No source';
   const freshness = summary?.freshness;
   const isEmpty = !loading && summary?.sample_count === 0 && summary.total_kwh === 0;
   const unlinkedOpenRecommendations = recommendations.filter((item) => item.alert_id == null);
@@ -215,6 +239,30 @@ export default function DashboardPage() {
   const budgetVariance = monthly?.budget.projected_mad != null && monthly.budget.target_mad != null
     ? monthly.budget.projected_mad - monthly.budget.target_mad
     : null;
+  const containsSimulation = summary?.sources.some((item) => item.source === 'simulation' || item.source === 'forecast_demo') ?? false;
+  const overviewSentence = !summary || loading
+    ? 'Building a plain-language picture of your electricity use…'
+    : isEmpty
+      ? `There are no electricity readings for ${periodLabel(timeframe)} yet.`
+      : timeframe === 'live'
+        ? `Your site is drawing ${latestPower.toFixed(2)} kW right now.`
+        : `For ${periodLabel(timeframe)}, your site used ${summary.total_kwh.toFixed(2)} kWh, costing about ${summary.currency} ${summary.estimated_cost.toFixed(2)}.`;
+  const peakSentence = summary && summary.sample_count > 0
+    ? `Demand was highest at ${summary.peak_kw.toFixed(2)} kW around ${peakTimeLabel(summary.peak_at)}.`
+    : 'A peak explanation will appear when readings are available.';
+  const comparisonSentence = dailyComparisonPct != null
+    ? `Your daily pace this month is ${Math.abs(dailyComparisonPct).toFixed(1)}% ${dailyComparisonPct > 0 ? 'higher' : 'lower'} than last month.`
+    : 'A month-to-month pace comparison appears after two days with at least 50% coverage.';
+  const chartInsight = summary && summary.average_kw > 0
+    ? summary.peak_kw / summary.average_kw >= 1.8
+      ? `Your peak was ${(summary.peak_kw / summary.average_kw).toFixed(1)}× the period average. The chart can help you spot which routine created that short burst.`
+      : `Demand stayed fairly close to the ${summary.average_kw.toFixed(2)} kW period average, without a sharply isolated peak.`
+    : 'Once readings arrive, this space will explain the shape of the curve—not only display it.';
+  const trustSentence = summary && summary.sample_count > 0
+    ? summary.coverage_pct >= 95
+      ? `Coverage is ${summary.coverage_pct.toFixed(1)}%, so this period has strong continuity.`
+      : `Coverage is ${summary.coverage_pct.toFixed(1)}%. Missing intervals remain visible and are excluded from unsupported energy totals.`
+    : 'No coverage assessment is available yet.';
 
   return (
     <AppLayout>
@@ -257,17 +305,41 @@ export default function DashboardPage() {
           </div>
         )}
 
+        <section className="grid gap-3 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.8fr)]" aria-label="Plain-language energy summary">
+          <div className="relative overflow-hidden rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-400/12 via-[#111827] to-violet-400/10 p-5 sm:p-6">
+            <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-cyan-400/10 blur-3xl" />
+            <div className="relative">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-cyan-200"><Sparkles className="h-4 w-4" />At a glance</p>
+                {containsSimulation && <Badge className="border-amber-300/20 bg-amber-400/10 text-amber-200" variant="outline">Synthetic demo data</Badge>}
+              </div>
+              <h2 className="mt-4 max-w-3xl text-xl font-semibold leading-8 text-white sm:text-2xl">{overviewSentence}</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{peakSentence}</p>
+              {containsSimulation && <p className="mt-4 flex max-w-3xl items-start gap-2 rounded-lg border border-amber-300/15 bg-amber-400/5 px-3 py-2 text-xs leading-5 text-amber-100/80"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />This view includes a seeded household simulation. It is useful for exploring the product, but it is not electricity measured at your home.</p>}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-[#111827] p-5">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-violet-200"><TrendingUp className="h-4 w-4" />What to know</p>
+            <p className="mt-4 text-sm font-medium leading-6 text-white">{comparisonSentence}</p>
+            <div className="my-4 h-px bg-white/10" />
+            <p className="text-xs font-medium text-slate-300">Next best action</p>
+            <p className="mt-1 text-sm leading-6 text-slate-400">{attentionCount ? `You have ${attentionCount} open item${attentionCount === 1 ? '' : 's'}. The highest-priority follow-up is ready in Actions.` : 'Nothing needs your attention right now. No measured incident or evidence-backed follow-up is open.'}</p>
+            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/actions">{attentionCount ? `Review ${attentionCount} open item${attentionCount === 1 ? '' : 's'}` : 'See your action history'}</Link>
+          </div>
+        </section>
+
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Period summary">
           {[
-            { label: timeframe === 'live' ? 'Current load' : 'Latest load', value: `${latestPower.toFixed(3)} kW`, icon: Zap },
-            { label: 'Energy', value: `${(summary?.total_kwh ?? 0).toFixed(2)} kWh`, icon: Gauge },
-            { label: 'Estimated cost', value: `${summary?.currency ?? 'MAD'} ${(summary?.estimated_cost ?? 0).toFixed(2)}`, icon: CircleDollarSign },
-            { label: 'Peak load', value: `${(summary?.peak_kw ?? 0).toFixed(3)} kW`, detail: summary?.peak_at ? new Date(summary.peak_at).toLocaleString() : 'No peak timestamp', icon: Activity },
+            { label: timeframe === 'live' ? 'Current load' : 'Latest load', value: `${latestPower.toFixed(3)} kW`, detail: 'The most recent demand reading.', icon: Zap },
+            { label: 'Energy', value: `${(summary?.total_kwh ?? 0).toFixed(2)} kWh`, detail: `Integrated across ${periodLabel(timeframe)}.`, icon: Gauge },
+            { label: 'Estimated cost', value: `${summary?.currency ?? 'MAD'} ${(summary?.estimated_cost ?? 0).toFixed(2)}`, detail: 'Estimated from your configured tariff.', icon: CircleDollarSign },
+            { label: 'Peak load', value: `${(summary?.peak_kw ?? 0).toFixed(3)} kW`, detail: summary?.peak_at ? `Reached ${peakTimeLabel(summary.peak_at)}.` : 'No peak timestamp yet.', icon: Activity },
           ].map((metric) => (
             <Card className="min-h-28 rounded-lg border-white/10 bg-[#111827]" key={metric.label}>
               <CardContent className="flex h-full flex-col justify-between pt-1">
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-400"><span>{metric.label}</span><metric.icon className="h-4 w-4 text-cyan-400" /></div>
-                <div><p className="mt-4 text-xl font-semibold text-white sm:text-2xl">{loading ? '...' : metric.value}</p>{'detail' in metric && metric.detail ? <p className="mt-1 truncate text-xs text-slate-500" title={metric.detail}>{metric.detail}</p> : null}</div>
+                <div><p className="mt-4 text-xl font-semibold text-white sm:text-2xl">{loading ? '...' : metric.value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{metric.detail}</p></div>
               </CardContent>
             </Card>
           ))}
@@ -276,8 +348,8 @@ export default function DashboardPage() {
         <Card className="rounded-lg border-white/10 bg-[#111827]">
           <CardHeader>
             <div>
-              <CardTitle className="text-sm text-white">Measured power</CardTitle>
-              <p className="mt-1 text-xs text-slate-400">Average load grouped by {summary?.granularity?.replace('_', ' ') || 'period'} for {periodLabel(timeframe)}.</p>
+              <CardTitle className="text-sm text-white">Your power pattern</CardTitle>
+              <p className="mt-1 text-xs text-slate-400">Average load grouped by {summary?.granularity?.replace('_', ' ') || 'period'} for {periodLabel(timeframe)}. Gaps remain visible instead of being silently smoothed.</p>
             </div>
             <CardAction><Button aria-label="Refresh consumption" disabled={refreshing || loading} onClick={() => timeframe === 'custom' ? applyCustomRange() : void loadSummary(timeframe, true)} size="icon" title="Refresh" variant="ghost">
               <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
@@ -292,7 +364,15 @@ export default function DashboardPage() {
                 <div><p className="font-medium text-white">No readings in this period</p><p className="mt-1 text-sm text-slate-400">Connect a meter, import a CSV, or explicitly start the demo simulator.</p></div>
                 <div className="flex gap-2"><Link className={buttonVariants({ size: 'sm' })} href="/usage">Import history</Link><Link className={buttonVariants({ size: 'sm', variant: 'outline' })} href="/settings?tab=data">Connect a meter</Link></div>
               </div>
-            ) : summary ? <ConsumptionChart summary={summary} variant="compact" /> : null}
+            ) : summary ? (
+              <>
+                <ConsumptionChart summary={summary} variant="compact" />
+                <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 md:grid-cols-2">
+                  <div className="rounded-lg bg-slate-950/35 p-3"><p className="text-xs font-medium text-cyan-200">What the shape suggests</p><p className="mt-1 text-xs leading-5 text-slate-400">{chartInsight}</p></div>
+                  <div className="rounded-lg bg-slate-950/35 p-3"><p className="text-xs font-medium text-emerald-200">How much to trust this period</p><p className="mt-1 text-xs leading-5 text-slate-400">{trustSentence}</p></div>
+                </div>
+              </>
+            ) : null}
           </CardContent>
         </Card>
 

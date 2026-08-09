@@ -28,6 +28,7 @@ import type {
   ConsumptionReadingPage,
   ConsumptionTimeframe,
   PrimaryMeter,
+  SimulationStatus,
   LegalConfiguration,
   AccountDeletionCapabilities,
 } from '@/types';
@@ -576,28 +577,22 @@ export const ingestionApi = {
 // Simulation API
 // ============================================================
 export const simulationApi = {
-  start: (): Promise<{ status: string }> =>
+  start: (): Promise<SimulationStatus> =>
     apiFetch('/api/v1/simulation/start', { method: 'POST' }),
 
-  stop: (): Promise<{ status: string }> =>
+  stop: (): Promise<SimulationStatus> =>
     apiFetch('/api/v1/simulation/stop', { method: 'POST' }),
 
-  getStatus: (): Promise<{ 
-    status: string; 
-    is_running: boolean; 
-    uptime: number;
-    base_load_kw?: number;
-    variation_percent?: number;
-  }> =>
+  getStatus: (): Promise<SimulationStatus> =>
     apiFetch('/api/v1/simulation/status'),
 
-  reset: (): Promise<{ status: string }> =>
+  reset: (): Promise<SimulationStatus> =>
     apiFetch('/api/v1/simulation/reset', { method: 'POST' }),
 
   configure: (config: {
     base_load_kw: number;
     variation_percent: number;
-  }): Promise<{ status: string }> =>
+  }): Promise<SimulationStatus> =>
     apiFetch('/api/v1/simulation/configure', { 
       method: 'POST',
       body: JSON.stringify(config)

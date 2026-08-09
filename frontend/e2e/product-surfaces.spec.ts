@@ -155,10 +155,54 @@ test('dashboard monitoring exposes a controlled live reading without browser tok
 
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Energy overview' })).toBeVisible();
+  await expect(page.getByText('For today, your site used 1.00 kWh, costing about MAD 1.10.')).toBeVisible();
+  await expect(page.getByText('Demand was highest at 2.75 kW around')).toBeVisible();
+  await expect(page.getByText('Your power pattern')).toBeVisible();
   await page.getByRole('tab', { name: 'Live' }).click();
   await expect(page.getByText('Stream: connected')).toBeVisible();
   await expect(page.getByText('2.750 kW').first()).toBeVisible();
   expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: [], session: [] });
+});
+
+
+test('persistent simulator explains history and confirms simulator-only reset', async ({ page }) => {
+  let resetCalled = false;
+  const simulatorStatus = () => ({
+    status: resetCalled ? 'reset' : 'stopped', is_running: false, uptime: 0, site_id: 1,
+    base_load_kw: 1.2, variation_percent: 10, profile: 'household_v1', is_reproducible: true,
+    bootstrap_days: 30, bootstrap_interval_minutes: 15, minimum_forecast_history_hours: 336,
+    history_points: resetCalled ? 2881 : 120, history_start_at: '2026-07-10T12:00:00Z',
+    history_end_at: '2026-08-09T12:00:00Z', history_span_hours: resetCalled ? 720 : 30,
+    history_ready_for_forecast: resetCalled, continuity_enabled_at: null, last_catch_up_at: null,
+    last_catch_up_points: 0, last_catch_up_interval_minutes: null, last_catch_up_was_limited: false,
+    deleted_simulation_readings: resetCalled ? 120 : undefined, preserved_non_simulation_data: resetCalled,
+  });
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'simulation-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/simulation/status') return route.fulfill({ json: simulatorStatus() });
+    if (pathname === '/api/v1/simulation/reset') { resetCalled = true; return route.fulfill({ json: simulatorStatus() }); }
+    if (pathname === '/api/v1/consumption/period') return route.fulfill({ json: {
+      timeframe: 'live', site_name: 'Demo home', timezone: 'UTC', period_start: '2026-08-09T11:45:00Z',
+      period_end: '2026-08-09T12:00:00Z', granularity: 'minute', total_kwh: 0, estimated_cost: 0,
+      currency: 'MAD', average_kw: 0, peak_kw: 0, peak_at: null, coverage_pct: 0, sample_count: 0,
+      sources: [], freshness: { status: 'empty', age_seconds: null, expected_interval_seconds: 5, last_seen_at: null, source: null, quality: null }, points: [],
+    } });
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  await page.goto('/simulation');
+  await expect(page.getByRole('heading', { name: 'Demo simulator' })).toBeVisible();
+  await expect(page.getByText('30 hours')).toBeVisible();
+  await expect(page.getByText('Synthetic, never measured')).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Reset demo data' }).click();
+  await expect.poll(() => resetCalled).toBe(true);
+  await expect(page.getByText('720 hours')).toBeVisible();
+  await expect(page.getByText('History available')).toBeVisible();
 });
 
 

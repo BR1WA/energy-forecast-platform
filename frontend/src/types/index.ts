@@ -127,6 +127,34 @@ export interface PrimaryMeter {
   push_key_configured: boolean;
 }
 
+export interface SimulationStatus {
+  status: string;
+  is_running: boolean;
+  uptime: number;
+  site_id: number;
+  base_load_kw: number;
+  variation_percent: number;
+  profile: 'household_v1' | string;
+  is_reproducible: boolean;
+  bootstrap_days: number;
+  bootstrap_interval_minutes: number;
+  minimum_forecast_history_hours: number;
+  history_points: number;
+  history_start_at: string | null;
+  history_end_at: string | null;
+  history_span_hours: number;
+  history_ready_for_forecast: boolean;
+  continuity_enabled_at: string | null;
+  last_catch_up_at: string | null;
+  last_catch_up_points: number;
+  last_catch_up_interval_minutes: number | null;
+  last_catch_up_was_limited: boolean;
+  history_action?: 'bootstrapped_empty_meter' | 'preserved_existing_meter_history' | 'preserved_existing_simulation_history';
+  bootstrap_accepted_rows?: number;
+  deleted_simulation_readings?: number;
+  preserved_non_simulation_data?: boolean;
+}
+
 export type ForecastHorizon = 24 | 168;
 
 export interface ForecastModelStatus {
