@@ -381,6 +381,62 @@ def test_calendar_week_and_timeframe_boundaries_across_timezones_and_dst():
         Base.metadata.drop_all(bind=engine)
 
 
+def test_populated_dst_weeks_project_exact_167_and_169_hour_periods():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(bind=engine)
+    db = sessionmaker(bind=engine)()
+
+    def add_hourly_site(email: str, start: datetime, now: datetime) -> User:
+        user = User(email=email, password_hash=hash_password("password123"), role="user", is_active=True)
+        db.add(user)
+        db.commit()
+        site = ensure_default_site(db, user.id)
+        site.timezone = "Europe/London"
+        meter = get_default_meter(db, user.id)
+        meter.expected_interval_seconds = 3600
+        settings = db.query(SiteSettings).filter(SiteSettings.site_id == site.id).one()
+        settings.peak_rate = 1.0
+        settings.off_peak_rate = 1.0
+        cursor = start
+        while cursor <= now:
+            db.add(SmartMeterReading(
+                meter_id=meter.id, timestamp=cursor, gap=1.0, grp=0.0, voltage=230,
+                intensity=4.3, sub_metering_1=0, sub_metering_2=0, sub_metering_3=0,
+                source="csv", quality="validated",
+            ))
+            cursor += timedelta(hours=1)
+        db.commit()
+        return user
+
+    try:
+        spring_start = datetime(2026, 3, 23, 0, 0, tzinfo=timezone.utc)
+        spring_now = datetime(2026, 3, 29, 11, 0, tzinfo=timezone.utc)
+        spring_user = add_hourly_site("spring-dst@example.com", spring_start, spring_now)
+        spring = consumption_service.get_period_summary(db, spring_user.id, "7d", now=spring_now)
+
+        assert spring["period_start"] == "2026-03-23T00:00:00+00:00"
+        assert spring["coverage_pct"] == 100.0
+        assert spring["total_kwh"] == 155.0
+        assert spring["projection"]["is_available"] is True
+        assert spring["projection"]["projected_kwh"] == 167.0
+        assert spring["projection"]["projected_cost"] == 167.0
+
+        autumn_start = datetime(2026, 10, 18, 23, 0, tzinfo=timezone.utc)
+        autumn_now = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
+        autumn_user = add_hourly_site("autumn-dst@example.com", autumn_start, autumn_now)
+        autumn = consumption_service.get_period_summary(db, autumn_user.id, "7d", now=autumn_now)
+
+        assert autumn["period_start"] == "2026-10-18T23:00:00+00:00"
+        assert autumn["coverage_pct"] == 100.0
+        assert autumn["total_kwh"] == 157.0
+        assert autumn["projection"]["is_available"] is True
+        assert autumn["projection"]["projected_kwh"] == 169.0
+        assert autumn["projection"]["projected_cost"] == 169.0
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
 def test_deterministic_end_of_period_projections():
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
