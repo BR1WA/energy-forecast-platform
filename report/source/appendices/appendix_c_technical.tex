@@ -18,6 +18,9 @@ Endpoint & Method & Purpose \\
 \breakcode{/api/v1/settings/setup} & POST & Create the initial site/meter configuration \\
 \breakcode{/api/v1/ingestion/meters/{id}/csv/preview} & POST & Validate a bounded CSV preview \\
 \breakcode{/api/v1/ingestion/meters/{id}/csv/import} & POST & Confirm and persist accepted readings \\
+\breakcode{/api/v1/simulation/status} & GET & Report simulator continuity and labelled history state \\
+\breakcode{/api/v1/simulation/start} & POST & Bootstrap if empty, catch up if eligible, and start live simulation \\
+\breakcode{/api/v1/simulation/reset} & POST & Replace simulator-owned history without deleting CSV or push rows \\
 \breakcode{/api/v1/consumption/period} & GET & Summarize consumption for a selected period \\
 \breakcode{/api/v1/forecast/capabilities} & GET & List supported and enabled horizons \\
 \breakcode{/api/v1/forecast/readiness} & GET & Explain artifact/history readiness \\
@@ -25,6 +28,7 @@ Endpoint & Method & Purpose \\
 \breakcode{/api/v1/forecast/history} & GET & Return owned forecast history \\
 \breakcode{/api/v1/alerts/} & GET & Return owned alert records \\
 \breakcode{/api/v1/analytics/report/pdf} & GET & Generate the supported analytics PDF \\
+\breakcode{/api/v1/account/delete} & DELETE & Reauthenticate and permanently remove the owned account graph \\
 \breakcode{/api/v1/system/live} & GET & Process liveness \\
 \breakcode{/api/v1/system/ready} & GET & Dependency readiness \\
 \bottomrule
@@ -50,10 +54,11 @@ Layer & Technique & Current evidence \\
 \endhead
 Schemas/services & Unit and focused integration tests & Validation, auth, settings, forecast, alert, report, and account behavior \\
 Database/API & Full pytest suite on PostgreSQL & 100 passed, 0 skipped \\
-Database/API & Final local pytest suite & 106 passed, 4 PostgreSQL-only skips \\
+Database/API & Current local pytest suite & 112 passed, 4 PostgreSQL-only skips \\
+Database/API & Current CI PostgreSQL and test-image gates & Passed \\
 Frontend static & ESLint and TypeScript & Both passed \\
 Frontend build & Next.js production compilation & Passed, 25 routes \\
-Browser E2E & Playwright six-project matrix & 180 passed, 0 failed \\
+Browser E2E & Playwright six-project matrix & 192 passed, 0 failed \\
 Model artifacts & Hash, strict load, inference shape, finite values & Both 24 h and 168 h validated \\
 Dependency security & npm and production pip audits & Zero known vulnerabilities \\
 Deployment & Docker health plus Azure HTTPS/browser smoke & Public web/API, email worker, managed database, both models, SMTP capability, and Google origin verified \\
@@ -84,7 +89,7 @@ curl http://localhost:8000/api/v1/system/ready
 curl http://localhost:3000/
 \end{lstlisting}
 
-The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure. The retained \texttt{v1-8c519b6} revisions provide the immediate rollback target.
+The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. The current web revision is \texttt{v1-f807316}; API and email worker use \texttt{v1-6796b1e}. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure. Older inactive revisions remain available, but rollback selection must preserve compatible web and API versions.
 
 \section{Report reproduction}
 

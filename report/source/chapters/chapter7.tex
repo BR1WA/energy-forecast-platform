@@ -3,11 +3,11 @@
 
 \section{Validation scope and evidence date}
 
-The software-validation evidence in this chapter begins with the full application audit performed on 31 July 2026 and ends with the jury-release gate on 9 August 2026. Historical reports are retained for chronology because test counts, routes, and capabilities changed over time. The audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes. The final Azure validation targeted commit \texttt{af467989694322ef76a5402a367893ea01f5e1dd}; it did not rerun or alter any scientific experiment.
+The software-validation evidence in this chapter begins with the full application audit performed on 31 July 2026 and ends with the post-release CI and Azure revision checks on 9 August 2026. Historical reports are retained for chronology because test counts, routes, and capabilities changed over time. The audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes. The latest coordinated validation targeted commit \texttt{6796b1ec7360f9c05cb804fbd8be29ba1ea78ef8}; it did not rerun or alter any scientific experiment.
 
 \section{Backend validation}
 
-The final local backend suite passed 106 tests with four expected PostgreSQL-only skips under SQLite. In the earlier full audit, a uniquely named disposable PostgreSQL database was created on the running server, migrated from an empty schema through all 17 Alembic revisions, tested, and removed in cleanup. That production-equivalent result remains 100 passed and zero skipped in 42.78 seconds, with one warning. No schema migration changed between the validated baseline and the jury release.
+The current local backend suite passed 112 tests with four expected PostgreSQL-only skips under SQLite. The additional cases cover deterministic simulator history, continuity and reset behavior, plus permanent deletion after a full 2,881-point simulator bootstrap. A focused local PostgreSQL deletion test removed the resulting ownership graph in 0.272 seconds. In the earlier full audit, a uniquely named disposable PostgreSQL database was created on the running server, migrated from an empty schema through all 17 Alembic revisions, tested, and removed in cleanup. That historical result remains 100 passed and zero skipped in 42.78 seconds, with one warning. The current CI also migrated an empty PostgreSQL service, passed the backend suite, audited dependencies, built the backend test image, and passed the suite again inside that image. No schema migration was required for the simulator continuity, CSV handoff, or deletion changes.
 
 The PostgreSQL run is the stronger result because it exercises locking and database behavior that SQLite cannot reproduce. It also confirms that migrations can construct the schema from empty state. The audit did not mutate the live product database.
 
@@ -15,7 +15,7 @@ No coverage percentage is claimed. Test count and coverage are different measure
 
 \section{Frontend and browser validation}
 
-ESLint passed, TypeScript type checking passed, and the production build completed with 25 routes. The final Playwright matrix executed across desktop Chromium, Firefox, WebKit, and three responsive projects and passed 180 of 180 tests. It covers 360-pixel, 390-pixel iPhone, and 768-pixel responsive profiles in addition to desktop browsers. Populated 167-hour and 169-hour local-week tests also exercise daylight-saving boundaries rather than only empty-period behavior.
+ESLint passed, TypeScript type checking passed, and the production build completed with 25 routes. The current Playwright matrix executes 192 tests across desktop Chromium, Firefox, WebKit, and three responsive projects. It covers 360-pixel, 390-pixel iPhone, and 768-pixel responsive profiles in addition to desktop browsers. The added cases verify the persistent-simulator explanation and reset, the dashboard narrative, and the confirmed simulator-to-CSV handoff. The complete matrix passed in CI. Populated 167-hour and 169-hour local-week tests also exercise daylight-saving boundaries rather than only empty-period behavior.
 
 \begin{table}[H]
 \centering
@@ -25,13 +25,14 @@ ESLint passed, TypeScript type checking passed, and the production build complet
 \toprule
 Area & Result & Interpretation \\
 \midrule
-Backend on SQLite & 106 passed, 4 skipped & Final local suite; PostgreSQL-only behavior excluded \\
-Backend on isolated PostgreSQL & 100 passed, 0 skipped & Historical full-audit evidence; schema unchanged \\
+Backend local suite & 112 passed, 4 skipped & Current local suite; PostgreSQL-only behavior excluded \\
+Backend CI with PostgreSQL & Passed & Empty database migrated; suite passed locally and in test image \\
+Backend on isolated PostgreSQL & 100 passed, 0 skipped & Historical full-audit evidence retained for chronology \\
 Frontend lint and type checking & Passed & Static quality gates are green \\
 Frontend production build & Passed, 25 routes & Current route tree compiles for production \\
-Playwright six-project matrix & 180 passed, 0 failed & Desktop and three responsive profiles green \\
+Playwright six-project matrix & 192 passed, 0 failed & Desktop and three responsive profiles green \\
 Docker Compose & Core health checks green, workers running & Local deployment validated; public status evaluated separately below \\
-Azure public deployment & HTTPS web/API, email worker, managed PostgreSQL, both models warmed & Email and Google capability verified; alert/avatar workers remain absent \\
+Azure public deployment & Web \texttt{v1-f807316}; API/worker \texttt{v1-6796b1e}; healthy & Managed PostgreSQL and both warmed models retained; alert/avatar workers remain absent \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -44,7 +45,7 @@ The manifests also preserve limitations. London-cohort metrics are not a guarant
 
 \section{Security validation}
 
-The audit reviewed password hashing, JWT and refresh-token behavior, account-action tokens, Google identity gating, role checks, ownership filters, upload bounds, request validation, SSRF controls, and secret configuration. CI includes a full-history gitleaks job. No P0 authentication bypass or data-loss defect was identified.
+The audit reviewed password hashing, JWT and refresh-token behavior, account-action tokens, Google identity gating, role checks, ownership filters, upload bounds, request validation, SSRF controls, and secret configuration. CI includes a full-history gitleaks job. No P0 authentication bypass or data-loss defect was identified. Permanent account deletion is additionally protected by recent password reauthentication and a literal confirmation value. Its implementation removes the complete ownership graph with ordered set-based statements, then writes only an anonymized deletion audit event, avoiding the request timeout observed with the earlier row-by-row ORM cascade.
 
 One current security-quality concern remains: the frontend application does not define its own complete security-header policy such as CSP, frame policy, content-type options, or referrer policy. Azure supplies managed HTTPS ingress, but transport security does not by itself establish a complete application-header policy. After dependency overrides and lockfile normalization, the final npm audit and the production Python requirements audit reported zero known vulnerabilities. Google integration uses only the public client ID; no provider secret is required or stored by EnergyAI.
 
@@ -52,11 +53,11 @@ One current security-quality concern remains: the frontend application does not 
 
 After Docker Desktop was started, the six-service Compose stack built and ran. PostgreSQL, backend, and frontend reported healthy; alert, email, and avatar-cleanup workers remained running. Health endpoints returned successful responses and both forecasting artifacts were available.
 
-The final Azure smoke test confirmed public TLS and HTTP 200 for the principal public pages, API liveness and readiness, managed-database connectivity, warmed 24-hour and 168-hour models, ready SMTP capability, and a healthy one-replica email worker. Google identity is published for external users, and the live account chooser opened for the exact Azure origin without creating a test user. The web and API retain zero-to-one scaling; the email worker remains at one replica. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production hardening remains conditional on security headers, durable avatar storage, centralized monitoring, Azure alert/avatar workers, restore evidence, load testing, and disaster-recovery procedures.
+The final Azure smoke test confirmed public TLS and HTTP 200 for the principal public pages, API liveness and readiness, managed-database connectivity, warmed 24-hour and 168-hour models, ready SMTP capability, and a healthy one-replica email worker. Google identity is published for external users, and the live account chooser opened for the exact Azure origin without creating a test user. A subsequent read-only Azure check found \texttt{ca-energyai-web--v1-f807316}, \texttt{ca-energyai-api--v1-6796b1e}, and \texttt{ca-energyai-email-worker--v1-6796b1e} active and healthy, with 100\% traffic on the new web and API revisions. The web and API retain zero-to-one scaling; the email worker remains at one replica. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production hardening remains conditional on security headers, durable avatar storage, centralized monitoring, Azure alert/avatar workers, restore evidence, load testing, and disaster-recovery procedures.
 
 \section{Requirement-to-test traceability}
 
-The report's traceability registry maps each major requirement to code and validation evidence. Examples include JWT authentication to authentication tests, RBAC to admin authorization tests, per-user data isolation to PostgreSQL integration tests, CSV preview/import to ingestion tests, and each forecast horizon to model-contract and dual-horizon browser tests. The complete machine-readable matrix is stored in \evidence{report/evidence/requirements\_traceability.csv}.
+The report's traceability registry maps each major requirement to code and validation evidence. Examples include JWT authentication to authentication tests, RBAC to admin authorization tests, per-user data isolation to PostgreSQL integration tests, CSV preview/import and simulator handoff to ingestion/browser tests, persistent demonstration continuity to simulator tests, bounded account deletion to ownership-graph tests, and each forecast horizon to model-contract and dual-horizon browser tests. The complete machine-readable matrix is stored in \evidence{report/evidence/requirements\_traceability.csv}.
 
 Traceability does not remove the need for judgment. For example, a route and test can show that account deletion works, but legal compliance requires institutional and jurisdiction-specific review. Likewise, an artifact test proves file identity and output shape, not real-world forecast calibration.
 

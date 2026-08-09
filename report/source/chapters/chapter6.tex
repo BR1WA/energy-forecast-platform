@@ -4,9 +4,9 @@
 
 \section{Product vision and user journey}
 
-EnergyAI turns the validated forecasting workflow into an application that a non-research user can operate without choosing neural architectures or manipulating notebooks. The primary journey is deliberately short: authenticate, configure a site and meter, import energy history, inspect data quality, select 24 or 168 hours, generate a forecast, and review the result with its uncertainty and provenance. Model selection is a backend responsibility governed by the artifact registry.
+EnergyAI turns the validated forecasting workflow into an application that a non-research user can operate without choosing neural architectures or manipulating notebooks. The primary journey is deliberately short: authenticate, configure a site and meter, import energy history or start the labelled demonstration simulator, inspect data quality, select 24 or 168 hours, generate a forecast, and review the result with its uncertainty and provenance. Model selection is a backend responsibility governed by the artifact registry.
 
-The platform does not expose every research feature. Product V1 prioritizes Dashboard, Usage, Forecast, Actions, and Settings. Administrative views are role-gated. Historical simulation and research model-selection surfaces may still exist in source or secondary routes, but they are not documented as the primary user journey.
+The platform does not expose every research feature. Product V1 prioritizes Dashboard, Usage, Forecast, Actions, and Settings. Administrative views are role-gated. Simulation is a secondary, explicitly synthetic demonstration surface; research model selection remains a backend and evidence-registry concern rather than a normal-user control.
 
 \section{Layered architecture}
 
@@ -25,7 +25,7 @@ The Docker Compose configuration defines six services: PostgreSQL, backend, fron
 
 The Next.js application provides authenticated and public routes. Public routes include the landing page, registration and login, password recovery, email verification states, privacy, terms, and support. The normal-user navigation contains exactly five primary destinations: \texttt{/dashboard}, \texttt{/usage}, \texttt{/forecast}, \texttt{/actions}, and \texttt{/settings}. Compatibility routes redirect \texttt{/consumption} to Usage; \texttt{/alerts} and \texttt{/recommendations} to Actions; and \texttt{/reports} to Usage. The \texttt{/admin} view is rendered only for an administrator.
 
-The interface uses explicit empty, loading, blocked, error, and success states. This is particularly important for forecasting. A missing model, insufficient history, disabled capability, or failed data-quality gate must be explained rather than replaced by a synthetic chart. Horizon state is persisted so that a user can move between 24-hour and 168-hour views without silently changing the underlying forecast.
+The interface uses explicit empty, loading, blocked, error, and success states. This is particularly important for forecasting. A missing model, insufficient history, disabled capability, or failed data-quality gate must be explained rather than replaced by a synthetic chart. Horizon state is persisted so that a user can move between 24-hour and 168-hour views without silently changing the underlying forecast. The dashboard also turns the selected period into short plain-language statements about energy, cost, peak timing, comparison, provenance, coverage, and the next useful action. These sentences complement rather than replace the numerical cards and charts.
 
 \IfFileExists{../assets/screenshots/dashboard.png}{
 \begin{figure}[H]
@@ -52,7 +52,7 @@ The core domain model is shown in \cref{fig:classdomain}. A User owns one or mor
 
 Local login verifies a bcrypt password hash. On success, the backend returns an access token and sets refresh state through an HttpOnly cookie. The server stores refresh-token hashes and supports rotation, logout, and logout-all operations. This design reduces exposure compared with storing long-lived refresh credentials in browser local storage.
 
-\ac{rbac} protects administrative operations. Ownership checks are also required for normal-user resources: role membership alone must not permit access to another user's site, readings, forecast history, or alerts. Account actions cover email verification, password reset, Google identity linking where configured, data export, avatar management, and irreversible deletion with recent-authentication controls.
+\ac{rbac} protects administrative operations. Ownership checks are also required for normal-user resources: role membership alone must not permit access to another user's site, readings, forecast history, or alerts. Account actions cover email verification, password reset, Google identity linking where configured, data export, avatar management, and irreversible deletion with recent-authentication controls. Permanent deletion performs explicit ordered, set-based deletes across audit history, outbox state, OAuth challenges, recommendations, alerts, forecasts, budgets, readings, ingestion batches, meters, simulator sessions, sites, tokens, linked identities, and the user. This avoids loading thousands of readings and invoking an unbounded ORM cascade inside one request. The transaction preserves only a new anonymized \texttt{account.deleted} audit event after the ownership graph is removed.
 
 \begin{figure}[H]
   \centering
@@ -65,7 +65,7 @@ Local login verifies a bcrypt password hash. On success, the backend returns an 
 
 The product input contract is intentionally simple: timestamps and energy values in kWh. A meter-scoped preview endpoint parses a bounded sample and returns detected columns and validation information. Import is a separate confirmed operation. The backend verifies ownership, normalizes supported timestamps, rejects invalid rows, bounds file/row processing, stores accepted readings transactionally, and records an ingestion batch.
 
-This separation improves safety and usability. A user can identify a wrong delimiter, timestamp column, or unit before modifying persisted history. Duplicate or malformed timestamps are not silently converted into model-ready data. The consumption API supports period summaries, paginated readings, current/history statistics, and export.
+This separation improves safety and usability. A user can identify a wrong delimiter, timestamp column, or unit before modifying persisted history. Duplicate or malformed timestamps are not silently converted into model-ready data. CSV preview remains available while the simulator runs. At confirmed import time, the client refreshes simulator status and warns that continuing the live synthetic feed could mix sources. Consent stops the simulator before import; cancellation writes nothing. Historical simulation rows remain labelled and are not automatically deleted. The simulator page provides a matching ``Stop demo and use real data'' action that links directly to the importer. The consumption API supports period summaries, paginated readings, current/history statistics, and export.
 
 \begin{figure}[H]
   \centering
@@ -81,6 +81,14 @@ This separation improves safety and usability. A user can identify a wrong delim
   \caption[Normal-user Usage and data-quality view]{Normal-user Usage view showing persisted demonstration readings, monthly energy and cost summaries, provenance, and data coverage.}
   \label{fig:screenshotusage}
 \end{figure}}{}
+
+\section{Persistent deterministic demonstration history}
+
+The demonstration simulator is persistent and source-aware. On its first start for an empty primary meter, it creates 30 days of household history at 15-minute intervals, or 2,881 timestamped readings including both boundary points. Each value is a deterministic function of a site-specific seed, timestamp, and profile version. The profile combines an overnight base load, morning and evening peaks, weekday and weekend differences, and bounded variation. Electrical companion values remain deterministic and physically consistent. Every generated row uses \texttt{source="simulation"} and simulated quality metadata, so no synthetic point is presented as measured electricity.
+
+Azure may scale the API to zero while the simulator session remains logically running. On the next backend start, catch-up advances only from the latest eligible simulation reading and never searches for arbitrary historical holes. A continuity marker prevents the feature from rewriting gaps that existed before deployment; stopping and later restarting the simulator establishes a new boundary so the stopped interval also remains visible. Ordinary catch-up retains the 15-minute cadence. Exceptionally long outages select progressively coarser intervals and never exceed 5,000 generated points. The unique meter/timestamp constraint and deterministic ingestion keys make bootstrap and catch-up idempotent under replay.
+
+The explicit ``Reset demo data'' operation deletes and regenerates only simulator-owned readings and batches. CSV and push readings remain unchanged, login never generates history, and a non-empty imported or measured meter is not automatically bootstrapped. This boundary provides at least 720 hours of reproducible demonstration context while preserving the data-integrity story of real acquisition paths.
 
 \section{Forecasting service and artifact contracts}
 
@@ -120,7 +128,7 @@ The 24-hour and 168-hour manifests record artifact version, checksum, size, unit
 
 \section{Dashboard, actions, alerts, and reports}
 
-The dashboard aggregates current consumption, historical trend, forecast summary, and prioritized actions from database-backed APIs. The Usage area focuses on measurements and export. Forecast focuses on horizon selection, readiness, quantiles, validation context, and history. Actions combine recommendations and alert state so that the prediction can lead to a practical response rather than remain an isolated chart.
+The dashboard aggregates current consumption, historical trend, forecast summary, and prioritized actions from database-backed APIs. Its ``At a glance'' narrative explains the selected period before requiring a user to decode the cards: how much energy and estimated cost were observed, when the peak occurred, how the period compares, whether data are fresh and sufficiently covered, which sources contributed, and what action is most relevant. Simulation provenance receives a prominent trust message whenever synthetic readings contribute. The Usage area focuses on measurements and export. Forecast focuses on horizon selection, readiness, quantiles, validation context, and history. Actions combine recommendations and alert state so that the prediction can lead to a practical response rather than remain an isolated chart.
 
 Alerts have acknowledged, resolved, and reopened states and a per-user configuration. Background workers support alert generation and delivery responsibilities. Recommendations can also be updated through explicit status transitions. PDF export is available from the forecasting workflow through the analytics endpoint. The legacy \texttt{/reports} page redirects to Usage; there is no separate reports workspace or external reporting warehouse.
 
@@ -134,7 +142,7 @@ Alerts have acknowledged, resolved, and reopened states and a per-user configura
 
 \section{Real-time behavior and background work}
 
-The repository contains WebSocket connection management and real-time alert behavior, along with workers for alerts, email outbox delivery, and avatar cleanup. Their responsibilities are separated from request-response handlers to avoid blocking API operations. The Azure deployment runs the email worker with the existing SMTP configuration, and the API reports email delivery ready. The live Google Web client also opens the account chooser for the authorized Azure origin. Provider availability remains operationally dependent, while alert and avatar-cleanup workers are not deployed in Azure.
+The repository contains WebSocket connection management and real-time alert behavior, along with workers for alerts, email outbox delivery, avatar cleanup, and simulator continuity. Their responsibilities are separated from ordinary user reads. Simulator history is created only by explicit simulator lifecycle operations or the startup catch-up of a session that remained running; login and dashboard requests do not write readings. The Azure deployment runs the email worker with the existing SMTP configuration, and the API reports email delivery ready. The live Google Web client also opens the account chooser for the authorized Azure origin. Provider availability remains operationally dependent, while alert and avatar-cleanup workers are not deployed in Azure.
 
 \section{Observability and error handling}
 
@@ -144,7 +152,7 @@ The product must distinguish service readiness from model readiness. A healthy F
 
 \section{UI/UX and accessibility considerations}
 
-The interface uses a consistent dark visual language, responsive layouts, labeled controls, status messages, and chart alternatives where practical. Browser tests cover desktop Chromium, Firefox, WebKit, and 360, 390, and 768-pixel responsive projects. Accessibility is not claimed as certified: a formal WCAG audit, keyboard-only review, screen-reader validation, and contrast inventory remain future work.
+The interface uses a consistent dark visual language, responsive layouts, labeled controls, status messages, concise narrative interpretation, and chart alternatives where practical. Browser tests cover desktop Chromium, Firefox, WebKit, and 360, 390, and 768-pixel responsive projects. Accessibility is not claimed as certified: a formal WCAG audit, keyboard-only review, screen-reader validation, and contrast inventory remain future work.
 
 \section{Local Docker deployment}
 
@@ -159,7 +167,7 @@ Environment configuration must replace insecure sentinel secrets before startup.
 
 \section{Azure platform deployment}
 
-The Product V1 jury release was deployed to Microsoft Azure in the Italy North region on 9 August 2026 from the exact \texttt{origin/main} commit \texttt{af46798}; the full hash is retained in the deployment evidence registry. The public endpoints are:
+The Product V1 jury release was updated in Microsoft Azure's Italy North region on 9 August 2026. Web revision \texttt{v1-f807316} contains the dashboard, persistent-simulator UI, and simulator-to-CSV handoff. API and email-worker revision \texttt{v1-6796b1e} includes deterministic persistence, catch-up, and bounded account deletion. The verified \texttt{origin/main} head is recorded in the deployment evidence registry. The public endpoints are:
 \par\smallskip
 \noindent\textbf{EnergyAI web application}\par
 {\small\url{https://ca-energyai-web.calmtree-b020e00c.italynorth.azurecontainerapps.io}}\par\smallskip
@@ -185,9 +193,9 @@ The Product V1 jury release was deployed to Microsoft Azure in the Italy North r
 \toprule
 Layer & Azure resource & Verified state \\
 \midrule
-Frontend & \breakcode{ca-energyai-web} & External HTTPS ingress; 0.5 vCPU, 1 GiB; zero-to-one replicas; HTTP 200 and visual landing-page inspection \\
-API and models & \breakcode{ca-energyai-api} & External HTTPS ingress; 2 vCPU, 4 GiB; zero-to-one replicas; liveness/readiness green; both TFT artifacts warmed \\
-Email worker & \breakcode{ca-energyai-email-worker} & One healthy replica; PostgreSQL outbox and existing SMTP configuration preserved; capability ready \\
+Frontend & \breakcode{ca-energyai-web} & Revision \texttt{v1-f807316}; external HTTPS ingress; zero-to-one replicas; healthy with 100\% traffic \\
+API and models & \breakcode{ca-energyai-api} & Revision \texttt{v1-6796b1e}; external HTTPS ingress; zero-to-one replicas; healthy with 100\% traffic; both TFT artifacts warmed \\
+Email worker & \breakcode{ca-energyai-email-worker} & Revision \texttt{v1-6796b1e}; one healthy replica; PostgreSQL outbox and SMTP configuration preserved \\
 Persistence & \breakcode{psql-energyai-br1wa-2691} & PostgreSQL 16, Burstable B1ms, 32 GiB; seven-day backup retention; application database ready \\
 Image supply & \breakcode{acrenergyaipfe2691} & Private Basic registry; images pinned to release-specific SHA-256 digests \\
 Secrets & \breakcode{kv-energyai-pfe-2691} & Database, JWT, and administrator secrets generated and retained outside the repository \\
@@ -196,10 +204,10 @@ Cost control & Subscription budget & Monthly threshold of 25 in the subscription
 \end{tabularx}
 \end{table}
 
-The final smoke test returned HTTP 200 for the frontend, Login, Register, Privacy, and Terms pages and \texttt{ready=true} for the API. The readiness payload reported PostgreSQL ready, both the 24-hour and 168-hour artifacts available, enabled, and warmed, and email processing ready. The live authentication capability response reported email and Google enabled. The Google control opened the account chooser for the authorized Azure domain and was closed without selecting an account. Desktop and 390-pixel mobile registration views had no horizontal overflow. The canonical Alerts endpoint no longer performs the former HTTPS-to-HTTP trailing-slash redirect.
+The original jury-release smoke test returned HTTP 200 for the frontend, Login, Register, Privacy, and Terms pages and \texttt{ready=true} for the API. The readiness payload reported PostgreSQL ready, both the 24-hour and 168-hour artifacts available, enabled, and warmed, and email processing ready. The live authentication capability response reported email and Google enabled. The Google control opened the account chooser for the authorized Azure domain and was closed without selecting an account. Desktop and 390-pixel mobile registration views had no horizontal overflow. After the latest changes, a read-only Azure revision check confirmed the web, API, and email-worker revisions above as active and healthy; the coordinated CI run at commit \texttt{6796b1e} passed frontend quality gates, PostgreSQL migrations and backend tests, full-history secret scanning, and Docker Compose smoke testing.
 
-This is a controlled public PFE deployment rather than a claim of complete production maturity. The deployment uses Azure-generated hostnames rather than a custom domain. Public email registration, verification delivery, the email worker, and Google identity are enabled, but no sustained provider/load test is claimed. Alert and avatar-cleanup workers from Compose are not deployed, uploaded avatars are not durably persisted, centralized Log Analytics retention is disabled, the registry uses deployment credentials rather than workload identity, and no backup restoration, load, disaster-recovery, formal accessibility, or penetration test has been completed. The PostgreSQL firewall accepts Azure-originated services but no temporary developer-IP rule remains. The monthly budget sends notifications but is not an automatic application shutdown policy. The coordinated \texttt{v1-8c519b6} web, API, and email-worker revisions remain available for rollback.
+This is a controlled public PFE deployment rather than a claim of complete production maturity. The deployment uses Azure-generated hostnames rather than a custom domain. Public email registration, verification delivery, the email worker, and Google identity are enabled, but no sustained provider/load test is claimed. Alert and avatar-cleanup workers from Compose are not deployed, uploaded avatars are not durably persisted, centralized Log Analytics retention is disabled, the registry uses deployment credentials rather than workload identity, and no backup restoration, load, disaster-recovery, formal accessibility, or penetration test has been completed. The PostgreSQL firewall accepts Azure-originated services but no temporary developer-IP rule remains. The monthly budget sends notifications but is not an automatic application shutdown policy. Older revisions remain inactive; rollback selection must preserve compatible web and API versions.
 
 \section{Implementation summary}
 
-EnergyAI's engineering contribution is an inspectable boundary between scientific artifacts and product behavior. The application exposes only supported horizons, verifies artifact identity, rejects insufficient input, records provenance, isolates user data, and preserves uncertainty. The serving scaler is now evaluated separately on the preserved London cohort instead of being treated as equivalent to the research transform. The next chapter evaluates the quality evidence for this implementation and states what remains conditional.
+EnergyAI's engineering contribution is an inspectable boundary between scientific artifacts and product behavior. The application exposes only supported horizons, verifies artifact identity, rejects insufficient input, records provenance, isolates user data, preserves uncertainty, labels every synthetic reading, and keeps simulator continuity separate from measured-data gaps. The dashboard communicates these boundaries in ordinary language, while bounded account deletion completes the owner-control path without making legal-compliance claims. The serving scaler is evaluated separately on the preserved London cohort instead of being treated as equivalent to the research transform. The next chapter evaluates the quality evidence for this implementation and states what remains conditional.
