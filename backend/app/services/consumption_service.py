@@ -700,6 +700,7 @@ class ConsumptionService:
             "month": previous["month"],
             "total_kwh": previous["total_kwh"],
             "total_cost": previous["total_cost"],
+            "days_in_month": previous["days_in_month"],
         }
         current["comparison_pct"] = (
             round((current["total_kwh"] - previous["total_kwh"]) / previous["total_kwh"] * 100, 1)

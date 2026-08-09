@@ -513,10 +513,12 @@ export const consumptionApi = {
     total_cost: number;
     peak_kw: number;
     average_daily_kwh: number;
+    days_elapsed: number;
+    days_in_month: number;
     coverage_pct: number;
     tariff: { currency: string; peak_rate: number; off_peak_rate: number; peak_start_hour: number; peak_end_hour: number };
     budget: { target_mad: number | null; spent_mad: number; remaining_mad: number | null; progress_pct: number | null; projected_mad: number | null; projection_available?: boolean; projection_reason?: string | null };
-    previous_month: { month: string; total_kwh: number; total_cost: number };
+    previous_month: { month: string; total_kwh: number; total_cost: number; days_in_month: number };
     comparison_pct: number | null;
   }> =>
     apiFetch('/api/v1/consumption/statistics'),

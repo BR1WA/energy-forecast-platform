@@ -60,6 +60,13 @@ function periodLabel(timeframe: ConsumptionTimeframe) {
   }[timeframe];
 }
 
+function monthLabel(value: string | undefined) {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) return 'last month';
+  const [year, month] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
 export default function DashboardPage() {
   const [timeframe, setTimeframe] = useState<ConsumptionTimeframe>('today');
   const [summary, setSummary] = useState<ConsumptionPeriodSummary | null>(null);
@@ -196,7 +203,18 @@ export default function DashboardPage() {
   const isEmpty = !loading && summary?.sample_count === 0 && summary.total_kwh === 0;
   const unlinkedOpenRecommendations = recommendations.filter((item) => item.alert_id == null);
   const attentionCount = openAlerts.length + unlinkedOpenRecommendations.length;
-  const priorityAction = openAlerts[0]?.message || recommendations[0]?.title || null;
+  const priorityAction = recommendations.find((item) => item.status === 'open')?.title || openAlerts[0]?.message || null;
+  const previousMonth = monthly?.previous_month;
+  const previousDailyAverage = previousMonth && previousMonth.days_in_month > 0
+    ? previousMonth.total_kwh / previousMonth.days_in_month
+    : null;
+  const dailyComparisonPct = monthly && previousDailyAverage && previousDailyAverage > 0
+    && monthly.coverage_pct >= 50 && monthly.days_elapsed >= 2
+    ? (monthly.average_daily_kwh - previousDailyAverage) / previousDailyAverage * 100
+    : null;
+  const budgetVariance = monthly?.budget.projected_mad != null && monthly.budget.target_mad != null
+    ? monthly.budget.projected_mad - monthly.budget.target_mad
+    : null;
 
   return (
     <AppLayout>
@@ -280,19 +298,18 @@ export default function DashboardPage() {
 
         <p className="text-xs leading-5 text-slate-500">Estimated costs use the peak and off-peak tariff rates configured in Settings and may not match taxes, fixed fees, or tiered utility billing.</p>
 
-        <section className="grid gap-5 border-y border-white/10 py-5 lg:grid-cols-3" aria-label="Operational summary">
-          <div className="min-w-0">
+        <section className="grid gap-3 border-y border-white/10 py-5 md:grid-cols-2 xl:grid-cols-4" aria-label="Operational summary">
+          <div className="min-w-0 rounded-lg border border-white/10 bg-[#111827] p-4">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><CircleDollarSign className="h-4 w-4 text-emerald-400" />Monthly outlook</h2>
             {monthly?.budget.target_mad == null ? (
-              <p className="mt-3 text-sm text-slate-500">No monthly budget configured.</p>
+              <><p className="mt-3 text-lg font-semibold text-white">{monthly ? `${monthly.tariff.currency} ${monthly.budget.spent_mad.toFixed(2)}` : 'Unavailable'}</p><p className="mt-1 text-xs text-slate-500">Spent so far. Add a monthly budget to track headroom.</p></>
             ) : (
               <>
                 <p className="mt-3 text-lg font-semibold text-white">
                   {monthly.tariff.currency} {monthly.budget.spent_mad.toFixed(2)} / {monthly.budget.target_mad.toFixed(2)}
                 </p>
                 {monthly.budget.projected_mad != null ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Projected {monthly.tariff.currency} {monthly.budget.projected_mad.toFixed(2)} at {monthly.coverage_pct.toFixed(1)}% coverage
-                  </p>
+                  <><p className="mt-1 text-xs text-slate-500">Projected {monthly.tariff.currency} {monthly.budget.projected_mad.toFixed(2)} at {monthly.coverage_pct.toFixed(1)}% coverage</p>{budgetVariance != null ? <p className={cn('mt-2 text-xs font-medium', budgetVariance > 0 ? 'text-amber-300' : 'text-emerald-300')}>{budgetVariance > 0 ? `Likely to exceed budget by ${monthly.tariff.currency} ${budgetVariance.toFixed(2)}` : `Within budget by ${monthly.tariff.currency} ${Math.abs(budgetVariance).toFixed(2)}`}</p> : null}</>
                 ) : (
                   <p className="mt-1 text-xs text-slate-500">
                     {monthly.budget.projection_reason === 'early_period'
@@ -308,13 +325,18 @@ export default function DashboardPage() {
             )}
             <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/settings?tab=budget">Tariff and budget settings</Link>
           </div>
-          <div className="min-w-0 border-t border-white/10 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+          <div className="min-w-0 rounded-lg border border-white/10 bg-[#111827] p-4">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><Gauge className="h-4 w-4 text-violet-400" />Compared with {monthLabel(previousMonth?.month)}</h2>
+            {previousMonth && previousMonth.total_kwh > 0 ? <><p className="mt-3 text-lg font-semibold text-white">{previousMonth.total_kwh.toFixed(2)} kWh</p><p className="mt-1 text-xs text-slate-500">Previous month total · {monthly?.tariff.currency ?? 'MAD'} {previousMonth.total_cost.toFixed(2)}</p>{dailyComparisonPct != null ? <p className={cn('mt-2 text-xs font-medium', dailyComparisonPct > 0 ? 'text-amber-300' : 'text-emerald-300')}>Your daily average is {Math.abs(dailyComparisonPct).toFixed(1)}% {dailyComparisonPct > 0 ? 'above' : 'below'} last month.</p> : <p className="mt-2 text-xs text-slate-500">Daily comparison appears after two days with at least 50% data coverage.</p>}</> : <p className="mt-3 text-sm text-slate-500">No complete previous-month history is available.</p>}
+            <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/usage">Compare usage periods</Link>
+          </div>
+          <div className="min-w-0 rounded-lg border border-white/10 bg-[#111827] p-4">
             <h2 className="flex items-center gap-2 text-sm font-medium text-white"><BrainCircuit className="h-4 w-4 text-cyan-400" />Latest forecast</h2>
             {latestForecast ? <><p className="mt-3 text-lg font-semibold text-white">{latestForecast.points.reduce((sum, point) => sum + point.p50_kwh, 0).toFixed(2)} kWh</p><p className="mt-1 text-xs text-slate-500">{latestForecast.method === 'global_tft' ? 'Global TFT median' : 'Seasonal fallback'}, {latestForecast.horizon_hours === 168 ? 'next 7 days / 168 hours' : 'next 24 hours'}</p></> : <p className="mt-3 text-sm text-slate-500">No persisted forecast.</p>}
             <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/forecast">Open forecast</Link>
           </div>
-          <div className="min-w-0 border-t border-white/10 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><ListChecks className="h-4 w-4 text-amber-400" />Needs attention</h2>
+          <div className="min-w-0 rounded-lg border border-white/10 bg-[#111827] p-4">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-white"><ListChecks className="h-4 w-4 text-amber-400" />Next best action</h2>
             <p className="mt-3 text-lg font-semibold text-white">{attentionCount ? `${attentionCount} open` : 'All clear'}</p>
             <p className="mt-1 line-clamp-2 text-xs text-slate-500">{priorityAction || 'No measured incident or evidence-backed follow-up action needs attention.'}</p>
             <Link className="mt-3 inline-flex text-xs text-cyan-300 hover:text-cyan-200" href="/actions">Open Actions</Link>

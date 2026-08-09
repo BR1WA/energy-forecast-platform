@@ -390,10 +390,18 @@ test('dashboard renders truthful monthly budget projection states without relabe
     if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'dash-budget-token', token_type: 'bearer' } });
     if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
     if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
-    if (pathname === '/api/v1/alerts/unacknowledged' || pathname === '/api/v1/alerts' || pathname === '/api/v1/recommendations') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/alerts/unacknowledged' || pathname === '/api/v1/alerts') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/recommendations') return route.fulfill({ json: [{ id: 8, alert_id: null, category: 'peak_load', title: 'Shift flexible loads away from the evening peak', message: 'Move discretionary appliances after 22:00.', status: 'open', evidence_json: {}, created_at: '2026-08-08T18:00:00Z' }] });
     if (pathname === '/api/v1/forecast/latest') return route.fulfill({ json: null });
     if (pathname === '/api/v1/consumption/statistics') {
       return route.fulfill({ json: {
+        month: '2026-08',
+        total_kwh: 72.0,
+        total_cost: 84.2,
+        peak_kw: 3.4,
+        average_daily_kwh: 9.0,
+        days_elapsed: 8,
+        days_in_month: 31,
         coverage_pct: 95.0,
         tariff: { currency: 'MAD', peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22 },
         budget: {
@@ -405,6 +413,8 @@ test('dashboard renders truthful monthly budget projection states without relabe
           projection_available: projectionAvailable,
           projection_reason: projectionReason,
         },
+        previous_month: { month: '2026-07', total_kwh: 248.0, total_cost: 286.0, days_in_month: 31 },
+        comparison_pct: null,
       } });
     }
     if (pathname === '/api/v1/consumption/period') {
@@ -422,6 +432,11 @@ test('dashboard renders truthful monthly budget projection states without relabe
   await page.goto('/dashboard');
   await expect(page.getByText('MAD 84.20 / 280.00')).toBeVisible();
   await expect(page.getByText('Projected MAD 302.70 at 95.0% coverage')).toBeVisible();
+  await expect(page.getByText('Likely to exceed budget by MAD 22.70')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compared with July 2026' })).toBeVisible();
+  await expect(page.getByText('248.00 kWh')).toBeVisible();
+  await expect(page.getByText('Your daily average is 12.5% above last month.')).toBeVisible();
+  await expect(page.getByText('Shift flexible loads away from the evening peak')).toBeVisible();
 
   // State 2: Projection unavailable (early_period) -> displays spent_mad without the word "Projected"
   projectionAvailable = false;
