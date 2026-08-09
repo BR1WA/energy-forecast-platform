@@ -148,8 +148,24 @@ class IngestionService:
         accepted_readings: list[SmartMeterReading] = []
         seen_timestamps: set[datetime] = set()
         latest_seen = _as_utc(meter.last_seen_at) if meter.last_seen_at is not None else None
+        existing_timestamps: set[datetime] = set()
+        if sample_list:
+            first_timestamp = _as_utc(sample_list[0].timestamp)
+            last_timestamp = _as_utc(sample_list[-1].timestamp)
+            existing_timestamps = {
+                _as_utc(row[0])
+                for row in (
+                    db.query(SmartMeterReading.timestamp)
+                    .filter(
+                        SmartMeterReading.meter_id == meter.id,
+                        SmartMeterReading.timestamp >= first_timestamp,
+                        SmartMeterReading.timestamp <= last_timestamp,
+                    )
+                    .all()
+                )
+            }
         for row_number, sample in enumerate(sample_list, start=1):
-            timestamp = sample.timestamp.astimezone(timezone.utc)
+            timestamp = _as_utc(sample.timestamp)
             if timestamp > datetime.now(timezone.utc) + timedelta(minutes=5):
                 errors.append({"row": row_number, "message": "timestamp cannot be more than five minutes in the future"})
                 continue
@@ -160,11 +176,7 @@ class IngestionService:
             if source == "push" and latest_seen is not None and timestamp < latest_seen:
                 errors.append({"row": row_number, "message": "push samples must not be older than the meter's latest reading"})
                 continue
-            if (
-                db.query(SmartMeterReading.id)
-                .filter(SmartMeterReading.meter_id == meter.id, SmartMeterReading.timestamp == timestamp)
-                .first()
-            ):
+            if timestamp in existing_timestamps:
                 duplicates += 1
                 continue
 
@@ -199,7 +211,7 @@ class IngestionService:
                 sub_metering_3=sample.sub_metering_3_wh,
                 energy_kwh=sample.energy_kwh,
                 source=source,
-                quality="validated",
+                quality="simulated" if source in {"simulation", "forecast_demo"} else "validated",
             )
             try:
                 with db.begin_nested():
@@ -210,6 +222,7 @@ class IngestionService:
                 continue
             accepted += 1
             accepted_readings.append(reading)
+            existing_timestamps.add(timestamp)
             if latest_seen is None or timestamp > latest_seen:
                 latest_seen = timestamp
 

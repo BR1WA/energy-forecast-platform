@@ -66,9 +66,7 @@ async def lifespan(app: FastAPI):
         logger.info("[SIMULATION-LOOP] Starting background simulation loop...")
         from app.services.simulation_service import simulation_service
         from app.database import SessionLocal
-        from app.models import Meter, SimulationSession
-        from app.schemas import MeterSample
-        from app.services.ingestion_service import ingestion_service
+        from app.models import SimulationSession
 
         while True:
             try:
@@ -76,18 +74,7 @@ async def lifespan(app: FastAPI):
                 try:
                     sessions = db.query(SimulationSession).filter(SimulationSession.is_running.is_(True)).all()
                     for session in sessions:
-                        meter = db.query(Meter).filter(
-                            Meter.site_id == session.site_id,
-                            Meter.is_primary.is_(True),
-                        ).one_or_none()
-                        if meter is None:
-                            continue
-                        ingestion_service.ingest(
-                            db,
-                            meter,
-                            [MeterSample.model_validate(simulation_service.reading_for_configuration(session.configuration or {}))],
-                            source="simulation",
-                        )
+                        simulation_service.advance_session(db, session)
                     if sessions:
                         db.commit()
                 except Exception as db_err:
