@@ -2,27 +2,28 @@
 
 ## Evidence boundary
 
-This record documents an in-place, non-destructive update of the existing
-EnergyAI PFE deployment in Azure Italy North. No database was reset or recreated,
-no migration was added or run, no model was trained or replaced, and no secret
-value is recorded here. The deployment preserves the existing PostgreSQL data,
-Key Vault-backed settings, SMTP configuration, model checkpoints, and inactive
-Container Apps revisions.
+This record documents the in-place, non-destructive updates of the existing
+EnergyAI PFE deployment in Azure Italy North through commit `6796b1e`. No
+database was reset or recreated, no schema migration was required, no model was
+trained or replaced, and no secret value is recorded here. The deployments
+preserved existing PostgreSQL data, Key Vault-backed settings, SMTP
+configuration, model checkpoints, and inactive Container Apps revisions.
 
 ## Source and images
 
-- Deployed Git commit: `af467989694322ef76a5402a367893ea01f5e1dd`
-- Remote branch at deployment: `origin/main`
-- Backend image: `acrenergyaipfe2691.azurecr.io/energyai-backend:af46798`
-- Backend image-list digest: `sha256:b90e1d9a1939546a85318f959d52d4188adfeafb303b3e2a373c2e9009ac871b`
-- Frontend image: `acrenergyaipfe2691.azurecr.io/energyai-frontend:af46798`
-- Frontend image-list digest: `sha256:085ca6ef85c7170da811c385d3a9647f3561a875724ebb96f8c5cb9d5612ce68`
+- Verified remote head: `6796b1ec7360f9c05cb804fbd8be29ba1ea78ef8`
+- Frontend source commit: `f807316`
+- Frontend image digest:
+  `sha256:6f136232457e877611b98b59c32440eaa5f141b120026fc604adafb41022d5a1`
+- Backend and email-worker source commit: `6796b1e`
+- Backend image digest:
+  `sha256:44bc79966e03a04d906895047fb189d3bfb12617544dcc59cfbd83f66cf8f299`
 
-The backend digest is shared with tag `1e4d004` because commit `af46798` changes
-only the frontend lockfile required for reproducible `npm ci` inside the Node 20
-Docker image. The frontend image was built with the public Azure API URL and the
-public Google Web client ID. No Google client secret is required by EnergyAI or
-stored in Azure.
+The frontend image was built with the public Azure API URL and the public Google
+Web client ID. No Google client secret is required by EnergyAI or stored in
+Azure. The backend image continues to contain the same frozen forecast
+artifacts; the current changes affect simulator continuity and bounded account
+deletion rather than model weights or manifests.
 
 ## Azure resources
 
@@ -45,14 +46,17 @@ Before deployment, the active revisions were:
 - Web: `ca-energyai-web--v1-8c519b6`
 - Email worker: `ca-energyai-email-worker--v1-8c519b6`
 
-After deployment, the active and healthy revisions are:
+After the latest deployments, the active and healthy revisions are:
 
-- API: `ca-energyai-api--v1-af46798`
-- Web: `ca-energyai-web--v1-af46798`
-- Email worker: `ca-energyai-email-worker--v1-af46798`
+- Web: `ca-energyai-web--v1-f807316`, 100% traffic
+- API: `ca-energyai-api--v1-6796b1e`, 100% traffic
+- Email worker: `ca-energyai-email-worker--v1-6796b1e`, one ready replica
 
-The three `v1-8c519b6` revisions remain inactive, healthy, and available as the
-exact coordinated rollback target. Earlier inactive revisions were also retained.
+The web revision contains the communicative dashboard and confirmed
+simulator-to-CSV handoff. The API and worker revision contains deterministic
+persistent simulation and bounded permanent account deletion. Older revisions
+remain inactive. A rollback must select compatible web and API revisions rather
+than assume that one historical suffix applies to all components.
 
 ## Google identity configuration
 
@@ -85,14 +89,27 @@ selecting an account, so this smoke test created no production user.
   with no HTTP downgrade redirect
 - Desktop Register page: no horizontal overflow; Google control present
 - 390 x 844 mobile Register page: no horizontal overflow; Google control visible
+- Persistent simulation: an empty meter receives 2,881 labelled readings spanning
+  30 days at 15-minute cadence; running sessions catch up forward after API sleep
+  with idempotent timestamps and a 5,000-point hard limit
+- Data integrity: CSV, push, pre-existing, and deliberately stopped gaps are not
+  backfilled; reset replaces simulator-owned rows only
+- CSV handoff: preview remains available, confirmation stops a running simulator
+  before import, cancellation writes nothing, and historical simulation rows are
+  preserved
+- Account deletion: the API uses ordered set-based removal of the complete owned
+  graph and preserves only an anonymized deletion audit event
 
-Automated release evidence immediately preceding deployment comprised 106 passing
-backend tests with four explicit PostgreSQL-only skips in the local SQLite profile,
-180/180 Playwright tests across six desktop/responsive browser projects, successful
-ESLint, TypeScript, and 25-route production compilation, populated 167-hour and
-169-hour DST projection tests, and zero known vulnerabilities in the production
-npm and Python dependency audits. The historical isolated-PostgreSQL result remains
-100 passed and zero skipped; it was not rerun during this deployment.
+The latest local suite comprised 112 passing backend tests with four explicit
+PostgreSQL-only skips. A focused PostgreSQL test deleted an account after a full
+2,881-point simulator bootstrap in 0.272 seconds. The six-project Playwright
+inventory now contains 192 tests, including the dashboard narrative, simulator
+reset/status, and simulator-to-CSV handoff. GitHub Actions run
+`31328212332` passed frontend lint, TypeScript, production build, and the complete
+browser matrix; backend migration, tests, dependency audit, image build, and
+containerized rerun; full-history secret scanning; and Docker Compose smoke
+testing. The historical isolated-PostgreSQL result remains 100 passed and zero
+skipped and is retained as a separate earlier audit.
 
 ## Preserved limitations
 

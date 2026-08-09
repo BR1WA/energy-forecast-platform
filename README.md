@@ -71,6 +71,8 @@ can be advertised by the API.
 - Coverage-gated Today/Week/Month estimates, monthly-budget status, and explicit previous-month daily-average comparison.
 - Energy, peak load, estimated tariff cost, freshness, coverage, and gap context.
 - Source-aware readings for CSV, push API, simulator, and forecast-demo data.
+- Plain-language period summaries explain the main consumption pattern, peak,
+  comparison, provenance, coverage, and next useful action alongside the charts.
 - Bounded raw-reading pagination and monthly CSV/PDF exports.
 
 ### Data acquisition
@@ -81,6 +83,9 @@ can be advertised by the API.
   last-seen state.
 - An explicitly labelled deterministic simulator for demonstrations and development. A first start on an empty meter prepares 30 days of 15-minute household history; an already-running session catches up forward after a backend sleep, while old, CSV, push, and deliberately stopped gaps remain untouched.
 - A confirmed “Reset demo data” action replaces only `source="simulation"` rows with the same seeded scenario and preserves measured/imported readings.
+- CSV preview remains available while the simulator runs. Confirming an import
+  first asks to stop the live simulator, preserves its historical rows, and then
+  imports the measured file; cancelling performs no write.
 - One private site and one primary meter per normal user in Product V1.
 
 ### Forecasting
@@ -111,7 +116,10 @@ can be advertised by the API.
   configured with a production Google Web OAuth client.
 - Profile images accept validated JPEG, PNG, WebP, HEIC, and HEIF input, then normalize it to sanitized WebP with bounded dimensions and durable cleanup jobs.
 - Administrative lifecycle reporting distinguishes pending verification, active, and disabled accounts without bypassing verification.
-- Owner archive/export and reauthenticated irreversible account deletion.
+- Owner archive/export and reauthenticated irreversible account deletion. The
+  deletion path uses ordered set-based database operations so thousands of
+  historical readings are removed within a bounded request instead of being
+  loaded and cascaded through the ORM one row at a time.
 - Admin-only user access control, aggregate statistics, audit visibility, and
   read-only model/system readiness.
 
@@ -322,6 +330,22 @@ the sending device. The API rejects invalid, duplicated, out-of-order, oversized
 or meter-incompatible batches and supports idempotent retry behavior. Consult the
 live OpenAPI contract at `/docs` for the current request and response schemas.
 
+### Moving from demo data to CSV
+
+The simulator and CSV import deliberately do not form a hidden application mode.
+A user can preview a CSV at any time. If the simulator is currently running, the
+confirmed import warns that synthetic and imported readings could otherwise be
+mixed, stops the live demo feed after consent, and then imports the validated
+rows. Existing `source="simulation"` history remains labelled and is not deleted.
+The simulator page also provides **Stop demo and use real data**, which links
+directly to the CSV importer.
+
+Starting or waking the simulator never fills a historical CSV or push-meter gap.
+Only an empty meter is bootstrapped automatically, and only a simulator session
+that remained running is caught up forward after an API sleep. Exceptional
+outages use progressively coarser intervals with a hard limit of 5,000 catch-up
+points.
+
 ## Security and ownership
 
 Product V1 includes:
@@ -344,24 +368,28 @@ for any public deployment.
 
 ## Quality evidence
 
-The latest full application audit was recorded on 31 July 2026. Its verified
-snapshot reported:
+The latest full CI and deployment verification completed on 9 August 2026 at
+commit `6796b1e`. Historical audit results are retained where they cover a
+different database profile, but the current application totals are:
 
 | Gate | Result |
 |---|---|
-| Backend with SQLite | 106 passed; 4 explicit PostgreSQL-only skips |
-| Backend with isolated PostgreSQL | 100 passed; 0 skipped |
+| Backend local suite | 112 passed; 4 explicit PostgreSQL-only skips |
+| Backend CI with migrated PostgreSQL | Passed, including migrations and containerized rerun |
+| Historical isolated-PostgreSQL audit | 100 passed; 0 skipped |
 | Frontend lint, type check, production build | Passed; 25 routes generated |
-| Playwright six-project matrix | 180/180 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
+| Playwright six-project matrix | 192/192 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
 | Production npm dependency audit | 0 known vulnerabilities |
 | Production Python dependency audit | 0 known vulnerabilities |
 | Compose runtime | Six services running; core health checks passed |
 | Forecast readiness | 24-hour and 168-hour artifacts warmed and ready |
+| Azure revisions | Web `v1-f807316`; API/email worker `v1-6796b1e`; healthy |
 
-This combines the historical isolated-PostgreSQL evidence with the final local
-release gate executed on 9 August 2026. The latter also passed production npm and
-Python dependency audits with zero known vulnerabilities and completed the full
-180-test browser matrix without interruption.
+The current CI run also passed full-history secret scanning and Docker Compose
+smoke testing. It covers persistent simulator history and catch-up, the
+simulator-to-CSV confirmation flow, and permanent account deletion with a full
+30-day synthetic history. See the
+[green GitHub Actions run](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31328212332).
 
 Read the [full application audit](docs/PFE_FULL_APP_AUDIT_2026-07-31.md) and
 [Product V1 validation evidence](docs/PRODUCT_V1_G7_VALIDATION_EVIDENCE.md) for
@@ -415,6 +443,8 @@ while separating completed engineering from future work.
 - [24-hour forecast artifact](docs/FORECAST_ARTIFACT.md)
 - [168-hour forecast artifact](docs/FORECAST_168H_ARTIFACT.md)
 - [PFE report QA](report/qa/final_report_qa.md)
+- [Persistent simulation and communicative-dashboard design](docs/PERSISTENT_SIMULATION_AND_DASHBOARD_PLAN_2026-08-09.md)
+- [Current Azure deployment evidence](report/evidence/azure_deployment_evidence_2026-08-09.md)
 
 ## Academic context and license
 
