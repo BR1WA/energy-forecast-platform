@@ -21,3 +21,4 @@ bcrypt>=4.0.0
 requests>=2.31.0
 google-auth>=2.35,<3
 Pillow>=11.3,<13
+pillow-heif==1.5.0

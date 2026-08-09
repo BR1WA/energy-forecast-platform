@@ -13,6 +13,7 @@ import uuid
 from typing import Protocol
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
@@ -20,6 +21,7 @@ from app.models import AvatarCleanupJob
 
 
 logger = logging.getLogger(__name__)
+register_heif_opener(thumbnails=False)
 AVATAR_URL_PREFIX = "/static/avatars/"
 OBJECT_KEY_PATTERN = re.compile(r"^[0-9a-f]{32}\.webp$")
 LEGACY_OBJECT_KEY_PATTERN = re.compile(r"^user_[0-9]+_[0-9]+\.(?:jpe?g|png|gif|webp)$")
@@ -27,6 +29,8 @@ SUPPORTED_CONTENT_TYPES = {
     "image/jpeg": "JPEG",
     "image/png": "PNG",
     "image/webp": "WEBP",
+    "image/heic": "HEIF",
+    "image/heif": "HEIF",
 }
 
 
@@ -63,7 +67,7 @@ def prepare_avatar(raw: bytes, content_type: str | None, settings: Settings | No
         raise AvatarValidationError(f"Avatar image must not exceed {settings.AVATAR_MAX_BYTES // (1024 * 1024)} MB.")
     expected_format = SUPPORTED_CONTENT_TYPES.get((content_type or "").lower())
     if expected_format is None:
-        raise AvatarValidationError("Avatar must be a JPEG, PNG, or WebP image.")
+        raise AvatarValidationError("Avatar must be a JPEG, PNG, WebP, HEIC, or HEIF image.")
 
     try:
         with Image.open(BytesIO(raw)) as probe:

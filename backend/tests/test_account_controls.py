@@ -11,6 +11,7 @@ import zipfile
 
 from fastapi.testclient import TestClient
 from PIL import Image
+from pillow_heif import register_heif_opener
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -102,6 +103,13 @@ def _image_bytes(format_name: str = "PNG", size: tuple[int, int] = (64, 48), col
     return output.getvalue()
 
 
+def _heif_bytes(size: tuple[int, int] = (64, 48)) -> bytes:
+    register_heif_opener(thumbnails=False)
+    output = BytesIO()
+    Image.new("RGB", size, color=(20, 120, 220)).save(output, format="HEIF", quality=90)
+    return output.getvalue()
+
+
 def test_avatar_validation_uses_decoded_type_dimensions_and_opaque_paths(tmp_path):
     prepared = prepare_avatar(_image_bytes("PNG"), "image/png", auth_router.settings)
     assert prepared.width == 64 and prepared.height == 48
@@ -119,6 +127,20 @@ def test_avatar_validation_uses_decoded_type_dimensions_and_opaque_paths(tmp_pat
     assert storage.exists(key)
     with pytest.raises(ValueError, match="Invalid avatar object key"):
         storage.delete("../outside.webp")
+
+
+def test_heic_avatar_is_decoded_validated_and_normalized_to_webp():
+    raw = _heif_bytes()
+
+    prepared = prepare_avatar(raw, "image/heic", auth_router.settings)
+
+    assert (prepared.width, prepared.height) == (64, 48)
+    with Image.open(BytesIO(prepared.content)) as normalized:
+        assert normalized.format == "WEBP"
+        assert normalized.size == (64, 48)
+
+    with pytest.raises(AvatarValidationError, match="declared image type"):
+        prepare_avatar(raw, "image/jpeg", auth_router.settings)
 
 
 def test_avatar_webp_mime_type_is_explicitly_registered():
