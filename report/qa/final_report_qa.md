@@ -28,7 +28,7 @@ The report records the latest split revision set verified on 9 August 2026:
 - verified `origin/main` head:
   `6796b1ec7360f9c05cb804fbd8be29ba1ea78ef8`;
 - frontend revision: `ca-energyai-web--v1-f807316`, healthy with 100% traffic;
-- API revision: `ca-energyai-api--v1-6796b1e`, healthy with 100% traffic;
+- backend revision: `ca-energyai-api--v1-6796b1e`, healthy with 100% traffic;
 - email-worker revision: `ca-energyai-email-worker--v1-6796b1e`, one healthy replica;
 - frontend digest: `sha256:6f136232457e877611b98b59c32440eaa5f141b120026fc604adafb41022d5a1`;
 - backend digest: `sha256:44bc79966e03a04d906895047fb189d3bfb12617544dcc59cfbd83f66cf8f299`;

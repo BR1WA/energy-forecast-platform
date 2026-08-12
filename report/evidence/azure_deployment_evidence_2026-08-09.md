@@ -31,25 +31,25 @@ deletion rather than model weights or manifests.
 - Resource group: `rg-energyai-pfe`
 - Container Apps environment: `cae-energyai-pfe`
 - Web app: `ca-energyai-web`
-- API app: `ca-energyai-api`
+- Backend app: `ca-energyai-api`
 - Email worker: `ca-energyai-email-worker`
 - PostgreSQL: `psql-energyai-br1wa-2691`, PostgreSQL 16, Standard B1ms,
   32 GiB, seven-day backup retention
 - Registry: `acrenergyaipfe2691`
-- Key Vault: `kv-energyai-pfe-2691`
+- Azure vault resource: `kv-energyai-pfe-2691`
 
 ## Revisions
 
 Before deployment, the active revisions were:
 
-- API: `ca-energyai-api--v1-8c519b6`
+- Backend revision: `ca-energyai-api--v1-8c519b6`
 - Web: `ca-energyai-web--v1-8c519b6`
 - Email worker: `ca-energyai-email-worker--v1-8c519b6`
 
 After the latest deployments, the active and healthy revisions are:
 
 - Web: `ca-energyai-web--v1-f807316`, 100% traffic
-- API: `ca-energyai-api--v1-6796b1e`, 100% traffic
+- Backend revision: `ca-energyai-api--v1-6796b1e`, 100% traffic
 - Email worker: `ca-energyai-email-worker--v1-6796b1e`, one ready replica
 
 The web revision contains the communicative dashboard and confirmed
