@@ -10,7 +10,6 @@ This file lists information that could not be established from the repository or
 - Official defense date. The earlier tentative 9 September 2026 value was removed because no official evidence is preserved locally.
 - Jury members, grades, institutions, and roles.
 - Official FS-UMI rules for citation style, margins, font, line spacing, binding, cover wording, and front-matter order for this Master programme.
-- Exact institution-approved wording for the AI-tool usage declaration.
 - Final personal dedication text.
 
 ## Scientific and documentary gaps
@@ -36,6 +35,5 @@ This file lists information that could not be established from the repository or
 2. Supply the jury composition, any required host/laboratory information, and final defense-date confirmation.
 3. Confirm the FS-UMI Master PFE cover and formatting rules.
 4. Approve the neutral wording of the DEPM methodological audit.
-5. Approve or replace the draft AI-tool declaration.
-6. Decide whether interval recalibration or a Moroccan pilot study must be completed before defense.
-7. Decide whether a custom domain, durable avatar storage, and the remaining Azure workers are required before the defense.
+5. Decide whether interval recalibration or a Moroccan pilot study must be completed before defense.
+6. Decide whether a custom domain, durable avatar storage, and the remaining Azure workers are required before the defense.

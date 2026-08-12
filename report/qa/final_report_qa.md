@@ -1,11 +1,11 @@
-# Final Report QA — Persistent Demo and Account-Control Update
+# Final Report QA — Supervisor Review Version 6
 
 ## Build identification
 
-- Planned output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v5.pdf`.
+- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v6.pdf`.
 - Previous supervisor-review and draft PDFs are retained and will not be overwritten.
 - Language: professional academic English, with the required French résumé.
-- Build date: 9 August 2026.
+- Build date: 12 August 2026.
 
 ## Scientific-evidence boundary
 
@@ -91,8 +91,6 @@ Moroccan-site performance guarantee.
 
 1. Official defense date.
 2. Jury names, grades, institutions, and roles.
-3. Exact Faculty/Master-approved AI-tool declaration.
-
 The unsupported tentative 9 September 2026 date remains removed. The dedication
 remains excluded because no dedication text was supplied.
 
@@ -106,19 +104,21 @@ remains excluded because no dedication text was supplied.
 - `report/source/chapters/general_conclusion.tex`
 - `report/source/appendices/appendix_a_traceability.tex`
 - `report/source/appendices/appendix_c_technical.tex`
+- `report/source/main.tex`
+- removed `report/source/appendices/appendix_d_declaration.tex`
 - `report/qa/current_report_text.txt`
 - `report/qa/final_report_qa.md`
 - `report/evidence/azure_deployment_evidence_2026-08-09.md`
 - `report/evidence/commit_timeline.csv`
 - `report/evidence/requirements_traceability.csv`
 - `report/evidence/test_evidence_summary.csv`
-- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v5.pdf`
+- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v6.pdf`
 
 ## Compilation and textual QA
 
-- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v5.pdf`.
-- Format: A4, 12 pt, one-sided PDF; 98 pages; 1,720,721 bytes.
-- SHA-256: `84B98108632FDD62B55062CAD9A31ABC9A067CE2D25C8C1366B64F32928687C0`.
+- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v6.pdf`.
+- Format: A4, 12 pt, one-sided PDF; 97 pages; 1,718,243 bytes.
+- SHA-256: `19451B8F8481B84EB052D6F5083D4213AAA2E1E56AD502FE500D91241742B088`.
 - Build method: clean manual MiKTeX sequence in a fresh output directory using
   pdfLaTeX, Biber, and stabilizing pdfLaTeX passes.
 - Fatal LaTeX errors: 0.
@@ -132,15 +132,16 @@ remains excluded because no dedication text was supplied.
 - Local Windows/Unix absolute paths: 0.
 - Stale disabled-registration/Google/deployment claims: 0.
 - `9 September 2026`: 0.
-- `TO BE CONFIRMED`: exactly 3 intentional administrative markers.
+- `TO BE CONFIRMED`: exactly 2 intentional administrative markers.
+- AI-tool declaration title and disclosure text: absent.
 
 ## Visual QA
 
-All 98 pages were rendered at 90 dpi and inspected in nine numbered contact
+All 97 pages were rendered at 90 dpi and inspected in nine numbered contact
 sheets. Full-resolution checks additionally covered the English and French
 abstracts, persistent-simulation section, dashboard narrative, Azure topology
 and resource table, validation summary, conclusion, evidence registries,
-requirement matrix, API/test tables, cover, and AI-tool declaration. The
+requirement matrix, API/test tables, cover, contents, and final technical page. The
 abstracts were tightened after the first inspection to remove nearly empty
 keyword-only continuation pages.
 
@@ -158,5 +159,5 @@ Verified conditions:
 - administrative placeholders are visible and limited to their intended fields.
 
 The report is ready for supervisor review as a technically finalized current-state
-draft. It is not institutionally final until the three administrative items above
+draft. It is not institutionally final until the two administrative items above
 are confirmed.
