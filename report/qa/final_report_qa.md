@@ -1,8 +1,8 @@
-# Final Report QA — Supervisor Review Version 6
+# Final Report QA — Supervisor Review Version 7
 
 ## Build identification
 
-- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v6.pdf`.
+- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v7.pdf`.
 - Previous supervisor-review and draft PDFs are retained and will not be overwritten.
 - Language: professional academic English, with the required French résumé.
 - Build date: 12 August 2026.
@@ -98,6 +98,8 @@ remains excluded because no dedication text was supplied.
 
 - `README.md`
 - `report/source/frontmatter/abstracts.tex`
+- `report/source/frontmatter/acknowledgements.tex`
+- `report/source/chapters/chapter2.tex`
 - `report/source/chapters/chapter1.tex`
 - `report/source/chapters/chapter6.tex`
 - `report/source/chapters/chapter7.tex`
@@ -112,13 +114,13 @@ remains excluded because no dedication text was supplied.
 - `report/evidence/commit_timeline.csv`
 - `report/evidence/requirements_traceability.csv`
 - `report/evidence/test_evidence_summary.csv`
-- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v6.pdf`
+- `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v7.pdf`
 
 ## Compilation and textual QA
 
-- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v6.pdf`.
-- Format: A4, 12 pt, one-sided PDF; 97 pages; 1,718,243 bytes.
-- SHA-256: `19451B8F8481B84EB052D6F5083D4213AAA2E1E56AD502FE500D91241742B088`.
+- Output: `report/exports/PFE_ZOUITNI_Salah_Eddine_supervisor_review_v7.pdf`.
+- Format: A4, 12 pt, one-sided PDF; 97 pages; 1,718,283 bytes.
+- SHA-256: `839586FEC502AE50872BE94ADBAE342979F9D4BE7F6B1D5D0E7A18ECE898B182`.
 - Build method: clean manual MiKTeX sequence in a fresh output directory using
   pdfLaTeX, Biber, and stabilizing pdfLaTeX passes.
 - Fatal LaTeX errors: 0.
