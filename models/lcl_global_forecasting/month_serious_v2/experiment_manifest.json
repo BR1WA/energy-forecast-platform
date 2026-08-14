@@ -1,0 +1,132 @@
+{
+  "experiment": "month_serious_v2",
+  "status": "strongest_research_candidate_not_promoted",
+  "seed": 2026,
+  "dataset": {
+    "name": "Low Carbon London smart-meter energy consumption",
+    "official_url": "https://data.london.gov.uk/download/vqm0d/04feba67-f1a3-4563-98d0-f3071e3d56d1/Partitioned%20LCL%20Data.zip",
+    "license": "Creative Commons Attribution",
+    "archive_bytes": 795722689,
+    "archive_sha256": "149a6a9c43c622fd0a14b7d11be055665317d3018d9fb7e1043bd51420bfaea5",
+    "source_households": 4438,
+    "retained_households": 1653,
+    "minimum_household_daily_coverage": 0.8,
+    "first_energy_date": "2011-11-23",
+    "last_energy_date": "2014-02-27",
+    "days": 828,
+    "known_households": 1322,
+    "cold_start_households": 331,
+    "daily_missing_fraction": 0.12825093301302565
+  },
+  "weather": {
+    "provider": "Open-Meteo historical weather API",
+    "model": "ERA5",
+    "source_url": "https://archive-api.open-meteo.com/v1/archive",
+    "raw_bytes": 467869,
+    "raw_sha256": "9c1b297726ca12b42c13ee669d630865913233d8f5d31c401b64612ee07e84e6",
+    "climatology_period": "1991-01-01 through 2010-12-31",
+    "future_policy": "day-of-year climatology only; realized future weather forbidden",
+    "features": [
+      "temperature_2m_mean",
+      "temperature_2m_min",
+      "temperature_2m_max",
+      "apparent_temperature_mean",
+      "precipitation_sum",
+      "sunshine_duration",
+      "wind_speed_10m_max",
+      "shortwave_radiation_sum"
+    ]
+  },
+  "task": {
+    "resolution": "daily",
+    "lookback_days": 365,
+    "horizon_days": 30,
+    "quantiles": [0.1, 0.5, 0.9],
+    "minimum_history_coverage": 0.95,
+    "maximum_history_gap_days": 7,
+    "target_imputation": "none"
+  },
+  "protocol": {
+    "train_targets_end_before": "2013-08-01",
+    "validation_origins": "2013-08-01 through 2013-10-31, weekly",
+    "cold_start_test_origins": "2013-11-01 through 2014-01-29, weekly",
+    "train_windows": 22751,
+    "validation_windows": 17902,
+    "known_test_windows": 16167,
+    "cold_start_test_windows": 4125,
+    "cold_start_daily_targets": 123750,
+    "foundation_selection_frozen_before_test_materialization": true,
+    "global_holdout_caveat": "The aggregate cold-start holdout was opened sequentially for the London ensemble, Bolt, then one validation-frozen Chronos-2 challenge."
+  },
+  "models": {
+    "london_ensemble": {
+      "description": "three-seed XGBoost quantile residual plus three-seed multiscale neural residual ensemble",
+      "daily_feature_count": 87,
+      "window_feature_count": 1228,
+      "validation_xgboost_weight": 0.8,
+      "validation_deep_weight": 0.2,
+      "training_seconds": 279.13255167007446
+    },
+    "chronos_bolt_small": {
+      "id": "amazon/chronos-bolt-small",
+      "revision": "772f3d25d38aec6d914c8949dab4462e2d46f5d8",
+      "parameters": 47700000,
+      "sha256": "06a6a19bbe74bc10a9cd193bd4bf2bf638ae07f7e0d51653ae7ab8ea968a21dd"
+    },
+    "chronos2": {
+      "id": "amazon/chronos-2",
+      "revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+      "parameters": 120000000,
+      "sha256": "ddcda3c7508bf2528087723e98a20707cc04b7f370ae275a9fd88078ddba4f42",
+      "chronos_forecasting_version": "2.3.1"
+    }
+  },
+  "selected_candidate": {
+    "name": "chronos2_causal_ensemble",
+    "daily_source": "50 percent Chronos-2 covariates plus 50 percent Chronos-2 univariate",
+    "daily_macro_mae_kwh": 2.503683481713897,
+    "daily_macro_rmse_kwh": 3.308469989885694,
+    "daily_macro_bias_kwh": -0.2952957988060648,
+    "daily_macro_r2": -0.13367418515651067,
+    "daily_global_r2": 0.7993375731680583,
+    "daily_p90_absolute_error_kwh": 5.55436248779297,
+    "month_total_mae_kwh": 38.74365690087829,
+    "month_total_median_ape_percent": 7.031945048750517,
+    "month_total_global_r2": 0.9175762282615223,
+    "central_80_coverage_percent": 80.64323232323233,
+    "central_80_mean_width_kwh": 7.497002491819016,
+    "month_total_central_80_coverage_percent": 95.75757575757575,
+    "daily_improvement_over_strongest_baseline_percent": 7.185571653933013,
+    "month_total_improvement_over_strongest_baseline_percent": 9.591033001496676
+  },
+  "strongest_baseline": {
+    "name": "weather_climatology_ridge",
+    "daily_macro_mae_kwh": 2.6975153823915035,
+    "month_total_mae_kwh": 42.85377677362432
+  },
+  "promotion": {
+    "promoted": false,
+    "checks": {
+      "daily_mae_improvement_at_least_5_percent": true,
+      "month_total_improvement_at_least_5_percent": true,
+      "daily_macro_r2_at_least_zero": false,
+      "absolute_daily_bias_at_most_0_5_kwh": true,
+      "central_80_daily_coverage_between_75_and_85_percent": true
+    },
+    "failed_reason": "household-level daily macro R2 is negative"
+  },
+  "implementation": [
+    "training/prepare_month_serious.py",
+    "training/month_serious.py",
+    "training/month_foundation.py",
+    "training/month_foundation_chronos2.py"
+  ],
+  "selection_artifact": "models/lcl_global_forecasting/month_serious_v2/foundation_selection.json",
+  "limitations": [
+    "The official meter release spans about 27 months, not a complete unseen final year.",
+    "Cold-start London evidence does not establish Moroccan transfer.",
+    "ERA5 climatology cannot represent actual future 30-day weather anomalies.",
+    "Monthly intervals produced by summed daily bounds are conservative and not nominally calibrated.",
+    "No monthly artifact was copied into backend/model_artifacts."
+  ]
+}

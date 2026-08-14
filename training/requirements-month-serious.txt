@@ -1,0 +1,8 @@
+# Reproducible research environment for the serious 30-day experiment.
+# Install a CUDA-compatible Torch build separately when GPU training is wanted.
+chronos-forecasting==2.3.1
+holidays==0.96
+numpy==2.2.6
+pandas==2.3.3
+polars==1.37.1
+xgboost==3.2.0

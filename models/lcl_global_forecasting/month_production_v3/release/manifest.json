@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "model_name": "month_production_v3",
+  "version": "3.0.0",
+  "status": "production_eligible",
+  "architecture": "Chronos-2 120M plus rank-8 LoRA domain adapter",
+  "base_model": {
+    "model_id": "amazon/chronos-2",
+    "revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+    "model_sha256": "ddcda3c7508bf2528087723e98a20707cc04b7f370ae275a9fd88078ddba4f42"
+  },
+  "adapter": {
+    "filename": "adapter_model.safetensors",
+    "bytes": 4854584,
+    "sha256": "5ba7e97995d10ee66fe5e699ff7aeabcbf3d64b73ebe005c613dfdc236cb873e",
+    "rank": 8,
+    "alpha": 16,
+    "training_updates": 600,
+    "learning_rate": 0.00001
+  },
+  "contract": {
+    "horizon_days": 30,
+    "context_days": 365,
+    "minimum_observed_days": 270,
+    "target_frequency": "daily",
+    "quantiles": [0.1, 0.5, 0.9],
+    "inference_dtype": "float32",
+    "negative_output_policy": "clip_to_zero",
+    "short_context_policy": "left pad to 365 with the earliest observed value",
+    "missing_history_policy": "linear interpolation within observed history only"
+  },
+  "calibration": {
+    "method": "scale-normalized asymmetric split conformal",
+    "scale": "mean absolute first difference over the latest 90 context days",
+    "lower_offset": -0.16261115670204163,
+    "upper_offset": 0.9470053911209106,
+    "nominal_coverage": 0.8
+  },
+  "fresh_transfer_audit": {
+    "dataset": "UCI Power Consumption of Tetouan City",
+    "doi": "10.24432/C5B034",
+    "windows": 9,
+    "baseline_macro_mase": 5.910207351048787,
+    "candidate_macro_mase": 1.0951091249783833,
+    "macro_mase_improvement_percent": 81.47088486186441,
+    "daily_macro_r2": 0.44984468120186816,
+    "central_80_coverage_percent": 88.14814814814815,
+    "daily_mae": 866.7450561523438,
+    "month_total_mae": 16118.6943359375
+  },
+  "conservative_baseline_check": {
+    "policy": "Post-gate robustness check against the strongest of every declared causal seasonal comparator; it cannot affect model selection or loosen promotion.",
+    "strongest_baseline": "last28_repeat",
+    "strongest_baseline_macro_mase": 2.1823911666870117,
+    "candidate_macro_mase": 1.0951089454762684,
+    "macro_mase_improvement_percent": 49.82068466036255
+  },
+  "secondary_diagnostics": {
+    "portugal_cold_2014": {
+      "daily_mae_improvement_percent": 34.03952303925747,
+      "month_total_mae_improvement_percent": 28.478165762374685,
+      "daily_macro_r2": 0.4667931584297853,
+      "central_80_coverage_percent": 80.70066334991708
+    },
+    "morocco_held_out_zones": {
+      "macro_mase_improvement_percent": -7.272827088838911,
+      "daily_macro_r2": -0.1769398151451866,
+      "central_80_coverage_percent": 84.44444444444444,
+      "warning": "This diagnostic failed point-accuracy gates; monitor and recalibrate for these southern Morocco meter types."
+    }
+  },
+  "reproducibility": {
+    "selection_file": "selection.json",
+    "audit_file": "audit.json",
+    "protocol_sha256": "252c3a26e8ca5c82f153c148f0f188c1c3be263d7788aeb11781f9af082f8e3d",
+    "selection_sha256": "37eebee454ed1e68bf7f64b91154de1ce8cada850c7a0b69726c76d14ef48f5f",
+    "audit_sha256": "448936067532f7facdc6ae323a4e510ab7ec05e208017420a6a554fd7e640332",
+    "artifact_reload_relative_error": 6.576540008644204e-08,
+    "seed": 2026
+  },
+  "performance": {
+    "hardware": "Intel host CPU, Windows, FP32",
+    "cold_load_seconds": 9.0374,
+    "single_series_warm_inference_median_seconds": 0.07684,
+    "benchmark_repetitions": 3,
+    "note": "Cold load includes resolving the locally cached pinned Chronos-2 base model."
+  },
+  "dependencies": {
+    "python": "3.11",
+    "torch": "2.9.1+cu126",
+    "chronos-forecasting": "2.3.1",
+    "peft": "0.17.1"
+  },
+  "limitations": [
+    "The public research datasets contain aggregate/client load rather than the target application's exact live-meter population.",
+    "Tetouan was never used by this project's training, selection, blending, calibration, or refit stages, but upstream Chronos-2 pretraining exposure to every public series cannot be independently excluded.",
+    "The model forecasts daily values; it is not an hourly 720-step endpoint.",
+    "Future realized weather is not consumed, preventing weather leakage but limiting response to unpredictable 30-day weather anomalies.",
+    "Southern Morocco held-out-zone point accuracy did not beat its seasonal baseline; that population requires monitored rollout or local recalibration.",
+    "The base Chronos-2 weights are resolved separately from the pinned upstream revision and are not redistributed in this repository."
+  ]
+}

@@ -1,0 +1,10 @@
+# Python 3.11 CUDA training environment used by month_production.py
+neuralforecast==3.1.8
+ray[tune]>=2.10,<3
+chronos-forecasting==2.3.1
+peft==0.17.1
+polars>=1.30,<2
+pandas>=2.2,<3
+openpyxl>=3.1,<4
+requests>=2.32,<3
+holidays>=0.75,<1

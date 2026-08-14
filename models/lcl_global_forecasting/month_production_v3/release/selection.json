@@ -1,0 +1,286 @@
+{
+  "selection_version": 1,
+  "frozen_before_cold_audit": true,
+  "seed": 2026,
+  "architecture": "chronos2_lora_600",
+  "production_model_path": "models/production_model",
+  "model_weight": 1.0,
+  "baseline_weight": 0.0,
+  "portugal_baseline": "annual",
+  "morocco_baseline": "weekday_8week_median",
+  "conformal_offsets": [
+    -0.16261115670204163,
+    0.9470053911209106
+  ],
+  "supervised_steps": 1000,
+  "lora_candidates": [
+    {
+      "steps": 100,
+      "portugal_daily_mae": 1261.490234375,
+      "morocco_macro_mase": 2.120094746351242
+    },
+    {
+      "steps": 300,
+      "portugal_daily_mae": 1264.1951904296875,
+      "morocco_macro_mase": 2.1155575613180795
+    },
+    {
+      "steps": 600,
+      "portugal_daily_mae": 1264.478515625,
+      "morocco_macro_mase": 2.1150445540746055
+    }
+  ],
+  "leaderboard": [
+    {
+      "model": "chronos2_lora_600",
+      "model_weight": 1.0,
+      "normalized_cross_dataset_objective": 0.7378187730249626,
+      "portugal_daily_mae": 1264.478515625,
+      "morocco_macro_mase": 2.1150445540746055
+    },
+    {
+      "model": "chronos2_lora_300",
+      "model_weight": 1.0,
+      "normalized_cross_dataset_objective": 0.7378478571838356,
+      "portugal_daily_mae": 1264.1951904296875,
+      "morocco_macro_mase": 2.1155575613180795
+    },
+    {
+      "model": "chronos2_lora_100",
+      "model_weight": 1.0,
+      "normalized_cross_dataset_objective": 0.738054500141908,
+      "portugal_daily_mae": 1261.490234375,
+      "morocco_macro_mase": 2.120094746351242
+    },
+    {
+      "model": "chronos2_zero_shot",
+      "model_weight": 1.0,
+      "normalized_cross_dataset_objective": 0.7389478777918354,
+      "portugal_daily_mae": 1265.03515625,
+      "morocco_macro_mase": 2.120058794816335
+    },
+    {
+      "model": "chronos2_lora_600",
+      "model_weight": 0.75,
+      "normalized_cross_dataset_objective": 0.7395897943789442,
+      "portugal_daily_mae": 1264.1873779296875,
+      "morocco_macro_mase": 2.1244108080863953
+    },
+    {
+      "model": "chronos2_lora_100",
+      "model_weight": 0.75,
+      "normalized_cross_dataset_objective": 0.7397347258629794,
+      "portugal_daily_mae": 1262.574462890625,
+      "morocco_macro_mase": 2.1272264818350473
+    },
+    {
+      "model": "chronos2_lora_300",
+      "model_weight": 0.75,
+      "normalized_cross_dataset_objective": 0.7398198281188479,
+      "portugal_daily_mae": 1264.266357421875,
+      "morocco_macro_mase": 2.1254767576853433
+    },
+    {
+      "model": "chronos2_zero_shot",
+      "model_weight": 0.75,
+      "normalized_cross_dataset_objective": 0.739971981563095,
+      "portugal_daily_mae": 1263.154052734375,
+      "morocco_macro_mase": 2.1276835401852927
+    },
+    {
+      "model": "chronos2_lora_300",
+      "model_weight": 0.5,
+      "normalized_cross_dataset_objective": 0.7970567547822978,
+      "portugal_daily_mae": 1419.43896484375,
+      "morocco_macro_mase": 2.2159470319747925
+    },
+    {
+      "model": "chronos2_lora_600",
+      "model_weight": 0.5,
+      "normalized_cross_dataset_objective": 0.7971511365509167,
+      "portugal_daily_mae": 1420.4744873046875,
+      "morocco_macro_mase": 2.215090831120809
+    },
+    {
+      "model": "chronos2_zero_shot",
+      "model_weight": 0.5,
+      "normalized_cross_dataset_objective": 0.7971544748200254,
+      "portugal_daily_mae": 1418.880126953125,
+      "morocco_macro_mase": 2.2171637614568076
+    },
+    {
+      "model": "chronos2_lora_100",
+      "model_weight": 0.5,
+      "normalized_cross_dataset_objective": 0.7971859523255451,
+      "portugal_daily_mae": 1419.241943359375,
+      "morocco_macro_mase": 2.216856986284256
+    },
+    {
+      "model": "chronos2_lora_300",
+      "model_weight": 0.25,
+      "normalized_cross_dataset_objective": 0.8884477961457364,
+      "portugal_daily_mae": 1673.38720703125,
+      "morocco_macro_mase": 2.352430522441864
+    },
+    {
+      "model": "chronos2_zero_shot",
+      "model_weight": 0.25,
+      "normalized_cross_dataset_objective": 0.88846152724252,
+      "portugal_daily_mae": 1672.8211669921875,
+      "morocco_macro_mase": 2.3532301584879556
+    },
+    {
+      "model": "chronos2_lora_600",
+      "model_weight": 0.25,
+      "normalized_cross_dataset_objective": 0.8885156400580578,
+      "portugal_daily_mae": 1674.032958984375,
+      "morocco_macro_mase": 2.351942221323649
+    },
+    {
+      "model": "chronos2_lora_100",
+      "model_weight": 0.25,
+      "normalized_cross_dataset_objective": 0.8885363854265269,
+      "portugal_daily_mae": 1673.424560546875,
+      "morocco_macro_mase": 2.352832088867823
+    },
+    {
+      "model": "tide",
+      "model_weight": 0.25,
+      "normalized_cross_dataset_objective": 0.9263691480859673,
+      "portugal_daily_mae": 1716.45263671875,
+      "morocco_macro_mase": 2.489408860603968
+    },
+    {
+      "model": "nhits",
+      "model_weight": 0.25,
+      "normalized_cross_dataset_objective": 0.9312549226876103,
+      "portugal_daily_mae": 1683.27880859375,
+      "morocco_macro_mase": 2.55699094136556
+    },
+    {
+      "model": "nhits",
+      "model_weight": 0.5,
+      "normalized_cross_dataset_objective": 0.9571198516944708,
+      "portugal_daily_mae": 1621.7330322265625,
+      "morocco_macro_mase": 2.767663061618805
+    },
+    {
+      "model": "chronos2_lora_100",
+      "model_weight": 0.0,
+      "normalized_cross_dataset_objective": 1.0,
+      "portugal_daily_mae": 1968.396240234375,
+      "morocco_macro_mase": 2.53831547498703
+    },
+    {
+      "model": "chronos2_lora_300",
+      "model_weight": 0.0,
+      "normalized_cross_dataset_objective": 1.0,
+      "portugal_daily_mae": 1968.396240234375,
+      "morocco_macro_mase": 2.53831547498703
+    },
+    {
+      "model": "chronos2_lora_600",
+      "model_weight": 0.0,
+      "normalized_cross_dataset_objective": 1.0,
+      "portugal_daily_mae": 1968.396240234375,
+      "morocco_macro_mase": 2.53831547498703
+    },
+    {
+      "model": "chronos2_zero_shot",
+      "model_weight": 0.0,
+      "normalized_cross_dataset_objective": 1.0,
+      "portugal_daily_mae": 1968.396240234375,
+      "morocco_macro_mase": 2.53831547498703
+    },
+    {
+      "model": "nhits",
+      "model_weight": 0.0,
+      "normalized_cross_dataset_objective": 1.0,
+      "portugal_daily_mae": 1968.396240234375,
+      "morocco_macro_mase": 2.53831547498703
+    },
+    {
+      "model": "tide",
+      "model_weight": 0.0,
+      "normalized_cross_dataset_objective": 1.0,
+      "portugal_daily_mae": 1968.396240234375,
+      "morocco_macro_mase": 2.53831547498703
+    },
+    {
+      "model": "tide",
+      "model_weight": 0.5,
+      "normalized_cross_dataset_objective": 1.0268659971241696,
+      "portugal_daily_mae": 2071.7236328125,
+      "morocco_macro_mase": 2.5414599577585855
+    },
+    {
+      "model": "nhits",
+      "model_weight": 0.75,
+      "normalized_cross_dataset_objective": 1.0687252508033775,
+      "portugal_daily_mae": 1828.1982421875,
+      "morocco_macro_mase": 3.0679984092712402
+    },
+    {
+      "model": "tide",
+      "model_weight": 0.75,
+      "normalized_cross_dataset_objective": 1.2256914779080335,
+      "portugal_daily_mae": 2771.602783203125,
+      "morocco_macro_mase": 2.6483050187428794
+    },
+    {
+      "model": "nhits",
+      "model_weight": 1.0,
+      "normalized_cross_dataset_objective": 1.2545672861704484,
+      "portugal_daily_mae": 2279.771728515625,
+      "morocco_macro_mase": 3.429130107164383
+    },
+    {
+      "model": "tide",
+      "model_weight": 1.0,
+      "normalized_cross_dataset_objective": 1.465649233410422,
+      "portugal_daily_mae": 3597.505615234375,
+      "morocco_macro_mase": 2.8014515340328217
+    }
+  ],
+  "validation": {
+    "portugal_baseline": {
+      "daily_mae": 1968.396240234375,
+      "daily_macro_mae": 1960.161492197137,
+      "daily_macro_r2": -0.8856836928116693,
+      "daily_global_r2": 0.9792877668331785,
+      "macro_mase": 3.8526137650461125,
+      "month_total_mae": 32945.2265625
+    },
+    "portugal_candidate": {
+      "daily_mae": 1264.548095703125,
+      "daily_macro_mae": 1257.3570677266084,
+      "daily_macro_r2": 0.38048275790194924,
+      "daily_global_r2": 0.9898644228238941,
+      "macro_mase": 2.3325017773007093,
+      "month_total_mae": 20962.296875,
+      "interval_80_coverage": 0.8008207070707071,
+      "interval_80_mean_width": 4754.51025390625
+    },
+    "morocco_baseline": {
+      "daily_mae": 11.214662551879883,
+      "daily_macro_mae": 11.214661836624146,
+      "daily_macro_r2": -0.26022019618986975,
+      "daily_global_r2": 0.8092682315573847,
+      "macro_mase": 2.53831547498703,
+      "month_total_mae": 205.8675537109375
+    },
+    "morocco_candidate": {
+      "daily_mae": 9.142496109008789,
+      "daily_macro_mae": 9.142495959997177,
+      "daily_macro_r2": -0.10259733589414743,
+      "daily_global_r2": 0.85277208024556,
+      "macro_mase": 2.1150445540746055,
+      "month_total_mae": 133.34571838378906,
+      "interval_80_coverage": 0.7958333333333333,
+      "interval_80_mean_width": 35.17682647705078
+    },
+    "n_portugal_windows": 528,
+    "n_morocco_windows": 24
+  },
+  "runtime_seconds": 403.063600063324
+}

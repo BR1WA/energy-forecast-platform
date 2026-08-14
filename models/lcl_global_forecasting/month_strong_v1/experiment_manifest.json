@@ -1,0 +1,63 @@
+{
+  "experiment": "month_strong_v1",
+  "status": "research_only_not_promoted",
+  "seed": 2026,
+  "source_experiment": "models/lcl_global_forecasting/full_selected_v1",
+  "dataset": "Low Carbon London smart-meter households",
+  "dataset_year": 2013,
+  "task": {
+    "resolution": "daily",
+    "lookback_days": 90,
+    "horizon_days": 30,
+    "quantiles": [0.1, 0.5, 0.9]
+  },
+  "cohorts": {
+    "known_households": 2000,
+    "cold_start_households": 500,
+    "cold_start_households_with_complete_test_windows": 487,
+    "cold_start_test_windows": 11580
+  },
+  "selected_candidate": {
+    "name": "xgboost_quantile_residual_refit",
+    "daily_macro_mae_kwh": 2.6907946028965517,
+    "daily_macro_rmse_kwh": 3.5164802704218023,
+    "daily_macro_bias_kwh": -0.43565774367881416,
+    "daily_macro_r2": -0.49229900980966396,
+    "daily_global_r2": 0.7432322846598287,
+    "month_total_mae_kwh": 48.08705499345943,
+    "month_total_median_ape_percent": 8.45688198661972,
+    "central_80_coverage_percent": 78.64910765687968,
+    "month_total_central_80_coverage_percent": 78.57512953367876,
+    "daily_mae_improvement_over_strongest_baseline_percent": 4.786811414805704,
+    "month_total_mae_improvement_over_strongest_baseline_percent": 1.5667712907835871,
+    "run_directory": "models/lcl_global_forecasting/month_strong_v1/runs/seed_2026_refit"
+  },
+  "strongest_baselines": {
+    "daily": {
+      "name": "damped_four_week_weekday_trend",
+      "macro_mae_kwh": 2.8260734073503886
+    },
+    "month_total": {
+      "name": "damped_four_week_weekday_trend",
+      "mae_kwh": 48.85246133245753
+    }
+  },
+  "promotion": {
+    "promoted": false,
+    "failed_checks": [
+      "daily MAE improvement is below 5 percent",
+      "month-total MAE improvement is below 5 percent",
+      "household-level daily macro R2 is negative"
+    ],
+    "passed_checks": [
+      "absolute daily macro bias is at most 0.5 kWh",
+      "central 80 percent daily interval coverage is between 75 and 85 percent"
+    ]
+  },
+  "implementation": "training/month_strong.py",
+  "limitations": [
+    "The source contains one London calendar year.",
+    "Cold-start London evidence does not establish Moroccan transfer.",
+    "No monthly artifact was copied into backend/model_artifacts."
+  ]
+}

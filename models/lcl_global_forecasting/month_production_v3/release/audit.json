@@ -1,0 +1,92 @@
+{
+  "audit_version": 1,
+  "architecture": "chronos2_lora_600",
+  "portugal": {
+    "baseline": {
+      "daily_mae": 1486.524169921875,
+      "daily_macro_mae": 1486.52424837938,
+      "daily_macro_r2": -0.5978592086775928,
+      "daily_global_r2": 0.9696835777089968,
+      "macro_mase": 2.226756743530729,
+      "month_total_mae": 21915.525390625
+    },
+    "candidate": {
+      "daily_mae": 980.5184326171875,
+      "daily_macro_mae": 980.5183784143248,
+      "daily_macro_r2": 0.4667931584297853,
+      "daily_global_r2": 0.9858075534130338,
+      "macro_mase": 1.2981722728529972,
+      "month_total_mae": 15674.3857421875,
+      "interval_80_coverage": 0.8070066334991708,
+      "interval_80_mean_width": 3629.52880859375
+    },
+    "daily_mae_improvement": 0.3403952303925747,
+    "month_total_mae_improvement": 0.28478165762374685,
+    "windows": 804
+  },
+  "morocco": {
+    "baseline": {
+      "daily_mae": 420.9315185546875,
+      "daily_macro_mae": 420.93149495124817,
+      "daily_macro_r2": -0.07941125591605266,
+      "daily_global_r2": 0.7992315158506303,
+      "macro_mase": 1.9586340487003326,
+      "month_total_mae": 7077.41796875
+    },
+    "candidate": {
+      "daily_mae": 428.9276123046875,
+      "daily_macro_mae": 428.92758095264435,
+      "daily_macro_r2": -0.1769398151451866,
+      "daily_global_r2": 0.8149862661798202,
+      "macro_mase": 2.1010821163654327,
+      "month_total_mae": 5313.5537109375,
+      "interval_80_coverage": 0.8444444444444444,
+      "interval_80_mean_width": 1944.1348876953125
+    },
+    "macro_mase_improvement": -0.07272827088838911,
+    "windows": 12
+  },
+  "tetouan_fresh_transfer": {
+    "baseline_name": "annual",
+    "baseline": {
+      "daily_mae": 4215.54638671875,
+      "daily_macro_mae": 4215.546223958333,
+      "daily_macro_r2": -8.79184043139642,
+      "daily_global_r2": 0.598953948124445,
+      "macro_mase": 5.910207351048787,
+      "month_total_mae": 124079.390625
+    },
+    "candidate": {
+      "daily_mae": 866.7450561523438,
+      "daily_macro_mae": 866.7450764973959,
+      "daily_macro_r2": 0.44984468120186816,
+      "daily_global_r2": 0.9739748685460988,
+      "macro_mase": 1.0951091249783833,
+      "month_total_mae": 16118.6943359375,
+      "interval_80_coverage": 0.8814814814814815,
+      "interval_80_mean_width": 4512.04150390625
+    },
+    "macro_mase_improvement": 0.8147088486186441,
+    "windows": 9
+  },
+  "diagnostic_gates": {
+    "portugal_daily_mae": true,
+    "portugal_month_total_mae": true,
+    "portugal_macro_r2": true,
+    "portugal_coverage": true,
+    "morocco_macro_mase": false,
+    "morocco_macro_r2": false,
+    "morocco_coverage": true
+  },
+  "production_gates": {
+    "tetouan_macro_mase": true,
+    "tetouan_macro_r2": true,
+    "tetouan_coverage": true,
+    "finite_nonnegative": true,
+    "artifact_reload": true
+  },
+  "artifact_reload_predictions_max_abs_error": 0.0001220703125,
+  "artifact_reload_predictions_relative_error": 6.576540008644204e-08,
+  "promoted": true,
+  "runtime_seconds": 11.225036382675171
+}

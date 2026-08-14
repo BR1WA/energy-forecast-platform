@@ -1,0 +1,93 @@
+{
+  "protocol_version": 2,
+  "frozen_at": "2026-08-12",
+  "purpose": "Fresh, leakage-resistant selection and production gating for a 30-day global electricity forecast model.",
+  "horizon_days": 30,
+  "context_days": 365,
+  "minimum_context_days": 270,
+  "short_context_policy": "For series with 270-364 observed days, left-pad to 365 with the earliest observed value; no future observation is used.",
+  "selection_rule": "All architecture, checkpoint, blend, calibration, and post-processing choices use known-series validation targets only. Cold-series targets remain inaccessible until selection.json is written.",
+  "sources": {
+    "portugal": {
+      "name": "UCI ElectricityLoadDiagrams20112014",
+      "doi": "10.24432/C58C86",
+      "archive_sha256": "F6C4D0E0DF12ECDB9EA008DD6EEF3518ADB52C559D04A9BAC2E1B81DCFC8D4E1",
+      "unit": "daily_kwh",
+      "interval_conversion": "15-minute kW divided by 4 and summed by day"
+    },
+    "morocco": {
+      "name": "UCI High-Resolution Load Dataset from Smart Meters Across Various Cities in Morocco",
+      "doi": "10.24432/C5FC8R",
+      "archive_sha256": "04A9A3CC5ADDFFBD0D2E2EAC898B51065D7D9F7EA457C9C28DBA6B703CA19021",
+      "units": {
+        "Laayoune": "daily_mean_ampere",
+        "Boujdour": "daily_mean_ampere",
+        "Foum eloued": "daily_mean_ampere",
+        "Marrakech": "daily_kwh"
+      },
+      "role": "development selection and post-selection diagnostic only"
+    },
+    "tetouan": {
+      "name": "UCI Power Consumption of Tetouan City",
+      "doi": "10.24432/C5B034",
+      "official_url": "https://archive.ics.uci.edu/static/public/849/power+consumption+of+tetouan+city.zip",
+      "archive_sha256": "3C4BF684161180937043A9FB65701A83D44B740B0D42F0492B6E7AEC57DDBBFE",
+      "unit": "daily_mean_reported_power",
+      "role": "fresh, geographically distinct production gate; source was identified and this protocol was frozen before download or target access"
+    }
+  },
+  "splits": {
+    "seed": 2026,
+    "portugal": {
+      "eligible_policy": "active by 2013-01-01 and positive on at least 90% of 2013-2014 days",
+      "cold_client_fraction": 0.2,
+      "selection_train_end": "2013-06-30",
+      "selection_validation_origins": ["2013-07-01", "2013-12-01"],
+      "locked_test_origins": ["2014-01-01", "2014-02-01", "2014-03-01", "2014-04-01", "2014-05-01", "2014-06-01", "2014-07-01", "2014-08-01", "2014-09-01", "2014-10-01", "2014-11-01", "2014-12-01"]
+    },
+    "morocco": {
+      "cold_series": ["Laayoune::Zone 5", "Boujdour::Zone 3", "Foum eloued::Zone 7", "Marrakech::Zone 2"],
+      "validation_policy": "two 30-day windows immediately before the final 90 days of each known series",
+      "diagnostic_policy": "three non-overlapping 30-day windows covering the final 90 complete days of each cold series; targets were first accessed during a pipeline smoke test and are excluded from production promotion"
+    },
+    "tetouan": {
+      "training_access": "none; no Tetouan observation is used for training, selection, blending, calibration, or refitting",
+      "locked_test_policy": "three non-overlapping 30-day windows covering the final 90 complete days of each of the three zones",
+      "weather_policy": "weather columns bundled with the source are not used because realized 30-day future weather would not be available in production"
+    }
+  },
+  "candidate_family": {
+    "foundation": "amazon/chronos-2 with LoRA domain adaptation selected from 100, 300, and 600 update steps",
+    "supervised": ["N-HiTS", "TiDE"],
+    "anchor": "validation-selected causal seasonal baseline",
+    "allowed_point_blend_weights": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "interval": "validation-only asymmetric conformal calibration of the 0.1/0.9 quantiles"
+  },
+  "production_gates": {
+    "portugal_cold_2014_diagnostic": {
+      "daily_mae_improvement_over_baseline_min": 0.05,
+      "month_total_mae_improvement_over_baseline_min": 0.05,
+      "daily_macro_r2_min": 0.0,
+      "interval_80_coverage_min": 0.75,
+      "interval_80_coverage_max": 0.90
+    },
+    "morocco_cold_transfer_diagnostic": {
+      "macro_scaled_mae_improvement_over_baseline_min": 0.05,
+      "daily_macro_r2_min": 0.0,
+      "interval_80_coverage_min": 0.70,
+      "interval_80_coverage_max": 0.92
+    },
+    "tetouan_fresh_transfer": {
+      "macro_scaled_mae_improvement_over_baseline_min": 0.05,
+      "daily_macro_r2_min": 0.0,
+      "interval_80_coverage_min": 0.70,
+      "interval_80_coverage_max": 0.92
+    },
+    "artifact": {
+      "reload_predictions_relative_error_max": 0.001,
+      "finite_nonnegative_predictions_required": true,
+      "manifest_and_sha256_required": true
+    }
+  },
+  "promotion_policy": "Promote only if every Tetouan fresh-transfer and artifact gate passes. Portugal and Morocco reserved sets are reported as diagnostics because their targets were opened during pipeline smoke testing before the final full run. A failed candidate remains a research artifact and does not replace backend production artifacts."
+}
