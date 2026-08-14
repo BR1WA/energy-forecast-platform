@@ -9,6 +9,7 @@ Communicative dashboard,Plain-language summary peak comparison provenance covera
 Permanent account deletion,Reauthentication and ordered set-based ownership-graph removal,backend/app/services/account_deletion_service.py,full-history PostgreSQL deletion and account-control tests,implemented
 24-hour forecast,Global TFT 24h artifact contract,backend/model_artifacts/global_tft_24h/manifest.json,model-contract and dual-horizon tests,implemented
 168-hour forecast,Global TFT 168h artifact contract,backend/model_artifacts/global_tft_168h/manifest.json,model-contract and dual-horizon tests,implemented
+30-day forecast,Chronos-2 LoRA daily artifact contract,models/lcl_global_forecasting/month_production_v3/release/manifest.json,model API cadence PDF and browser tests,implemented
 Forecast history,Persisted Forecast records and history endpoint,backend/app/routers/forecast.py,forecast API and browser tests,implemented
 Alerts,AlertConfig Alert entities and worker,backend/app/routers/alerts.py,alert tests and worker health,implemented
 Reports,Analytics PDF endpoint and reports route,backend/app/routers/analytics.py,report and horizon-specific PDF tests,implemented

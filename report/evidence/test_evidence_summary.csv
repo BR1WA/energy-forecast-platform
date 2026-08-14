@@ -1,14 +1,14 @@
 area,command_or_source,result,status,limitations
-Backend local,python -m pytest -q,112 passed 4 PostgreSQL-only skipped,passed,Verified 2026-08-09 after persistent simulation and account-deletion changes
+Backend local,python -m pytest -q,116 passed 4 PostgreSQL-only skipped,passed,Verified 2026-08-14 with month serving and hourly challenger tests
 Backend PostgreSQL,disposable migrated PostgreSQL database then python -m pytest -q,100 passed 0 skipped,passed,Database removed after isolated run
 Backend CI PostgreSQL and image,GitHub Actions run 31328212332,migrations suite dependency audit image build and containerized suite passed,passed,Commit 6796b1e
-Frontend lint,npm run lint,passed,passed,Audit run dated 2026-07-31
-Frontend type checking,npm run typecheck,passed,passed,Audit run dated 2026-07-31
-Frontend production build,npm run build,25 routes generated,passed,Audit run dated 2026-07-31
-Playwright six-project matrix,npm run test:browser,192 passed 0 failed,passed,CI run 31328212332 across three desktop and three responsive projects
+Frontend lint,npm run lint,passed,passed,Verified 2026-08-14
+Frontend type checking,npm run typecheck,passed,passed,Verified 2026-08-14
+Frontend production build,npm run build,25 routes generated,passed,Verified 2026-08-14
+Playwright six-project matrix,npm run test:browser,198 passed 0 failed,passed,Verified 2026-08-14 across three desktop and three responsive projects
 Production npm dependencies,npm audit --omit=dev,0 known vulnerabilities,passed,Full development graph still reported nine high-severity tooling advisories
 Python dependency audit,pip-audit in current CI,0 known vulnerabilities,passed,CI run 31328212332
 Secret scanning,CI full-history gitleaks job,passed,passed,CI run 31328212332
 Docker Compose,CI smoke test,stack started and model readiness passed,passed,CI run 31328212332
-Artifact contract,manifest hash/readiness/inference tests,24h and 168h artifacts validated,passed,Production manifest evidence and audit tests
+Artifact contract,manifest hash/readiness/inference tests,24h 168h and 30-day artifacts validated,passed,Month real-wrapper smoke passed; hourly challengers remain undeployed
 Azure active revisions,Azure Container Apps read-only revision check,web v1-f807316 API and worker v1-6796b1e healthy,passed,Snapshot verified 2026-08-09

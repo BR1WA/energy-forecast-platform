@@ -2,10 +2,10 @@
 
 <h1>EnergyAI</h1>
 <h3>Evidence-aware electricity monitoring and multi-horizon forecasting</h3>
-<p><strong>Product V1 · FastAPI · Next.js 16 · PostgreSQL 16 · Global TFT</strong></p>
+<p><strong>Product V1 · FastAPI · Next.js 16 · PostgreSQL 16 · Global TFT + Chronos-2</strong></p>
 <p>
 EnergyAI turns owned smart-meter readings into live monitoring, tariff-aware<br>
-analytics, operational alerts, and probabilistic 24-hour or 168-hour energy<br>
+analytics, operational alerts, and probabilistic 24-hour, 168-hour, or 30-day daily energy<br>
 forecasts—without hiding missing data, model fallbacks, or deployment limits.
 </p>
 
@@ -16,7 +16,9 @@ forecasts—without hiding missing data, model fallbacks, or deployment limits.
 > **Release status:** Product V1 is publicly deployed on Microsoft Azure for
 > controlled academic demonstration and supervisor/jury review. The verified
 > release includes HTTPS web/API access, managed PostgreSQL, both packaged
-> forecasting artifacts, transactional email delivery, and Google signup. It is
+> TFT forecasting artifacts, transactional email delivery, and Google signup.
+> The repository release now also contains the gated 30-day daily capability;
+> the last verified Azure revision predates that addition. It is
 > not presented as a globally validated or fully hardened production service.
 
 ## Contents
@@ -51,7 +53,7 @@ Import CSV data, push readings, or use the labelled demo simulator
         ↓
 Inspect consumption, cost, freshness, gaps, and coverage
         ↓
-Run a gated 24-hour or 168-hour forecast
+Run a gated 24-hour, 168-hour, or 30-day daily forecast
         ↓
 Review uncertainty, provenance, alerts, and evidence-backed actions
         ↓
@@ -91,15 +93,16 @@ can be advertised by the API.
 ### Forecasting
 
 - Independently packaged Global TFT models for the next 24 and 168 hourly kWh
-  values.
+  values, plus a Chronos-2 LoRA model for 30 daily kWh values.
 - q10, q50, and q90 predictions with clear uncertainty visualization.
 - Coverage, missing-gap, lookback, artifact-integrity, and runtime-readiness gates.
-- Labelled seasonal-naive fallback if an accepted input cannot complete TFT
+- Labelled seasonal-naive fallback if an accepted input cannot complete model
   inference.
 - Persisted model name, version, horizon, preprocessing provenance, target
   timestamps, fallback reason, and quantiles.
 - Forecast PDF export; the week view aggregates the 168 hourly medians into
-  readable local-day totals while retaining all hourly targets.
+  readable local-day totals, while the month view preserves its 30 native daily
+  targets.
 
 ### Alerts and actions
 
@@ -125,7 +128,7 @@ can be advertised by the API.
 
 ## Forecasting contract and evidence
 
-Every Product V1 forecast requires:
+Hourly forecasts require:
 
 | Gate | Requirement |
 |---|---|
@@ -135,6 +138,17 @@ Every Product V1 forecast requires:
 | Numeric validity | Finite values after bounded interpolation |
 | Artifact | Manifest, byte size, SHA-256, strict state loading, and warm-up must pass |
 | Normalization | Rolling 336-hour per-site z-score used by the serving pipeline |
+
+The 30-day capability has a separate, explicit contract:
+
+| Gate | Requirement |
+|---|---|
+| History | Up to 365 rolling daily-energy blocks; at least 270 complete blocks |
+| Coverage | At least 95% observed coverage per accepted daily block |
+| Missing data | No internal gap longer than 3 days; latest daily block must pass |
+| Output | 30 daily p10/p50/p90 values, not 720 hourly steps |
+| Artifact | LoRA adapter and pinned Chronos-2 base SHA-256 checks must pass |
+| Inference | FP32, non-negative clipping, validation-only asymmetric conformal calibration |
 
 The deployed checkpoints were evaluated without retraining on the preserved
 Low Carbon London cold-start cohort using the exact production normalization
@@ -159,6 +173,8 @@ Artifact contracts:
 
 - [24-hour Global TFT](docs/FORECAST_ARTIFACT.md)
 - [168-hour Global TFT](docs/FORECAST_168H_ARTIFACT.md)
+- [30-day Chronos-2 LoRA](docs/MONTH_PRODUCTION_V3.md)
+- [Hourly Chronos-2 challengers](docs/HOURLY_FOUNDATION_V2.md)
 
 ## Architecture
 
@@ -172,8 +188,8 @@ Artifact contracts:
 │ EnergyAI API v1.0 / FastAPI                                 │
 │ Auth · ownership · ingestion · analytics · reports · policy │
 ├──────────────────┬───────────────────────┬──────────────────┤
-│ PostgreSQL 16    │ Global TFT artifacts  │ Durable workers  │
-│ SQLAlchemy       │ 24h + gated 168h      │ alerts · email   │
+│ PostgreSQL 16    │ TFT + Chronos artifacts│ Durable workers  │
+│ SQLAlchemy       │ 24h · 168h · 30 daily │ alerts · email   │
 │ Alembic          │ manifests + hashes    │ avatar cleanup   │
 └──────────────────┴───────────────────────┴──────────────────┘
 ```
@@ -199,8 +215,9 @@ primary meter server-side.
 
 - Docker Engine or Docker Desktop
 - Docker Compose v2
-- Approximately 12 MB for the two packaged model checkpoints, in addition to
-  container images and database storage
+- Approximately 22 MB for the two TFT checkpoints and three tracked LoRA
+  adapters, plus roughly 480 MB for the pinned Chronos-2 base weights cached in
+  the backend image
 
 ### 1. Configure the release
 
@@ -218,9 +235,9 @@ Open `.env` and replace every `replace_with_...` value. At minimum, provide:
 - the legal owner, contact, support, and effective-date values required when
   `DEBUG=false`.
 
-The example enables the packaged 168-hour model. Email delivery and Google
-authentication remain disabled until their complete external configuration is
-supplied and tested.
+The example enables the packaged 168-hour and 30-day daily models. Email
+delivery and Google authentication remain disabled until their complete
+external configuration is supplied and tested.
 
 ### 2. Start and verify the stack
 
@@ -269,14 +286,16 @@ Copy-Item backend\.env.example backend\.env
 Set-Location backend
 python -m pip install -r requirements-dev.txt
 python -m pip install -r requirements-ml.txt
+python -m pip install -r requirements-foundation.txt
 python -m app.cli migrate
 python -m app.cli create-admin
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-`requirements-ml.txt` installs CPU PyTorch and is required for local TFT
-inference. The ordinary CI test image can exclude Torch to keep its resource
-usage bounded; artifact contract tests run in an ML-enabled target.
+`requirements-ml.txt` installs CPU PyTorch. `requirements-foundation.txt` adds
+the Chronos-2/PEFT runtime used by the 30-day model. The production image caches
+the exact base revision during its build so requests do not depend on a live
+model download.
 
 ### Frontend
 
@@ -374,15 +393,15 @@ different database profile, but the current application totals are:
 
 | Gate | Result |
 |---|---|
-| Backend local suite | 112 passed; 4 explicit PostgreSQL-only skips |
+| Backend local suite | 116 passed; 4 explicit PostgreSQL-only skips |
 | Backend CI with migrated PostgreSQL | Passed, including migrations and containerized rerun |
 | Historical isolated-PostgreSQL audit | 100 passed; 0 skipped |
 | Frontend lint, type check, production build | Passed; 25 routes generated |
-| Playwright six-project matrix | 192/192 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
+| Playwright six-project matrix | 198/198 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
 | Production npm dependency audit | 0 known vulnerabilities |
 | Production Python dependency audit | 0 known vulnerabilities |
 | Compose runtime | Six services running; core health checks passed |
-| Forecast readiness | 24-hour and 168-hour artifacts warmed and ready |
+| Forecast readiness | 24-hour and 168-hour TFTs retained; 30-day daily Chronos capability packaged, API-wired, and real-wrapper warm-up passed |
 | Azure revisions | Web `v1-f807316`; API/email worker `v1-6796b1e`; healthy |
 
 The current CI run also passed full-history secret scanning and Docker Compose
@@ -401,7 +420,7 @@ the exact environment, boundaries, and operator-owned checks.
 |---|---|
 | `backend/app/` | FastAPI application, domain services, security policy, and ML runtime |
 | `backend/alembic/` | Versioned database migrations |
-| `backend/model_artifacts/` | Production-only 24-hour and 168-hour checkpoint packages |
+| `backend/model_artifacts/` | Production 24-hour and 168-hour TFT checkpoint packages; Docker also stages the month adapter here |
 | `backend/tests/` | API, ownership, database, security, worker, and model-contract tests |
 | `frontend/src/` | Next.js application, components, API client, and browser-facing policy |
 | `frontend/tests/` | Playwright Product V1 journeys |
@@ -409,7 +428,7 @@ the exact environment, boundaries, and operator-owned checks.
 | `docs/` | Architecture, release, operations, audit, and validation records |
 | `report/source/` | LaTeX PFE report source |
 | `report/evidence/` | Reproducibility manifests and evaluation outputs |
-| `models/`, `notebooks/`, `experiments/` | Local research history; never loaded by the production service |
+| `models/`, `notebooks/`, `experiments/` | Governed research history; the exact month release is copied into the production image |
 
 ## Known boundaries
 
@@ -422,7 +441,13 @@ The following remain outside the verified Product V1 public-deployment claim:
   behavior have not been load-tested.
 - Azure alert and avatar-cleanup workers are not deployed, and avatars are not yet
   stored in durable object storage.
-- Monthly forecasting is not a production capability.
+- The 30-day model passed its fresh Tetouan gate, but a southern-Morocco
+  diagnostic did not beat its seasonal baseline; monitored local rollout and
+  recalibration remain necessary.
+- New 24-hour and 168-hour Chronos-2 challengers improve London cold-household
+  macro MAE by 2.90% and 2.62% over the deployed TFTs, but remain undeployed
+  until shared-base memory, 672-hour readiness, container, and geographic
+  transfer gates pass.
 - There are no utility pull connectors, subscriptions, billing, remote appliance
   control, battery dispatch, or automated demand response.
 - Product V1 intentionally supports one site and one primary meter per normal user.
@@ -442,6 +467,10 @@ while separating completed engineering from future work.
 - [Full application audit](docs/PFE_FULL_APP_AUDIT_2026-07-31.md)
 - [24-hour forecast artifact](docs/FORECAST_ARTIFACT.md)
 - [168-hour forecast artifact](docs/FORECAST_168H_ARTIFACT.md)
+- [Serious 30-day research experiment](docs/MONTH_SERIOUS_V2_EXPERIMENT.md)
+- [Production-eligible 30-day model](docs/MONTH_PRODUCTION_V3.md)
+- [Production-eligible hourly challengers](docs/HOURLY_FOUNDATION_V2.md)
+- [Initial 30-day research experiment](docs/MONTH_STRONG_MODEL_EXPERIMENT.md)
 - [PFE report QA](report/qa/final_report_qa.md)
 - [Persistent simulation and communicative-dashboard design](docs/PERSISTENT_SIMULATION_AND_DASHBOARD_PLAN_2026-08-09.md)
 - [Current Azure deployment evidence](report/evidence/azure_deployment_evidence_2026-08-09.md)

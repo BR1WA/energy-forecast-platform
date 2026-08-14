@@ -5,7 +5,7 @@
 
 The corrected task estimates future hourly energy rather than a contemporaneous high/low class. For an origin $t$, lookback $L$, and horizon $H$, the input contains observations $y_{t-L+1},\ldots,y_t$ and the target contains $y_{t+1},\ldots,y_{t+H}$. Calendar features for future timestamps are permitted because hour, weekday, month, workday status, and holiday flags are known before inference. Future measured consumption or future weather observations are not permitted unless replaced by forecasts available at the same origin.
 
-EnergyAI supports $L=336$ hours and $H\in\{24,168\}$. The two-week history covers recent daily and weekly patterns. The 24-hour horizon supports next-day action, while 168 hours provides a full week. Direct multi-output forecasting avoids the error accumulation of recursively feeding each prediction back as the next input, although uncertainty still grows across the horizon.
+EnergyAI uses two cadence-specific contracts. The hourly TFTs use $L=336$ hourly values and $H\in\{24,168\}$ hourly targets. The month model aggregates meter intervals into rolling 24-hour energy totals, accepts up to 365 daily values with a minimum of 270 valid days, and directly emits 30 daily targets. The API retains 720 as a duration identifier for compatibility while returning the authoritative target count and interval explicitly. Direct multi-output forecasting avoids the error accumulation of recursively feeding each prediction back as the next input.
 
 \section{Causal windows}
 
@@ -149,4 +149,4 @@ The 24-hour checkpoint digest is \texttt{60fedcde...bc5a04d}; the 168-hour diges
   \label{fig:promotion}
 \end{figure}
 
-Completion of training is not sufficient for promotion. The run must use a comparable causal protocol, beat a seasonal baseline, remain robust across the household distribution, load strictly from a reproducible artifact, and produce finite outputs of the expected shape. A model that fails a gate remains an archive or research result. This discipline explains why the monthly experiments are discussed but not exposed, and why TimePro or TimeMixer++ are not assigned local performance claims without successful metric files.
+Completion of training is not sufficient for promotion. The run must use a comparable causal protocol, beat frozen comparators, remain robust across the evaluated distribution, load strictly from a reproducible artifact, and produce finite outputs of the expected shape. The month study froze selection on Tetouan before opening Portugal and southern-Morocco diagnostics; the latter negative transfer result is retained as a limitation. The hourly Chronos challengers passed their London accuracy gates but were not activated because their small improvement did not yet satisfy the broader serving tradeoff. TimePro and TimeMixer++ are still not assigned local performance claims without successful metric files.

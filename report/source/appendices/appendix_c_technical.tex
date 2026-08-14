@@ -54,14 +54,14 @@ Layer & Technique & Current evidence \\
 \endhead
 Schemas/services & Unit and focused integration tests & Validation, auth, settings, forecast, alert, report, and account behavior \\
 Database/API & Full pytest suite on PostgreSQL & 100 passed, 0 skipped \\
-Database/API & Current local pytest suite & 112 passed, 4 PostgreSQL-only skips \\
+Database/API & Current local pytest suite & 116 passed, 4 PostgreSQL-only skips \\
 Database/API & Current CI PostgreSQL and test-image gates & Passed \\
 Frontend static & ESLint and TypeScript & Both passed \\
 Frontend build & Next.js production compilation & Passed, 25 routes \\
-Browser E2E & Playwright six-project matrix & 192 passed, 0 failed \\
-Model artifacts & Hash, strict load, inference shape, finite values & Both 24 h and 168 h validated \\
+Browser E2E & Playwright six-project matrix & 198 passed, 0 failed \\
+Model artifacts & Hash, strict load, inference shape, finite values, cadence & Active 24 h, 168 h, and 30-day releases validated; hourly challengers audited separately \\
 Dependency security & npm and production pip audits & Zero known vulnerabilities \\
-Deployment & Docker health plus Azure HTTPS/browser smoke & Public web/API, email worker, managed database, both models, SMTP capability, and Google origin verified \\
+Deployment & Docker health plus Azure HTTPS/browser smoke & Prior public web/API, email worker, managed database, both TFTs, SMTP capability, and Google origin verified \\
 \bottomrule
 \end{longtable}
 
@@ -89,7 +89,7 @@ curl http://localhost:8000/api/v1/system/ready
 curl http://localhost:3000/
 \end{lstlisting}
 
-The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. The current web revision is \texttt{v1-f807316}; API and email worker use \texttt{v1-6796b1e}. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure. Older inactive revisions remain available, but rollback selection must preserve compatible web and API versions.
+The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. The current web revision is \texttt{v1-f807316}; API and email worker use \texttt{v1-6796b1e}. This verified revision predates the repository's 30-day model integration. A later cloud promotion must use the production backend image that caches the pinned foundation base, enable \texttt{FORECAST\_30D\_ENABLED}, and pass model warm-up and memory checks. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure.
 
 \section{Report reproduction}
 

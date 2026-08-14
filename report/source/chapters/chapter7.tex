@@ -3,11 +3,11 @@
 
 \section{Validation scope and evidence date}
 
-The software-validation evidence in this chapter begins with the full application audit performed on 31 July 2026 and ends with the post-release CI and Azure revision checks on 9 August 2026. Historical reports are retained for chronology because test counts, routes, and capabilities changed over time. The audit used both SQLite and a disposable PostgreSQL database, frontend quality commands, a six-project browser matrix, dependency audits, artifact checks, Docker health, and source review. The checkpoint quantile reanalysis and the separate serving-normalization evaluation were generated on 1 August 2026; each is identified by script, input, checkpoint, environment, and output hashes. The latest coordinated validation targeted commit \texttt{6796b1ec7360f9c05cb804fbd8be29ba1ea78ef8}; it did not rerun or alter any scientific experiment.
+The software-validation evidence in this chapter begins with the full application audit performed on 31 July 2026 and includes the foundation-model work completed on 14 August 2026. Historical reports are retained for chronology because test counts, routes, and capabilities changed over time. The audit uses backend tests, frontend quality commands, browser tests, artifact checks, real-wrapper smoke tests, and source review. The previous coordinated Azure validation still targets commit \texttt{6796b1e}; the new repository release is locally verified but not represented as already promoted to Azure.
 
 \section{Backend validation}
 
-The current local backend suite passed 112 tests with four expected PostgreSQL-only skips under SQLite. The additional cases cover deterministic simulator history, continuity and reset behavior, plus permanent deletion after a full 2,881-point simulator bootstrap. A focused local PostgreSQL deletion test removed the resulting ownership graph in 0.272 seconds. In the earlier full audit, a uniquely named disposable PostgreSQL database was created on the running server, migrated from an empty schema through all 17 Alembic revisions, tested, and removed in cleanup. That historical result remains 100 passed and zero skipped in 42.78 seconds, with one warning. The current CI also migrated an empty PostgreSQL service, passed the backend suite, audited dependencies, built the backend test image, and passed the suite again inside that image. No schema migration was required for the simulator continuity, CSV handoff, or deletion changes.
+The current local suite passed 116 tests with four expected PostgreSQL-only skips under SQLite. The new cases cover the month manifest and checksum, 365-day input preparation, 30-target inference, cadence-aware API persistence and reload, monthly PDF output, and the hourly challenger protocol. A focused real-wrapper smoke test also loaded the exact Chronos-2 base and adapter and returned 30 finite ordered quantiles. In the earlier full audit, a uniquely named disposable PostgreSQL database was migrated through all 17 Alembic revisions, tested, and removed; that historical result remains 100 passed and zero skipped. No schema migration was required because the existing integer horizon and JSON forecast snapshot can persist the new cadence metadata.
 
 The PostgreSQL run is the stronger result because it exercises locking and database behavior that SQLite cannot reproduce. It also confirms that migrations can construct the schema from empty state. The audit did not mutate the live product database.
 
@@ -15,7 +15,7 @@ No coverage percentage is claimed. Test count and coverage are different measure
 
 \section{Frontend and browser validation}
 
-ESLint passed, TypeScript type checking passed, and the production build completed with 25 routes. The current Playwright matrix executes 192 tests across desktop Chromium, Firefox, WebKit, and three responsive projects. It covers 360-pixel, 390-pixel iPhone, and 768-pixel responsive profiles in addition to desktop browsers. The added cases verify the persistent-simulator explanation and reset, the dashboard narrative, and the confirmed simulator-to-CSV handoff. The complete matrix passed in CI. Populated 167-hour and 169-hour local-week tests also exercise daylight-saving boundaries rather than only empty-period behavior.
+ESLint passed, TypeScript type checking passed, and the production build completed with 25 routes. The current Playwright matrix executes 198 tests across desktop Chromium, Firefox, WebKit, and three responsive projects. It covers 360-pixel, 390-pixel iPhone, and 768-pixel profiles. The new monthly case verifies that the capability remains daily, reports its long-history readiness gate, and never offers 30 days of demonstration data as a false bypass. Populated 167-hour and 169-hour local-week tests continue to exercise daylight-saving boundaries.
 
 \begin{table}[H]
 \centering
@@ -25,12 +25,12 @@ ESLint passed, TypeScript type checking passed, and the production build complet
 \toprule
 Area & Result & Interpretation \\
 \midrule
-Backend local suite & 112 passed, 4 skipped & Current local suite; PostgreSQL-only behavior excluded \\
+Backend local suite & 116 passed, 4 skipped & Current local suite; PostgreSQL-only behavior excluded \\
 Backend CI with PostgreSQL & Passed & Empty database migrated; suite passed locally and in test image \\
 Backend on isolated PostgreSQL & 100 passed, 0 skipped & Historical full-audit evidence retained for chronology \\
 Frontend lint and type checking & Passed & Static quality gates are green \\
 Frontend production build & Passed, 25 routes & Current route tree compiles for production \\
-Playwright six-project matrix & 192 passed, 0 failed & Desktop and three responsive profiles green \\
+Playwright six-project matrix & 198 passed, 0 failed & Desktop and three responsive profiles green \\
 Docker Compose & Core health checks green, workers running & Local deployment validated; public status evaluated separately below \\
 Azure public deployment & Web \texttt{v1-f807316}; API/worker \texttt{v1-6796b1e}; healthy & Managed PostgreSQL and both warmed models retained; alert/avatar workers remain absent \\
 \bottomrule
@@ -39,9 +39,9 @@ Azure public deployment & Web \texttt{v1-f807316}; API/worker \texttt{v1-6796b1e
 
 \section{Model-contract and artifact validation}
 
-The product does not rely only on a database model name. Artifact tests verify manifest parsing, supported horizon, checksum, strict state-dict load, CPU inference, finite output, expected shape, and reference points where recorded. Both 24-hour and 168-hour capabilities are packaged. The checkpoints share a file size of 5,600,105 bytes but have distinct SHA-256 hashes, confirming that the weekly artifact is not merely a renamed daily file.
+The product does not rely only on a database model name. Artifact tests verify manifest parsing, supported capability, checksum, strict load, CPU inference, finite output, expected shape, cadence, and reference points where recorded. The two active TFT checkpoints share a file size of 5,600,105 bytes but have distinct SHA-256 hashes. The month release separately verifies a 4,854,584-byte LoRA adapter, the pinned Chronos-2 base revision, FP32 inference, and exactly 30 ordered daily quantiles. A real-wrapper smoke test completed a checksum-verified load and prediction.
 
-The manifests also preserve limitations. London-cohort metrics are not a guarantee for a client site. New sites use their recent 336-hour window for normalization, while the frozen research metrics use each evaluation household's pre-validation training-segment statistics. The supplementary inference-only evaluation now measures this transform change on the same frozen London cohort and reports it separately from the research headlines. Quantile outputs have not been recalibrated per site. Week-ahead uncertainty grows with the horizon and must be displayed with provenance.
+The manifests also preserve limitations. London-cohort metrics are not a guarantee for a client site. New hourly requests use their recent 336-hour window for normalization, while month requests require a substantially longer daily history. The month model's positive Tetouan and Portugal evidence coexists with a negative southern-Morocco diagnostic, and its conformal correction is not a per-site guarantee. The hourly Chronos adapters pass their London gates but remain inactive because deployment value includes memory, startup, input migration, and geographic evidence as well as MAE.
 
 \section{Security validation}
 
@@ -51,7 +51,7 @@ One current security-quality concern remains: the frontend application does not 
 
 \section{Docker and deployed service health}
 
-After Docker Desktop was started, the six-service Compose stack built and ran. PostgreSQL, backend, and frontend reported healthy; alert, email, and avatar-cleanup workers remained running. Health endpoints returned successful responses and both forecasting artifacts were available.
+The previously validated six-service Compose stack ran with PostgreSQL, backend, and frontend healthy and all workers running. For the new release, Compose configuration resolves with the month feature flag and the production Dockerfile stages the exact adapter, pinned dependencies, and base-model prefetch step. The full foundation image remains subject to the deployment memory/startup gate documented for the target environment.
 
 The final Azure smoke test confirmed public TLS and HTTP 200 for the principal public pages, API liveness and readiness, managed-database connectivity, warmed 24-hour and 168-hour models, ready SMTP capability, and a healthy one-replica email worker. Google identity is published for external users, and the live account chooser opened for the exact Azure origin without creating a test user. A subsequent read-only Azure check found \texttt{ca-energyai-web--v1-f807316}, \texttt{ca-energyai-api--v1-6796b1e}, and \texttt{ca-energyai-email-worker--v1-6796b1e} active and healthy, with 100\% traffic on the new web and API revisions. The web and API retain zero-to-one scaling; the email worker remains at one replica. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production hardening remains conditional on security headers, durable avatar storage, centralized monitoring, Azure alert/avatar workers, restore evidence, load testing, and disaster-recovery procedures.
 
@@ -81,7 +81,7 @@ The cold-start experiment gives every held-out London household a mean and stand
 
 \subsection{Monthly horizon}
 
-Monthly candidates beat the seasonal baseline in average MAE by 5-8\%, but their cold-start macro $R^2$ values are negative. This conflict demonstrates why a single favorable metric is insufficient. Monthly forecasting remains experimental until household-level consistency improves.
+The earlier monthly N-BEATS and MultiCycleNet candidates remain invalid for promotion because their cold-start macro $R^2$ values are negative. The replacement Chronos-2 release passes its frozen selection gate with 49.82\% improvement and positive macro $R^2$, then transfers positively to Portugal. Its southern-Morocco diagnostic is worse than the comparator and therefore prevents a broad geographic claim. The repository capability is production-eligible for controlled use, not universally validated.
 
 \subsection{Experiment completeness}
 
@@ -116,6 +116,6 @@ Operational & Public endpoint interpreted as complete production maturity & Exac
 
 The project demonstrates a change in what counts as success. At the beginning, success meant matching a 98\% article result. After the audit, success meant constructing a task that could fail honestly. That shift led to lower and more interpretable metrics, stronger baselines, broader household analysis, and explicit artifact limitations.
 
-The final TFT research results are credible because they satisfy several independent conditions: the target is continuous and future-indexed; all households share one causal chronology; households are evaluated in a cold-start cohort; the model beats a seasonal baseline for nearly all evaluated households; median, p90, bias, and interval diagnostics are reported; and the original checkpoints are hash-identified. The application adds strict loading and refuses unsupported horizons. The separate serving-normalization evaluation extends this evidence to the rolling transform on the same frozen cohort. These facts support a controlled demonstration and a defensible PFE contribution, but they do not establish geographic transfer or site-specific calibration.
+The final model decisions are credible because they combine causal targets, frozen protocols, strong comparators, distributional metrics, transfer diagnostics, checksummed artifacts, and explicit operational gates. The application adds strict loading and refuses unsupported cadence or history. The decision not to activate the slightly more accurate hourly Chronos challengers is part of this rigor: a production model must improve the whole system contract, not only one metric. These facts support a controlled demonstration and a defensible PFE contribution, but they do not establish universal geographic transfer or site-specific calibration.
 
 The remaining conditional findings also improve rather than weaken the report. They separate verified public availability from full production maturity and prevent a controlled academic deployment from being misrepresented as a globally validated service.

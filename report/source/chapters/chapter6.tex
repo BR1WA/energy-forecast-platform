@@ -4,7 +4,7 @@
 
 \section{Product vision and user journey}
 
-EnergyAI turns the validated forecasting workflow into an application that a non-research user can operate without choosing neural architectures or manipulating notebooks. The primary journey is deliberately short: authenticate, configure a site and meter, import energy history or start the labelled demonstration simulator, inspect data quality, select 24 or 168 hours, generate a forecast, and review the result with its uncertainty and provenance. Model selection is a backend responsibility governed by the artifact registry.
+EnergyAI turns the validated forecasting workflow into an application that a non-research user can operate without choosing neural architectures or manipulating notebooks. The primary journey is deliberately short: authenticate, configure a site and meter, import energy history or start the labelled demonstration simulator, inspect data quality, select 24 hours, 168 hours, or 30 days, generate a forecast, and review the result with its uncertainty, cadence, and provenance. Model selection is a backend responsibility governed by the artifact registry.
 
 The platform does not expose every research feature. Product V1 prioritizes Dashboard, Usage, Forecast, Actions, and Settings. Administrative views are role-gated. Simulation is a secondary, explicitly synthetic demonstration surface; research model selection remains a backend and evidence-registry concern rather than a normal-user control.
 
@@ -17,7 +17,7 @@ The platform does not expose every research feature. Product V1 prioritizes Dash
   \label{fig:layeredarch}
 \end{figure}
 
-The presentation layer uses Next.js 16, React 19, TypeScript, Tailwind CSS, and reusable UI components. The API layer uses FastAPI and Pydantic schemas. Persistence uses SQLAlchemy models, Alembic migrations, and PostgreSQL 16. Separate worker services handle alert, email, and avatar-cleanup responsibilities. The model layer contains fixed Global TFT artifacts and their manifests.
+The presentation layer uses Next.js 16, React 19, TypeScript, Tailwind CSS, and reusable UI components. The API layer uses FastAPI and Pydantic schemas. Persistence uses SQLAlchemy models, Alembic migrations, and PostgreSQL 16. Separate worker services handle alert, email, and avatar-cleanup responsibilities. The model layer contains fixed Global TFT artifacts plus the checksum-addressed Chronos-2 month adapter and pinned base revision.
 
 The Docker Compose configuration defines six services: PostgreSQL, backend, frontend, alert worker, email worker, and avatar-cleanup worker. At the verified local checkpoint, database, backend, and frontend health checks pass and the three workers run. The public Azure topology deploys the web, API, and email-worker containers, with PostgreSQL provided as a managed service. Alert and avatar-cleanup workers remain local-only. This distinction prevents local worker readiness from being misreported as cloud worker availability.
 
@@ -25,7 +25,7 @@ The Docker Compose configuration defines six services: PostgreSQL, backend, fron
 
 The Next.js application provides authenticated and public routes. Public routes include the landing page, registration and login, password recovery, email verification states, privacy, terms, and support. The normal-user navigation contains exactly five primary destinations: \texttt{/dashboard}, \texttt{/usage}, \texttt{/forecast}, \texttt{/actions}, and \texttt{/settings}. Compatibility routes redirect \texttt{/consumption} to Usage; \texttt{/alerts} and \texttt{/recommendations} to Actions; and \texttt{/reports} to Usage. The \texttt{/admin} view is rendered only for an administrator.
 
-The interface uses explicit empty, loading, blocked, error, and success states. This is particularly important for forecasting. A missing model, insufficient history, disabled capability, or failed data-quality gate must be explained rather than replaced by a synthetic chart. Horizon state is persisted so that a user can move between 24-hour and 168-hour views without silently changing the underlying forecast. The dashboard also turns the selected period into short plain-language statements about energy, cost, peak timing, comparison, provenance, coverage, and the next useful action. These sentences complement rather than replace the numerical cards and charts.
+The interface uses explicit empty, loading, blocked, error, and success states. This is particularly important for forecasting. A missing model, insufficient history, disabled capability, or failed data-quality gate must be explained rather than replaced by a synthetic chart. Horizon state is persisted across 24-hour, 168-hour, and 30-day views. Daily labels, cards, chart axes, peak descriptions, and PDF names are derived from the returned cadence instead of dividing an assumed hourly series. The demonstration-history shortcut is intentionally unavailable for the month model because its 30-day bootstrap cannot satisfy the 270-day readiness gate.
 
 \IfFileExists{../assets/screenshots/dashboard.png}{
 \begin{figure}[H]
@@ -92,7 +92,7 @@ The explicit ``Reset demo data'' operation deletes and regenerates only simulato
 
 \section{Forecasting service and artifact contracts}
 
-The forecast router exposes capabilities, readiness, demo-history preparation, run, latest, and history operations. The service resolves the configured horizon to a packaged artifact, checks its manifest, loads the user's owned site history, applies data gates and derived calendar features, normalizes the latest 336-hour window, performs inference, inversely transforms outputs with the same window statistics, persists the forecast, and returns the median path and quantile bounds. This implementation contract differs from the scaler contract used for the frozen headline metrics; \cref{tab:normalizationcontracts} and \cref{tab:servingcomparison} separate the two evidence sets.
+The forecast router exposes capabilities, readiness, demo-history preparation, run, latest, and history operations. For 24 and 168 hours, the service validates and normalizes the latest 336-hour window before TFT inference. For the month capability, it integrates persisted meter intervals into rolling 24-hour energy blocks, requires at least 270 complete daily values within a maximum 365-day context, performs causal interpolation only across bounded internal missing days, and invokes the checksum-verified Chronos-2 LoRA release. Forecast records preserve target count, interval length, resolution, input range, and model provenance so that retrieval and PDF generation cannot reinterpret 30 daily targets as 720 hourly points.
 
 \begin{figure}[H]
   \centering
@@ -101,12 +101,12 @@ The forecast router exposes capabilities, readiness, demo-history preparation, r
   \label{fig:forecastlifecycle}
 \end{figure}
 
-The 24-hour and 168-hour manifests record artifact version, checksum, size, unit, lookback, horizon, normalization, quantiles, calendar features, data gates, research metrics, and limitations. The weekly manifest additionally records architecture properties, strict state-dict load, CPU output shape, finite-output verification, and smoke-reference values. Artifact readiness is fixed and explicit rather than inferred from a mutable database label.
+The two TFT manifests record artifact version, checksum, size, unit, lookback, horizon, normalization, quantiles, calendar features, data gates, research metrics, and limitations. The month manifest additionally pins the Chronos-2 base revision and checksum, LoRA checksum, FP32 inference, 365/270-day context contract, 30-target daily output, conformal correction, transfer diagnostics, and CPU benchmark. The container build installs the pinned Chronos/PEFT runtime and prefetches the exact base weights; runtime loading is offline. Artifact readiness is fixed and explicit rather than inferred from a mutable database label.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.98\textwidth]{sequence_forecast.pdf}
-  \caption{Sequence diagram for a supported 24-hour or 168-hour forecast.}
+  \caption{Sequence diagram for a supported forecast; the month path uses daily aggregation and a separate foundation-model contract.}
   \label{fig:forecastsequence}
 \end{figure}
 
@@ -163,7 +163,7 @@ docker compose ps
 curl http://localhost:8000/api/v1/system/live
 curl http://localhost:8000/api/v1/system/ready
 \end{lstlisting}
-Environment configuration must replace insecure sentinel secrets before startup. PostgreSQL data and avatars use named volumes. Alembic migrations run against the configured database. Model artifacts are packaged in the backend image or mounted according to the repository's Compose build context.
+Environment configuration must replace insecure sentinel secrets before startup. PostgreSQL data and avatars use named volumes. Alembic migrations run against the configured database. Model artifacts are packaged in the backend image or mounted according to the repository's Compose build context. The production build includes the exact month adapter and cached base model; deployments may disable the month capability explicitly but do not download mutable weights at request time.
 
 \section{Azure platform deployment}
 
@@ -204,10 +204,10 @@ Cost control & Subscription budget & Monthly threshold of 25 in the subscription
 \end{tabularx}
 \end{table}
 
-The original jury-release smoke test returned HTTP 200 for the frontend, Login, Register, Privacy, and Terms pages and \texttt{ready=true} for the API. The readiness payload reported PostgreSQL ready, both the 24-hour and 168-hour artifacts available, enabled, and warmed, and email processing ready. The live authentication capability response reported email and Google enabled. The Google control opened the account chooser for the authorized Azure domain and was closed without selecting an account. Desktop and 390-pixel mobile registration views had no horizontal overflow. After the latest changes, a read-only Azure revision check confirmed the web, API, and email-worker revisions above as active and healthy; the coordinated CI run at commit \texttt{6796b1e} passed frontend quality gates, PostgreSQL migrations and backend tests, full-history secret scanning, and Docker Compose smoke testing.
+The original jury-release smoke test returned HTTP 200 for the frontend, Login, Register, Privacy, and Terms pages and \texttt{ready=true} for the API. The readiness payload reported PostgreSQL ready, both TFT artifacts available, enabled, and warmed, and email processing ready. The live authentication capability response reported email and Google enabled. The Google control opened the account chooser for the authorized Azure domain and was closed without selecting an account. Desktop and 390-pixel mobile registration views had no horizontal overflow. A read-only Azure revision check confirmed the web, API, and email-worker revisions above as active and healthy. That evidence predates the repository month integration; an Azure promotion of the new foundation-model image is not claimed in this report.
 
 This is a controlled public PFE deployment rather than a claim of complete production maturity. The deployment uses Azure-generated hostnames rather than a custom domain. Public email registration, verification delivery, the email worker, and Google identity are enabled, but no sustained provider/load test is claimed. Alert and avatar-cleanup workers from Compose are not deployed, uploaded avatars are not durably persisted, centralized Log Analytics retention is disabled, the registry uses deployment credentials rather than workload identity, and no backup restoration, load, disaster-recovery, formal accessibility, or penetration test has been completed. The PostgreSQL firewall accepts Azure-originated services but no temporary developer-IP rule remains. The monthly budget sends notifications but is not an automatic application shutdown policy. Older revisions remain inactive; rollback selection must preserve compatible web and API versions.
 
 \section{Implementation summary}
 
-EnergyAI's engineering contribution is an inspectable boundary between scientific artifacts and product behavior. The application exposes only supported horizons, verifies artifact identity, rejects insufficient input, records provenance, isolates user data, preserves uncertainty, labels every synthetic reading, and keeps simulator continuity separate from measured-data gaps. The dashboard communicates these boundaries in ordinary language, while bounded account deletion completes the owner-control path without making legal-compliance claims. The serving scaler is evaluated separately on the preserved London cohort instead of being treated as equivalent to the research transform. The next chapter evaluates the quality evidence for this implementation and states what remains conditional.
+EnergyAI's engineering contribution is an inspectable boundary between scientific artifacts and product behavior. The application exposes only supported capabilities, distinguishes hourly and daily cadence, verifies artifact identity, rejects insufficient input, records provenance, isolates user data, preserves uncertainty, labels every synthetic reading, and keeps simulator continuity separate from measured-data gaps. The active release deliberately keeps the compact TFTs for day/week and uses Chronos-2 only where it fills the missing month capability. The next chapter evaluates the quality evidence for this implementation and states what remains conditional.

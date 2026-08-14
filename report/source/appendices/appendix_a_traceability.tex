@@ -5,13 +5,16 @@
 
 Every central claim in the report must resolve to a source file, manifest, CSV, notebook output, test log, or Git checkpoint. The machine-readable registries are stored under \evidence{report/evidence}. Their purpose is to prevent accidental promotion of an old presentation value, failed experiment, or unverified administrative detail.
 
-\begin{table}[H]
-\centering
-\caption{Report evidence registries.}
-\begin{tabularx}{\textwidth}{p{0.34\textwidth}Y}
+\begin{longtable}{p{0.34\textwidth}p{0.58\textwidth}}
+\caption{Report evidence registries.}\\
 \toprule
 Registry & Content \\
 \midrule
+\endfirsthead
+\toprule
+Registry & Content \\
+\midrule
+\endhead
 \breakcode{model_registry.csv} & Model task, split, scaler scope, seed, artifact, metrics, status, and limitation \\
 \breakcode{artifact_hash_inventory.csv} & File sizes and SHA-256 digests for packaged and selected historical artifacts \\
 \breakcode{figure_registry.csv} & Figure source, generation method, evidence date, and status \\
@@ -22,12 +25,15 @@ Registry & Content \\
 \breakcode{lcl_tft_reanalysis_manifest.json} & Checkpoint/data/script hashes, reproduced cohort checks, and post-hoc quantile diagnostics \\
 \breakcode{lcl_tft_serving_normalization_manifest.json} & Preserved-data audit, exact serving-normalization comparison, hashes, environment, and generated evidence \\
 \breakcode{lcl_tft_serving_normalization_comparison.csv} & Research-versus-serving metrics for the frozen 24-hour and 168-hour cold-start cohorts \\
+\breakcode{month_production_v3/release/manifest.json} & Frozen Chronos-2 base/adapter identity, selection and transfer metrics, cadence, calibration, and runtime contract \\
+\breakcode{hourly_foundation_v2/protocol.json} & Preregistered hourly challenger candidates, comparators, cohorts, and promotion gates \\
+\breakcode{hourly_foundation_v2/audit.json} & Sealed cold-household accuracy, coverage, household-win, and FP32 reload results \\
+\breakcode{hourly_foundation_v2/operational_benchmark.json} & CPU load, memory, and warm-inference measurements used in the deployment decision \\
 \breakcode{openapi_inventory_summary.json} & Exact current OpenAPI path and operation counts \\
 \breakcode{azure_deployment_evidence_2026-08-07.md} & Release commit, Azure resource boundary, HTTPS endpoints, readiness checks, scale settings, cost controls, and remaining cloud limitations \\
 \breakcode{azure_deployment_evidence_2026-08-09.md} & Jury release commit, immutable image digests, email and Google capability, responsive smoke tests, retained rollback revisions, and remaining limitations \\
 \bottomrule
-\end{tabularx}
-\end{table}
+\end{longtable}
 
 \section{Condensed requirement matrix}
 
@@ -50,6 +56,8 @@ Demo-to-CSV handoff & Fresh simulator-status check, explicit stop confirmation, 
 Permanent account deletion & Reauthentication plus ordered set-based ownership-graph deletion & Full-history PostgreSQL deletion test and backend account-control tests \\
 24-hour forecasting & Active Global TFT 24 h manifest and checkpoint & Artifact contract and dual-horizon tests \\
 168-hour forecasting & Active Global TFT 168 h manifest and checkpoint & Artifact contract and dual-horizon tests \\
+30-day forecasting & Active Chronos-2 LoRA month release with explicit daily cadence & Checksum, 365-day input, 30-target inference, API persistence, UI cadence, and PDF tests \\
+Hourly challenger governance & Checksum-addressed Chronos-2 LoRA 24 h and 168 h releases & Frozen accuracy gates passed; resource/contract decision records why activation is deferred \\
 Forecast provenance & Persisted Forecast entity and history endpoint & Forecast API tests and UI coverage \\
 Alerts and actions & AlertConfig, Alert, Recommendation, workers & Alert state tests and worker health \\
 Analytics PDF export & Forecast UI and analytics PDF endpoint; legacy reports route redirects to Usage & Horizon-specific PDF tests \\

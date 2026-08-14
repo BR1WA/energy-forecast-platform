@@ -20,7 +20,7 @@ The exact architecture and dataset variants in the paper were not treated as aut
 
 \section{PatchTST and long-horizon research}
 
-PatchTST experiments introduced direct multi-step forecasting with patch tokens, channel independence, and reversible normalization. Research checkpoints existed for 24, 168, and 720-hour model families at the \texttt{v0.1.0} tag, alongside advanced PatchTST and iTransformer artifacts. These assets document the evolution of the modeling work. They are now classified as research archive because the Product V1 tree intentionally packages only active Global TFT artifacts.
+PatchTST experiments introduced direct multi-step forecasting with patch tokens, channel independence, and reversible normalization. Research checkpoints existed for 24, 168, and 720-hour model families at the \texttt{v0.1.0} tag, alongside advanced PatchTST and iTransformer artifacts. These assets document the evolution of the modeling work. They remain research archives rather than being confused with the later active TFT and Chronos-2 releases.
 
 \section{ECL deep-model benchmark}
 
@@ -238,7 +238,44 @@ The diagnostic manifest records the two checkpoint hashes, raw-array and scaler 
 
 \subsection{Monthly experiments}
 
-For 30 daily totals, MultiCycleNet-adapted records cold-start macro MAE 2.840813 kWh, 8.50\% lower than seasonal naive, while Global N-BEATS records 2.939712 kWh and 5.31\% improvement. However, their cold-start macro $R^2$ values are -0.6078 and -0.7170 respectively. The negative macro coefficients indicate that many household-level series are not modeled reliably. The monthly capability remains experimental and is not presented as an active EnergyAI promise.
+For 30 daily totals, the historical MultiCycleNet-adapted and Global N-BEATS candidates improved seasonal-naive MAE by only 8.50\% and 5.31\%, with macro $R^2$ values of -0.6078 and -0.7170. They remain archived. A subsequent production study compared zero-shot Chronos-2 and rank-8 LoRA schedules of 100, 300, and 600 updates under a frozen selection protocol. The 600-step adapter won, after which the sealed transfer diagnostics were opened.
+
+\begin{table}[H]
+\centering
+\caption{Frozen evidence for the selected 30-day Chronos-2 LoRA release.}
+\label{tab:monthchronos}
+\begin{tabularx}{\textwidth}{p{0.28\textwidth}YYY}
+\toprule
+Evaluation & Primary result & Macro $R^2$ & Central-80\% coverage \\
+\midrule
+Tetouan selection & 49.82\% MAE improvement over strongest frozen baseline & 0.4498 & 88.15\% \\
+Portugal diagnostic & 34.04\% daily-MAE and 28.48\% month-total improvement & 0.4668 & 80.70\% \\
+Southern Morocco diagnostic & MASE 7.27\% worse than baseline & -0.1769 & 84.44\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The release therefore passes its declared production gate without supporting a universal geographic claim. It pins the exact 120M base revision, adapter checksum, FP32 inference precision, non-negative output policy, quantile ordering, and residual-based conformal correction. A CPU benchmark measured approximately 9.04 seconds for cold loading and 76.8 ms median warm inference. Because the base is immutable and cached during the container build, ordinary startup is offline and checksum verified.
+
+\subsection{Same-architecture hourly challengers}
+
+The successful month architecture justified a controlled attempt at the day and week tasks. Separate rank-8 LoRA adapters were selected on known-household validation windows using 672 hours of context; the 500-household London cold cohort was opened only after the 300-step schedule won. The comparison used the exact packaged TFT inference path rather than a newly tuned proxy.
+
+\begin{table}[H]
+\centering
+\caption{Frozen London cold-household audit of hourly Chronos-2 challengers.}
+\label{tab:hourlychronos}
+\begin{tabularx}{\textwidth}{p{0.14\textwidth}YYYYY}
+\toprule
+Horizon & Chronos MAE & TFT MAE & \makecell{MAE\\gain} & Macro $R^2$ & HH win rate \\
+\midrule
+24 h & 0.176788 & 0.182067 & 2.90\% & 0.2920 & 79.96\% \\
+168 h & 0.188696 & 0.193770 & 2.62\% & 0.2472 & 80.96\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Both adapters pass the preregistered 2\% MAE, non-negative $R^2$, coverage, household-win, finite-output, and FP32 reload gates. Their central-80\% coverages are 79.72\% and 78.41\%; warm CPU inference is approximately 111 ms and 127 ms. Nevertheless, activation is deferred: the improvement is modest, the required history would double from 336 to 672 hours, the first base load adds about 904 MB of resident memory, and no geographic hourly transfer gate has been run. The checksum-addressed releases remain production-eligible challengers pending a shared-base multi-adapter loader and container resource gate.
 
 \section{Training and inference considerations}
 
@@ -253,11 +290,11 @@ The full-profile Global TFT training times recorded in the leaderboard are appro
 
 The run files report 3.864 seconds for the complete batched 24-hour cold-start evaluation and 5.578 seconds for the complete batched 168-hour evaluation on the recorded training environment. These totals cover thousands of windows and must not be read as single-request web latency. No controlled concurrency or percentile-latency benchmark is claimed for the API.
 
-The product loads fixed artifacts and verifies their contracts. It does not retrain on user request. This reduces latency and prevents accidental replacement of a validated model by an untracked run.
+The product loads fixed artifacts and verifies their contracts. It does not retrain on user request. The active hourly paths remain the compact TFTs; the active month path uses the verified Chronos-2 adapter. This reduces latency and prevents accidental replacement of a validated model by an untracked run.
 
 \section{Final selection}
 
-Global TFT was selected and packaged for both supported horizons because it provides the best cold-start macro MAE among the final candidates, broad household win rates, native quantile outputs, acceptable artifact size, and reproducible checkpoint identity. \Cref{fig:tftflow} separates the operational transformation from the research evidence boundary.
+Global TFT remains selected for both hourly horizons because it provides strong cold-start evidence, broad household win rates, native quantiles, compact artifacts, and the most favorable current serving tradeoff. Chronos-2 LoRA is selected for the 30-day daily capability because it fills a missing horizon and passes the stronger frozen cross-dataset gate. \Cref{fig:tftflow} separates the hourly operational transformation from the research evidence boundary.
 
 \begin{figure}[H]
   \centering
@@ -266,4 +303,4 @@ Global TFT was selected and packaged for both supported horizons because it prov
   \label{fig:tftflow}
 \end{figure}
 
-The final selection is narrower than the research history by design. iTransformer leads the stored ECL benchmark; Global TFT leads the LCL household cold-start comparison under the original per-household training-segment normalization. TimePro and TimeMixer++ remain attempted. Monthly N-BEATS and MultiCycleNet remain experimental. Historical DEPM scores remain invalidated. The supplementary rolling-normalization run now supports the packaged transform on the same frozen London cohort, while geographic transfer and per-site calibration remain scientifically conditional.
+The final selection is narrower than the research history by design. iTransformer leads the stored ECL benchmark; Global TFT remains the active hourly family; Chronos-2 LoRA is active only for 30 daily targets. The new hourly Chronos adapters are positive, reproducible challengers rather than deployed replacements. TimePro and TimeMixer++ remain attempted, historical monthly N-BEATS and MultiCycleNet remain archived, and the DEPM scores remain invalidated. Geographic transfer and per-site calibration remain scientifically conditional.

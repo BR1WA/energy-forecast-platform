@@ -10,13 +10,13 @@ For a univariate household series $y_t$, a direct multi-horizon forecaster can b
   (\hat y_{t+1},\ldots,\hat y_{t+H}) = f_{\theta}(y_{t-L+1:t}, c_{t-L+1:t+H}),
   \label{eq:forecast}
 \end{equation}
-where $L$ is the lookback length, $H$ the forecast horizon, and $c$ represents calendar or other covariates known at forecast time. The packaged EnergyAI models use a 336-hour history and output either 24 or 168 hourly values. They also estimate the 0.1, 0.5, and 0.9 quantiles, enabling the interface to show a central path and an uncertainty interval.
+where $L$ is the lookback length, $H$ the forecast horizon, and $c$ represents calendar or other covariates known at forecast time. The packaged hourly TFTs use 336 hours and output 24 or 168 hourly values. The month model integrates persisted intervals into at least 270 valid rolling daily totals, uses up to 365 daily values, and outputs 30 daily values. All active models expose the 0.1, 0.5, and 0.9 quantiles.
 
 This formulation must not be confused with a binary label such as ``high'' or ``low'' consumption. Classification can support anomaly or state detection, but it does not answer how many kWh will be consumed at each future hour. It can also become trivial if the class is constructed from a measurement retained among the inputs. One of the first framing decisions of this PFE was therefore to replace the historical class objective with a physically interpretable continuous target.
 
 \section{Operational horizons and user value}
 
-EnergyAI exposes two supported horizons. The 24-hour horizon is intended for next-day review, scheduling, and short-term action. The 168-hour horizon supports week-ahead budget awareness and operational planning. Both outputs are hourly, which preserves intraday structure and allows users to locate peaks. A 30-day aggregate horizon was explored during model research but remains experimental because the household-level macro $R^2$ values were negative in the recorded cold-start evaluation. It is not exposed as an active primary product capability.
+EnergyAI exposes three supported capabilities. The 24-hour horizon is intended for next-day review, and the 168-hour horizon supports week-ahead planning; both preserve hourly structure. The 30-day capability emits 30 daily totals rather than pretending that an integer duration of 720 means 720 hourly targets. It supports month-ahead budget planning and carries explicit daily cadence, target-count, input-readiness, and provenance metadata. Earlier monthly N-BEATS and MultiCycleNet results remain historical; the active month capability is a separately selected and audited Chronos-2 release.
 
 The value of a forecast depends on its comparison target. Repeating yesterday's load or the same hour from the previous week often yields a surprisingly strong baseline. A deep model is only justified when it consistently improves over such rules, not merely when it reports a low number on an arbitrary normalized scale. This report consequently compares Global TFT with a seasonal-naive baseline and reports both average error and the proportion of households for which the model wins.
 
@@ -49,7 +49,7 @@ The current repository supports the following primary user flow:
   \item[\textbf{FR-02}] complete site, timezone, tariff, and meter setup;
   \item[\textbf{FR-03}] preview and import a CSV containing timestamps and energy values;
   \item[\textbf{FR-04}] inspect consumption summaries and paginated readings;
-  \item[\textbf{FR-05}] verify model readiness, choose 24 or 168 hours, and generate a forecast with quantiles and provenance;
+  \item[\textbf{FR-05}] verify model readiness, choose 24 hours, 168 hours, or 30 daily targets, and generate a forecast with quantiles, cadence, and provenance;
   \item[\textbf{FR-06}] review alerts and recommendation-based actions;
   \item[\textbf{FR-07}] manage site, budget, account export, and account deletion settings; and
   \item[\textbf{FR-08}] permit administrators to manage users and inspect system/model readiness without exposing that surface to normal users.
@@ -76,7 +76,7 @@ Electricity traces can reveal occupancy and routine. Each Site and Meter is asso
 
 \subsection{Latency and resource constraints}
 
-The user experience requires bounded imports and responsive inference. The product therefore packages fixed CPU-loadable artifacts instead of retraining in response to user requests. The 24-hour and 168-hour TFT checkpoints each contain approximately 1.386 million trainable parameters and are approximately 5.6 MB on disk. Training occurred as an offline research workflow; serving is a controlled inference operation.
+The user experience requires bounded imports and responsive inference. The product therefore packages fixed CPU-loadable artifacts instead of retraining in response to user requests. The two TFT checkpoints are approximately 5.6 MB each. The month LoRA adapter is approximately 4.9 MB, but its pinned 120M-parameter base adds a substantial image-cache and memory cost. A measured CPU cold load took about 9.0 seconds; warm 30-day inference took about 77 ms. The production image therefore caches the exact base revision and verifies both base and adapter checksums before offline serving.
 
 \subsection{Cold-start generalization}
 
@@ -104,7 +104,7 @@ Risk & Control & Acceptance evidence \\
 \midrule
 Target leakage & Causal feature audit and chronological split & Reproducible comparison between historical and corrected pipelines \\
 Misleading model comparison & Common cohorts, units, horizons, and baselines & Leaderboards with explicit protocol columns \\
-Unsupported product promise & Capability and readiness gates & Only 24 h and 168 h artifacts exposed \\
+Unsupported product promise & Capability, cadence, and readiness gates & 24 and 168 hourly targets plus exactly 30 daily targets \\
 Cross-user data exposure & Ownership-scoped queries and RBAC & PostgreSQL integration and authorization tests \\
 Corrupted or mismatched model & Manifest and SHA-256 verification & Strict load, finite output, and expected shape checks \\
 Research--serving transform mismatch & Explicit normalization contracts and frozen-cohort serving re-evaluation & Transform comparison completed; new-site efficacy remains conditional \\

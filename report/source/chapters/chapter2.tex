@@ -69,6 +69,10 @@ A global model shares parameters across many time series. Its complexity does no
 
 \ac{tft} combines variable selection, gated residual networks, recurrent local processing, and interpretable attention for multi-horizon forecasting \cite{lim2021tft}. The EnergyAI Global TFT adapts this family to a household input contract consisting of historical energy and derived calendar features. It outputs three quantiles learned through the pinball objective introduced by quantile regression \cite{koenker1978quantile} and is trained across households. The artifact manifests document 1,386,262 trainable parameters, a 336-hour lookback, and data-quality gates.
 
+\section{Pretrained time-series foundation models}
+
+Chronos converts scaled time-series values into a representation that can be modeled by a pretrained sequence architecture and returns probabilistic forecasts \cite{ansari2024chronos}. Its later official implementation adds direct quantile prediction, longer context, covariates, and parameter-efficient fine-tuning paths \cite{chronos2repo}. This changes the model-selection tradeoff: a compact task-specific model may remain preferable for latency and memory, while one shared pretrained base can transfer across cadences and datasets when adapted with small LoRA modules. EnergyAI evaluates that proposition under frozen validation and audit gates rather than assuming that pretraining guarantees transfer.
+
 \section{Ensembles and extraordinary scores}
 
 Alghamdi et al. propose a stacked LSTM snapshot ensemble combined with \ac{fft} features and a meta-learner and report RMSE 0.020, MAE 0.013, MAPE 0.017, and $R^2=0.999$ on IHEPC with weather data \cite{alghamdi2024snapshot}. The paper is relevant because it illustrates how ensemble diversity and frequency-domain features can be combined. It also illustrates why scale, split, target definition, and inverse transformation must accompany extraordinary metrics.
@@ -100,8 +104,9 @@ iTransformer \cite{liu2024itransformer} & Variable-token attention for multivari
 xPatch \cite{stitsyuk2025xpatch} & Seasonal-trend decomposition with linear and nonlinear patch streams & Completed ECL rows; treated as a separate non-Transformer competitor \\
 N-BEATS \cite{oreshkin2020nbeats} & Residual backcast/forecast basis expansion & Completed LCL candidate rows; not the selected packaged model \\
 TFT \cite{lim2021tft} & Gating, variable selection, recurrent context, attention, and multi-horizon quantiles & Completed LCL 24 h and 168 h checkpoints; packaged and separately evaluated under serving normalization on the frozen LCL cohort; new-site transfer remains unvalidated \\
+Chronos / Chronos-2 \cite{ansari2024chronos,chronos2repo} & Pretrained probabilistic forecasting with parameter-efficient adaptation & Selected, transfer-audited, and deployed in the repository for 30 daily targets; hourly challengers packaged but not activated \\
 TimeMixer++ \cite{wang2025timemixerpp} and TimePro \cite{ma2025timepro} & Recent multi-resolution and efficient multivariate designs & Integration attempted; dependency/provenance barriers prevented completed local leaderboard rows \\
-Probabilistic and conformal forecasting \cite{gneiting2014probabilistic,stankeviciute2021conformal} & Calibration, sharpness, and post-hoc interval validity & Used to evaluate TFT interval coverage and define future calibration work; no conformal layer is claimed as implemented \\
+Probabilistic and conformal forecasting \cite{gneiting2014probabilistic,stankeviciute2021conformal} & Calibration, sharpness, and post-hoc interval validity & TFT intervals are diagnosed; the month release applies a frozen residual-based conformal correction \\
 \bottomrule
 \end{longtable}
 
@@ -141,6 +146,7 @@ xPatch & Decomposition with linear/nonlinear streams & Recent implementation sen
 TimePro / TimeMixer++ & Recent efficient designs & Reproduction uncertainty & Attempted; no completed metrics \\
 N-BEATS & Strong global residual backbone & Point forecast without native uncertainty in local setup & Product fallback/experimental \\
 TFT & Multi-horizon quantiles and gating & More complex artifact and calibration needs & Selected and packaged at 24 h and 168 h \\
+Chronos-2 plus LoRA & Cross-dataset pretrained representation and small adapters & Base memory, startup latency, and transfer sensitivity & Active at 30 daily targets; hourly challengers retained \\
 \bottomrule
 \end{tabularx}
 \end{table}
