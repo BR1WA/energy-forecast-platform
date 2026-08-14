@@ -105,7 +105,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=(
         "Energy Forecasting Platform — "
-        "one-site monitoring with truthful fixed 24-hour and gated 168-hour forecasts, "
+        "one-site monitoring with truthful fixed 24-hour, 168-hour, and 30-day daily forecasts, "
         "with JWT authentication and alert management."
     ),
     docs_url="/docs",

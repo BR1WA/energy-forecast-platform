@@ -20,6 +20,8 @@ from app.services.product_forecast_service import (
     ARTIFACT_SPECS,
     ForecastCapabilityError,
     LOOKBACK_HOURS,
+    MONTH_HORIZON_HOURS,
+    MONTH_LOOKBACK_HOURS,
     ProductForecastService,
 )
 from app.services.site_service import ensure_default_site, get_default_meter
@@ -62,11 +64,41 @@ def add_complete_history(db, user_id: int, *, power: float = 2.0):
     return site, meter
 
 
+def add_complete_month_history(db, user_id: int, *, power: float = 2.0):
+    site = ensure_default_site(db, user_id)
+    site.timezone = "UTC"
+    meter = get_default_meter(db, user_id)
+    start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    db.bulk_save_objects(
+        [
+            SmartMeterReading(
+                meter_id=meter.id,
+                timestamp=start + timedelta(hours=index),
+                gap=power + (index % 24) / 20,
+                grp=0.0,
+                voltage=230.0,
+                intensity=5.0,
+                sub_metering_1=0.0,
+                sub_metering_2=0.0,
+                sub_metering_3=0.0,
+                source="csv",
+                quality="validated",
+            )
+            for index in range(MONTH_LOOKBACK_HOURS + 1)
+        ]
+    )
+    db.commit()
+    return site, meter
+
+
 def test_packaged_checkpoint_matches_the_production_manifest():
     manifest = json.loads((ARTIFACT_DIR / "manifest.json").read_text(encoding="utf-8"))
     checkpoint = ARTIFACT_DIR / manifest["checkpoint_file"]
     assert checkpoint.stat().st_size == manifest["checkpoint_size_bytes"]
-    assert hashlib.sha256(checkpoint.read_bytes()).hexdigest() == manifest["checkpoint_sha256"]
+    assert (
+        hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        == manifest["checkpoint_sha256"]
+    )
     assert manifest["lookback_hours"] == 336
     assert manifest["horizon_hours"] == 24
     assert manifest["quantiles"] == [0.1, 0.5, 0.9]
@@ -77,8 +109,14 @@ def test_packaged_week_checkpoint_matches_its_independent_manifest():
     manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
     checkpoint = artifact_dir / manifest["checkpoint_file"]
     assert checkpoint.stat().st_size == manifest["checkpoint_size_bytes"] == 5_600_105
-    assert hashlib.sha256(checkpoint.read_bytes()).hexdigest() == manifest["checkpoint_sha256"]
-    assert manifest["checkpoint_sha256"] == "80af16b25af9b912019c6e40cfdc491e2cf5173e5743144596801e28df695f93"
+    assert (
+        hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        == manifest["checkpoint_sha256"]
+    )
+    assert (
+        manifest["checkpoint_sha256"]
+        == "80af16b25af9b912019c6e40cfdc491e2cf5173e5743144596801e28df695f93"
+    )
     assert manifest["lookback_hours"] == 336
     assert manifest["horizon_hours"] == 168
     assert manifest["quantiles"] == [0.1, 0.5, 0.9]
@@ -86,12 +124,29 @@ def test_packaged_week_checkpoint_matches_its_independent_manifest():
     assert manifest["training"]["cold_start_households_beating_seasonal_percent"] >= 75
 
 
+def test_packaged_month_adapter_matches_its_production_manifest():
+    artifact_dir = ARTIFACT_SPECS[MONTH_HORIZON_HOURS].artifact_dir
+    manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+    adapter = artifact_dir / manifest["adapter"]["filename"]
+    assert manifest["status"] == "production_eligible"
+    assert manifest["contract"]["horizon_days"] == 30
+    assert manifest["contract"]["context_days"] == 365
+    assert manifest["contract"]["target_frequency"] == "daily"
+    assert adapter.stat().st_size == manifest["adapter"]["bytes"] == 4_854_584
+    assert (
+        hashlib.sha256(adapter.read_bytes()).hexdigest()
+        == manifest["adapter"]["sha256"]
+    )
+
+
 def test_week_capability_is_hidden_by_default():
     capabilities = ProductForecastService(forecast_168h_enabled=False).capabilities()
     assert [item["horizon_hours"] for item in capabilities["capabilities"]] == [24]
 
 
-def test_week_artifact_failure_is_actionable_and_never_substitutes_the_day_model(monkeypatch):
+def test_week_artifact_failure_is_actionable_and_never_substitutes_the_day_model(
+    monkeypatch,
+):
     service = ProductForecastService(forecast_168h_enabled=True)
     monkeypatch.setattr(
         service,
@@ -105,7 +160,9 @@ def test_week_artifact_failure_is_actionable_and_never_substitutes_the_day_model
             "display_name": ARTIFACT_SPECS[horizon_hours].display_name,
             "version": "1.0.0",
             "artifact_fingerprint": None,
-            "error": None if horizon_hours == 24 else "Weekly checkpoint integrity failed.",
+            "error": (
+                None if horizon_hours == 24 else "Weekly checkpoint integrity failed."
+            ),
         },
     )
 
@@ -183,6 +240,89 @@ def test_readiness_rejects_incomplete_history_instead_of_padding_it():
         assert any("at least 95%" in reason for reason in prepared.reasons)
         assert any("maximum is 3 hours" in reason for reason in prepared.reasons)
         assert site.id is not None
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_month_readiness_builds_complete_daily_energy_without_future_padding():
+    engine, db = build_session()
+    try:
+        user = User(
+            email="forecast-month-ready@example.com",
+            password_hash=hash_password("password123"),
+            role="user",
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        add_complete_month_history(db, user.id)
+
+        prepared = ProductForecastService(
+            forecast_30d_enabled=True
+        ).prepare_month_input(db, user.id)
+        assert prepared.ready
+        assert prepared.observed_days == 365
+        assert prepared.coverage_percent == 100.0
+        assert prepared.values is not None
+        assert prepared.values.shape == (365,)
+        assert np.isfinite(prepared.values).all()
+        assert np.all(prepared.values > 0)
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_month_generation_returns_30_daily_targets_and_explicit_cadence(monkeypatch):
+    engine, db = build_session()
+    try:
+        user = User(
+            email="forecast-month-generation@example.com",
+            password_hash=hash_password("password123"),
+            role="user",
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        add_complete_month_history(db, user.id)
+        service = ProductForecastService(forecast_30d_enabled=True)
+        monkeypatch.setattr(
+            service,
+            "warmup",
+            lambda horizon_hours=24: {
+                "available": True,
+                "enabled": True,
+                "warmed": True,
+                "horizon_hours": horizon_hours,
+                "name": ARTIFACT_SPECS[horizon_hours].model_name,
+                "display_name": ARTIFACT_SPECS[horizon_hours].display_name,
+                "version": "3.0.0",
+                "artifact_fingerprint": "monthly-adapter-sha",
+                "error": None,
+            },
+        )
+        monkeypatch.setattr(
+            service,
+            "_predict_month",
+            lambda prepared: (
+                np.linspace(20, 22, 30),
+                np.linspace(24, 26, 30),
+                np.linspace(28, 30, 30),
+            ),
+        )
+
+        result = service.generate(db, user.id, MONTH_HORIZON_HOURS)
+        assert result["method"] == "chronos2_lora"
+        assert result["resolution"] == "daily"
+        assert result["target_count"] == 30
+        assert result["target_interval_hours"] == 24
+        assert len(result["prediction_rows"]) == 30
+        timestamps = [point["timestamp"] for point in result["points"]]
+        assert all(
+            right - left == timedelta(days=1)
+            for left, right in zip(timestamps, timestamps[1:])
+        )
+        assert result["forecast_end"] - result["origin"] == timedelta(days=30)
     finally:
         db.close()
         Base.metadata.drop_all(bind=engine)
@@ -273,7 +413,10 @@ def test_week_fallback_uses_the_previous_168_hours_without_fake_interval(monkeyp
         Base.metadata.drop_all(bind=engine)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="PyTorch is optional in the CI test image")
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None,
+    reason="PyTorch is optional in the CI test image",
+)
 def test_packaged_tft_returns_ordered_24_hour_quantiles():
     engine, db = build_session()
     try:
@@ -301,7 +444,10 @@ def test_packaged_tft_returns_ordered_24_hour_quantiles():
         Base.metadata.drop_all(bind=engine)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="PyTorch is optional in the CI test image")
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None,
+    reason="PyTorch is optional in the CI test image",
+)
 def test_packaged_tft_returns_ordered_168_hour_quantiles():
     engine, db = build_session()
     try:
@@ -315,8 +461,12 @@ def test_packaged_tft_returns_ordered_168_hour_quantiles():
         db.commit()
         add_complete_history(db, user.id)
 
-        result = ProductForecastService(forecast_168h_enabled=True).generate(db, user.id, 168)
-        repeated = ProductForecastService(forecast_168h_enabled=True).generate(db, user.id, 168)
+        result = ProductForecastService(forecast_168h_enabled=True).generate(
+            db, user.id, 168
+        )
+        repeated = ProductForecastService(forecast_168h_enabled=True).generate(
+            db, user.id, 168
+        )
         assert result["method"] == "global_tft"
         assert result["horizon_hours"] == 168
         assert len(result["prediction_rows"]) == 168
@@ -329,7 +479,10 @@ def test_packaged_tft_returns_ordered_168_hour_quantiles():
         Base.metadata.drop_all(bind=engine)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="PyTorch is optional in the CI test image")
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None,
+    reason="PyTorch is optional in the CI test image",
+)
 def test_packaged_week_checkpoint_matches_the_deterministic_smoke_fingerprint():
     import torch
 

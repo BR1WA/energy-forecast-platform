@@ -1,6 +1,11 @@
 **
 !backend/
 !backend/**
+!models/
+!models/lcl_global_forecasting/
+!models/lcl_global_forecasting/month_production_v3/
+!models/lcl_global_forecasting/month_production_v3/release/
+!models/lcl_global_forecasting/month_production_v3/release/**
 
 backend/.env
 backend/.pytest_cache/

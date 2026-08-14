@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     # Product V1 capabilities. New integrations stay invisible until an operator
     # explicitly enables them and supplies their complete configuration.
     FORECAST_168H_ENABLED: bool = False
+    FORECAST_30D_ENABLED: bool = False
     EMAIL_DELIVERY_ENABLED: bool = False
     GOOGLE_AUTH_ENABLED: bool = False
 

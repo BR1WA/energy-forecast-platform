@@ -1,14 +1,15 @@
 """
 Pydantic schemas for request/response validation.
 """
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from enum import Enum
 import math
 
-
 # ======================== AUTH ========================
+
 
 class UserRole(str, Enum):
     admin = "admin"
@@ -144,6 +145,7 @@ class AccountLifecycleStatus(str, Enum):
 class AdminUserResponse(UserResponse):
     lifecycle_status: AccountLifecycleStatus
 
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -181,7 +183,9 @@ class PasswordResetConfirm(BaseModel):
 class AccountDeletionRequest(BaseModel):
     confirmation: Literal["DELETE"]
     current_password: Optional[str] = Field(default=None, max_length=100)
-    google_credential: Optional[str] = Field(default=None, min_length=20, max_length=4096)
+    google_credential: Optional[str] = Field(
+        default=None, min_length=20, max_length=4096
+    )
     google_state: Optional[str] = Field(default=None, min_length=20, max_length=512)
 
 
@@ -217,8 +221,10 @@ class AuthCapabilitiesResponse(BaseModel):
 
 # ======================== INGESTION ========================
 
+
 class MeterSample(BaseModel):
     """Canonical electricity measurement accepted from every ingestion source."""
+
     model_config = ConfigDict(populate_by_name=True)
 
     timestamp: datetime
@@ -239,8 +245,14 @@ class MeterSample(BaseModel):
         return value
 
     @field_validator(
-        "active_power_kw", "reactive_power_kvar", "voltage_v", "current_a",
-        "sub_metering_1_wh", "sub_metering_2_wh", "sub_metering_3_wh", "energy_kwh",
+        "active_power_kw",
+        "reactive_power_kvar",
+        "voltage_v",
+        "current_a",
+        "sub_metering_1_wh",
+        "sub_metering_2_wh",
+        "sub_metering_3_wh",
+        "energy_kwh",
     )
     @classmethod
     def values_must_be_finite(cls, value: Optional[float]) -> Optional[float]:
@@ -282,13 +294,16 @@ class IngestionResult(BaseModel):
 
 # ======================== USERS (Admin) ========================
 
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
 
+
 class UserUpdateMe(BaseModel):
     full_name: Optional[str] = None
+
 
 class PasswordUpdate(BaseModel):
     current_password: str
@@ -297,11 +312,12 @@ class PasswordUpdate(BaseModel):
 
 # ======================== FORECAST ========================
 
+
 class ForecastModelStatus(BaseModel):
     available: bool
     enabled: bool = True
     warmed: bool = False
-    horizon_hours: Literal[24, 168] = 24
+    horizon_hours: Literal[24, 168, 720] = 24
     name: str
     display_name: str
     version: str
@@ -310,7 +326,10 @@ class ForecastModelStatus(BaseModel):
 
 
 class ForecastCapability(BaseModel):
-    horizon_hours: Literal[24, 168]
+    horizon_hours: Literal[24, 168, 720]
+    target_count: int
+    target_interval_hours: int
+    resolution: Literal["hourly", "daily"]
     label: str
     description: str
     model: ForecastModelStatus
@@ -322,7 +341,7 @@ class ForecastCapabilitiesResponse(BaseModel):
 
 
 class ForecastRunRequest(BaseModel):
-    horizon_hours: Literal[24, 168] = 24
+    horizon_hours: Literal[24, 168, 720] = 24
 
 
 class ForecastDemoHistoryResponse(BaseModel):
@@ -340,8 +359,11 @@ class ForecastDemoHistoryResponse(BaseModel):
 
 
 class ForecastReadiness(BaseModel):
-    horizon_hours: Literal[24, 168] = 24
+    horizon_hours: Literal[24, 168, 720] = 24
+    target_count: int
+    target_interval_hours: int
     status: Literal["ready", "fallback_ready", "insufficient_data"]
+    ready_for_model: bool
     ready_for_tft: bool
     fallback_available: bool
     required_hours: int
@@ -352,8 +374,13 @@ class ForecastReadiness(BaseModel):
     missing_hours: int
     imputed_hours: int
     maximum_gap_hours: int
+    required_days: Optional[int] = None
+    observed_days: int = 0
+    missing_days: int = 0
+    imputed_days: int = 0
+    maximum_gap_days: int = 0
     unit: Literal["kWh"]
-    resolution: Literal["hourly"]
+    resolution: Literal["hourly", "daily"]
     latest_reading_at: Optional[datetime] = None
     forecast_origin: Optional[datetime] = None
     reasons: List[str] = Field(default_factory=list)
@@ -373,11 +400,14 @@ class ProductForecastResponse(BaseModel):
     id: int
     model_name: str
     model_version: str
-    method: Literal["global_tft", "seasonal_naive", "unknown"]
+    method: Literal["global_tft", "chronos2_lora", "seasonal_naive", "unknown"]
     fallback_reason: Optional[str] = None
     unit: Literal["kWh"] = "kWh"
     timezone: str
     horizon_hours: int
+    target_count: int
+    target_interval_hours: int
+    resolution: Literal["hourly", "daily"]
     input_start: Optional[datetime] = None
     input_end: Optional[datetime] = None
     forecast_start: datetime
@@ -399,10 +429,15 @@ class ProductForecastHistoryItem(BaseModel):
     model_name: str
     method: str
     horizon_hours: int
+    target_count: int
+    target_interval_hours: int
+    resolution: Literal["hourly", "daily"]
     forecast_start: Optional[datetime] = None
     created_at: datetime
 
+
 # ======================== ALERTS ========================
+
 
 class AlertConfigCreate(BaseModel):
     threshold_kw: float = Field(ge=0.1, le=20.0, default=3.0)
@@ -420,8 +455,11 @@ class AlertConfigResponse(BaseModel):
     missing_data_minutes: int
     email_enabled: bool
     email_delivery_available: bool
-    email_delivery_unavailable_reason: Optional[Literal["mail_disabled", "email_unverified"]] = None
+    email_delivery_unavailable_reason: Optional[
+        Literal["mail_disabled", "email_unverified"]
+    ] = None
     created_at: datetime
+
 
 class AlertResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -437,6 +475,7 @@ class AlertResponse(BaseModel):
     acknowledged_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     created_at: datetime
+
 
 class RecommendationStatusUpdate(BaseModel):
     status: str = Field(pattern="^(open|completed|dismissed)$")
@@ -462,16 +501,19 @@ class ConsumptionTrendPoint(BaseModel):
     consumption: float
     predicted: Optional[float] = None
 
+
 class WeeklyConsumptionPoint(BaseModel):
     week: str
     actual: float
     predicted: float
     savings: float
 
+
 class HourlyPatternPoint(BaseModel):
     hour: str
     weekday: float
     weekend: float
+
 
 class MonthlyAccuracyPoint(BaseModel):
     month: str
@@ -479,16 +521,19 @@ class MonthlyAccuracyPoint(BaseModel):
     sota_hybrid: float
     patchtst: float
 
+
 class ModelPerformancePoint(BaseModel):
     metric: str
     cnn_bilstm: float
     sota_hybrid: float
     patchtst: float
 
+
 class HeatmapPoint(BaseModel):
     day: str
     hour: int
     value: float
+
 
 class ReportForecastItem(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
@@ -516,6 +561,7 @@ class AnalyticsSummary(BaseModel):
 
 
 # ======================== ADMIN ========================
+
 
 class SystemHealth(BaseModel):
     model_config = ConfigDict(protected_namespaces=())

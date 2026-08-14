@@ -33,8 +33,18 @@ def test_owned_report_summary_pdf_and_consumption_csv():
     app.dependency_overrides[get_db] = override_get_db
     db = Session()
     try:
-        owner = User(email="report-owner@example.com", password_hash=hash_password("password123"), role="user", is_active=True)
-        other = User(email="report-other@example.com", password_hash=hash_password("password123"), role="user", is_active=True)
+        owner = User(
+            email="report-owner@example.com",
+            password_hash=hash_password("password123"),
+            role="user",
+            is_active=True,
+        )
+        other = User(
+            email="report-other@example.com",
+            password_hash=hash_password("password123"),
+            role="user",
+            is_active=True,
+        )
         db.add_all([owner, other])
         db.commit()
         site = ensure_default_site(db, owner.id)
@@ -85,19 +95,39 @@ def test_owned_report_summary_pdf_and_consumption_csv():
             model_name="global_tft_24h",
             horizon=24,
             predictions=[[9.0, 8.0, 10.0] for _ in range(24)],
-            input_snapshot={"method": "global_tft", "forecast_origin": start.isoformat()},
+            input_snapshot={
+                "method": "global_tft",
+                "forecast_origin": start.isoformat(),
+            },
         )
         db.add_all(
             [
                 forecast,
                 other_forecast,
-                Alert(user_id=owner.id, site_id=site.id, alert_type="high_consumption", severity="high", message="Open"),
-                Alert(user_id=owner.id, site_id=site.id, alert_type="missing_data", severity="high", message="Closed", resolved_at=start),
+                Alert(
+                    user_id=owner.id,
+                    site_id=site.id,
+                    alert_type="high_consumption",
+                    severity="high",
+                    message="Open",
+                ),
+                Alert(
+                    user_id=owner.id,
+                    site_id=site.id,
+                    alert_type="missing_data",
+                    severity="high",
+                    message="Closed",
+                    resolved_at=start,
+                ),
             ]
         )
         db.commit()
-        owner_headers = {"Authorization": f"Bearer {create_access_token({'sub': str(owner.id)})}"}
-        other_headers = {"Authorization": f"Bearer {create_access_token({'sub': str(other.id)})}"}
+        owner_headers = {
+            "Authorization": f"Bearer {create_access_token({'sub': str(owner.id)})}"
+        }
+        other_headers = {
+            "Authorization": f"Bearer {create_access_token({'sub': str(other.id)})}"
+        }
         client = TestClient(app)
 
         summary = client.get("/api/v1/analytics/summary", headers=owner_headers)
@@ -109,15 +139,30 @@ def test_owned_report_summary_pdf_and_consumption_csv():
         assert payload["recent_forecasts"][0]["total_kwh"] == 36.0
         assert payload["recent_forecasts"][0]["peak_hourly_kwh"] == 1.5
 
-        pdf = client.get(f"/api/v1/analytics/report/pdf?forecast_id={forecast.id}", headers=owner_headers)
+        pdf = client.get(
+            f"/api/v1/analytics/report/pdf?forecast_id={forecast.id}",
+            headers=owner_headers,
+        )
         assert pdf.status_code == 200
         assert pdf.headers["content-type"] == "application/pdf"
         assert pdf.content.startswith(b"%PDF")
-        assert f"energy_forecast_24h_{forecast.id}.pdf" in pdf.headers["content-disposition"]
-        day_pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf.content)).pages)
+        assert (
+            f"energy_forecast_24h_{forecast.id}.pdf"
+            in pdf.headers["content-disposition"]
+        )
+        day_pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(pdf.content)).pages
+        )
         assert "Next 24 Hours Energy Forecast Report" in day_pdf_text
-        assert "Output: 24 hourly energy values in kWh" in day_pdf_text
-        assert client.get(f"/api/v1/analytics/report/pdf?forecast_id={forecast.id}", headers=other_headers).status_code == 404
+        assert "Output: 24 hourly energy values in kWh across 24 hours" in day_pdf_text
+        assert (
+            client.get(
+                f"/api/v1/analytics/report/pdf?forecast_id={forecast.id}",
+                headers=other_headers,
+            ).status_code
+            == 404
+        )
 
         weekly = Forecast(
             user_id=owner.id,
@@ -140,15 +185,79 @@ def test_owned_report_summary_pdf_and_consumption_csv():
         )
         db.add(weekly)
         db.commit()
-        weekly_pdf = client.get(f"/api/v1/analytics/report/pdf?forecast_id={weekly.id}", headers=owner_headers)
+        weekly_pdf = client.get(
+            f"/api/v1/analytics/report/pdf?forecast_id={weekly.id}",
+            headers=owner_headers,
+        )
         assert weekly_pdf.status_code == 200
-        assert f"energy_forecast_168h_{weekly.id}.pdf" in weekly_pdf.headers["content-disposition"]
-        weekly_pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(weekly_pdf.content)).pages)
+        assert (
+            f"energy_forecast_168h_{weekly.id}.pdf"
+            in weekly_pdf.headers["content-disposition"]
+        )
+        weekly_pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(weekly_pdf.content)).pages
+        )
         assert "7-Day / 168-Hour Energy Forecast Report" in weekly_pdf_text
-        assert "Output: 168 hourly energy values in kWh" in weekly_pdf_text
-        assert client.get(f"/api/v1/analytics/report/pdf?forecast_id={weekly.id}", headers=other_headers).status_code == 404
+        assert (
+            "Output: 168 hourly energy values in kWh across 168 hours"
+            in weekly_pdf_text
+        )
+        assert (
+            client.get(
+                f"/api/v1/analytics/report/pdf?forecast_id={weekly.id}",
+                headers=other_headers,
+            ).status_code
+            == 404
+        )
 
-        csv_response = client.get("/api/v1/consumption/export?month=2026-07", headers=owner_headers)
+        monthly = Forecast(
+            user_id=owner.id,
+            site_id=site.id,
+            model_name="month_production_v3",
+            horizon=720,
+            input_source="meter",
+            input_start=start - timedelta(days=365),
+            input_end=start,
+            predictions=[[25.0, 20.0, 30.0] for _ in range(30)],
+            confidence_method="Validation-only asymmetric conformal calibration.",
+            input_snapshot={
+                "method": "chronos2_lora",
+                "model_version": "3.0.0",
+                "forecast_origin": start.isoformat(),
+                "forecast_end": (start + timedelta(days=30)).isoformat(),
+                "timezone": "UTC",
+                "sources": ["csv"],
+                "coverage_percent": 100,
+                "target_count": 30,
+                "target_interval_hours": 24,
+                "resolution": "daily",
+            },
+        )
+        db.add(monthly)
+        db.commit()
+        monthly_pdf = client.get(
+            f"/api/v1/analytics/report/pdf?forecast_id={monthly.id}",
+            headers=owner_headers,
+        )
+        assert monthly_pdf.status_code == 200
+        assert (
+            f"energy_forecast_30d_{monthly.id}.pdf"
+            in monthly_pdf.headers["content-disposition"]
+        )
+        monthly_pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(monthly_pdf.content)).pages
+        )
+        assert "30-Day Daily Energy Forecast Report" in monthly_pdf_text
+        assert (
+            "Output: 30 daily energy values in kWh across 720 hours" in monthly_pdf_text
+        )
+        assert "Peak daily energy: 25.000 kWh" in monthly_pdf_text
+
+        csv_response = client.get(
+            "/api/v1/consumption/export?month=2026-07", headers=owner_headers
+        )
         assert csv_response.status_code == 200
         csv_text = csv_response.text
         assert "site,Default site" in csv_text

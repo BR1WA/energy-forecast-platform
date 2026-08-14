@@ -246,5 +246,6 @@ def all_model_readiness(
         "artifacts": [
             product_forecast_service.warmup(),
             product_forecast_service.warmup(168),
+            product_forecast_service.warmup(720),
         ]
     }

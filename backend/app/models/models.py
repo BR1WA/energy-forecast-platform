@@ -296,7 +296,7 @@ class Forecast(Base):
     model_name = Column(String(50), nullable=False)
     input_start = Column(DateTime(timezone=True), nullable=True)
     input_end = Column(DateTime(timezone=True), nullable=True)
-    predictions = Column(JSON, nullable=False)  # 24-step forecast array
+    predictions = Column(JSON, nullable=False)  # Fixed-cadence forecast array.
     metrics = Column(JSON, nullable=True)  # {mae, rmse, mape} if actuals available
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

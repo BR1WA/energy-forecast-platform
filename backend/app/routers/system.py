@@ -31,6 +31,8 @@ def build_readiness(db: Session) -> dict:
     forecast_artifacts = {"24": forecast}
     if product_forecast_service.is_enabled(168):
         forecast_artifacts["168"] = product_forecast_service.warmup(168)
+    if product_forecast_service.is_enabled(720):
+        forecast_artifacts["720"] = product_forecast_service.warmup(720)
     mail_counts = {"processing": 0, "retry": 0, "dead": 0}
     if settings.EMAIL_DELIVERY_ENABLED:
         for state in mail_counts:

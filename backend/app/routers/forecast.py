@@ -1,4 +1,5 @@
-"""Product forecast API for fixed 24-hour and gated 168-hour capabilities."""
+"""Product API for fixed hourly and daily forecast capabilities."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -26,7 +27,6 @@ from app.services.product_forecast_service import (
     product_forecast_service,
 )
 
-
 router = APIRouter(prefix="/api/v1/forecast", tags=["Forecast"])
 PRODUCT_MODELS = PRODUCT_MODEL_NAMES
 
@@ -42,16 +42,23 @@ def _serialize(forecast: Forecast) -> dict:
     snapshot = forecast.input_snapshot or {}
     origin = snapshot.get("forecast_origin")
     rows = forecast.predictions or []
+    target_interval_hours = int(snapshot.get("target_interval_hours", 1))
+    resolution = snapshot.get("resolution", "hourly")
     points = []
     if origin:
         parsed_origin = datetime.fromisoformat(origin)
         for index, row in enumerate(rows):
             points.append(
                 {
-                    "timestamp": parsed_origin + timedelta(hours=index),
+                    "timestamp": parsed_origin
+                    + timedelta(hours=index * target_interval_hours),
                     "p50_kwh": float(row[0]),
-                    "p10_kwh": float(row[1]) if len(row) > 1 and row[1] is not None else None,
-                    "p90_kwh": float(row[2]) if len(row) > 2 and row[2] is not None else None,
+                    "p10_kwh": (
+                        float(row[1]) if len(row) > 1 and row[1] is not None else None
+                    ),
+                    "p90_kwh": (
+                        float(row[2]) if len(row) > 2 and row[2] is not None else None
+                    ),
                 }
             )
     return {
@@ -63,6 +70,9 @@ def _serialize(forecast: Forecast) -> dict:
         "unit": "kWh",
         "timezone": snapshot.get("timezone", "UTC"),
         "horizon_hours": forecast.horizon or 24,
+        "target_count": int(snapshot.get("target_count", len(rows))),
+        "target_interval_hours": target_interval_hours,
+        "resolution": resolution,
         "input_start": forecast.input_start,
         "input_end": forecast.input_end,
         "forecast_start": origin,
@@ -117,7 +127,9 @@ def prepare_demo_history(
     return result
 
 
-@router.post("/run", response_model=ProductForecastResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/run", response_model=ProductForecastResponse, status_code=status.HTTP_201_CREATED
+)
 def run_forecast(
     data: ForecastRunRequest | None = None,
     db: Session = Depends(get_db),
@@ -141,22 +153,31 @@ def run_forecast(
         model_name=result["model_name"],
         horizon=horizon_hours,
         input_source="meter",
-        input_start=origin - timedelta(hours=LOOKBACK_HOURS),
+        input_start=result.get("input_start", origin - timedelta(hours=LOOKBACK_HOURS)),
         input_end=origin,
         predictions=result["prediction_rows"],
         confidence_method=result["confidence_method"],
         input_snapshot={
-            "product_contract": f"one_site_primary_meter_{horizon_hours}h_v1",
+            "product_contract": (
+                "one_site_primary_meter_30_daily_v1"
+                if result["resolution"] == "daily"
+                else f"one_site_primary_meter_{horizon_hours}h_v1"
+            ),
             "model_version": result["model_version"],
             "method": result["method"],
             "fallback_reason": result["fallback_reason"],
             "timezone": result["site"].timezone,
             "meter_id": result["meter"].id,
             "forecast_origin": origin.isoformat(),
-            "forecast_end": (origin + timedelta(hours=horizon_hours)).isoformat(),
+            "forecast_end": result["forecast_end"].isoformat(),
+            "target_count": result["target_count"],
+            "target_interval_hours": result["target_interval_hours"],
+            "resolution": result["resolution"],
             "coverage_percent": result["coverage_percent"],
             "observed_hours": result["observed_hours"],
+            "observed_days": result.get("observed_days", 0),
             "maximum_gap_hours": result["maximum_gap_hours"],
+            "maximum_gap_days": result.get("maximum_gap_days", 0),
             "sources": result["sources"],
             "preprocessing": result["preprocessing"],
             "inference_seconds": result["inference_seconds"],
@@ -225,6 +246,15 @@ def get_forecast_history(
             "model_name": forecast.model_name,
             "method": (forecast.input_snapshot or {}).get("method", "unknown"),
             "horizon_hours": forecast.horizon or 24,
+            "target_count": int(
+                (forecast.input_snapshot or {}).get(
+                    "target_count", len(forecast.predictions or [])
+                )
+            ),
+            "target_interval_hours": int(
+                (forecast.input_snapshot or {}).get("target_interval_hours", 1)
+            ),
+            "resolution": (forecast.input_snapshot or {}).get("resolution", "hourly"),
             "forecast_start": (forecast.input_snapshot or {}).get("forecast_origin"),
             "created_at": forecast.created_at,
         }
