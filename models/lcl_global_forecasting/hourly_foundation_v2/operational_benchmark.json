@@ -1,0 +1,22 @@
+{
+  "benchmark_version": 1,
+  "measured_at": "2026-08-14",
+  "hardware": "Intel host CPU, Windows, FP32",
+  "process_policy": "The 24-hour adapter was loaded first; the 168-hour adapter was loaded in the same process after deleting the first wrapper, so framework and base-model caches remained warm.",
+  "tasks": {
+    "24": {
+      "cold_load_seconds": 9.895600800000466,
+      "process_rss_increase_mb": 904.48046875,
+      "warm_inference_median_seconds": 0.11137280000002647,
+      "warm_repetitions": 3
+    },
+    "168": {
+      "cached_load_seconds": 0.9083004000003712,
+      "additional_process_rss_mb": 220.41015625,
+      "warm_inference_median_seconds": 0.1269308999999339,
+      "warm_repetitions": 3
+    }
+  },
+  "decision": "Keep both adapters as production-eligible challengers, but retain the deployed TFTs until a shared-base multi-adapter loader, 672-hour readiness migration, and container memory gate pass.",
+  "month_release_effect": "The month capability already pays the first Chronos base-model memory cost because it fills a previously missing product horizon. Replacing both lightweight TFTs would add adapter/model state for a marginal 2.6-2.9% London-cohort MAE gain."
+}

@@ -1,0 +1,206 @@
+{
+  "selection_version": 1,
+  "frozen_before_cold_audit": true,
+  "seed": 2026,
+  "base_model": "amazon/chronos-2",
+  "base_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+  "context_hours": 672,
+  "training_sequences": 1971,
+  "tasks": {
+    "24": {
+      "architecture": "chronos2_lora_300",
+      "model_path": "runs\\24h\\chronos2_lora_300",
+      "conformal_offsets": [
+        0.04912519082427025,
+        0.11531520634889603
+      ],
+      "baseline": "same_hour_four_week_median",
+      "baseline_scores": [
+        {
+          "name": "same_hour_four_week_median",
+          "mae_kwh": 0.1589888036251068
+        },
+        {
+          "name": "last_week_repeat",
+          "mae_kwh": 0.19069139659404755
+        },
+        {
+          "name": "last_day_repeat",
+          "mae_kwh": 0.19347608089447021
+        }
+      ],
+      "candidate_scores": [
+        {
+          "name": "chronos2_lora_300",
+          "windows": 1471,
+          "households": 250,
+          "macro_mae_kwh": 0.1379277411517687,
+          "median_household_mae_kwh": 0.11217549070715904,
+          "p90_household_mae_kwh": 0.2626791179180145,
+          "macro_r2": 0.23307432754930243,
+          "central_80_coverage_percent": 73.7338545207342,
+          "central_80_mean_width_kwh": 0.3887365162372589
+        },
+        {
+          "name": "chronos2_lora_100",
+          "windows": 1471,
+          "households": 250,
+          "macro_mae_kwh": 0.1379612453104928,
+          "median_household_mae_kwh": 0.11218535900115967,
+          "p90_household_mae_kwh": 0.26267471313476565,
+          "macro_r2": 0.23305764112127833,
+          "central_80_coverage_percent": 73.81033310673011,
+          "central_80_mean_width_kwh": 0.38952937722206116
+        },
+        {
+          "name": "chronos2_zero_shot",
+          "windows": 1471,
+          "households": 250,
+          "macro_mae_kwh": 0.13796855392190627,
+          "median_household_mae_kwh": 0.11230064928531647,
+          "p90_household_mae_kwh": 0.26263346076011657,
+          "macro_r2": 0.23302525473406996,
+          "central_80_coverage_percent": 73.79050532517562,
+          "central_80_mean_width_kwh": 0.3900296092033386
+        }
+      ],
+      "validation": {
+        "candidate": {
+          "windows": 1471,
+          "households": 250,
+          "macro_mae_kwh": 0.1379277411517687,
+          "median_household_mae_kwh": 0.11217549070715904,
+          "p90_household_mae_kwh": 0.2626791179180145,
+          "macro_r2": 0.23307432754930243,
+          "central_80_coverage_percent": 79.99660095173351,
+          "central_80_mean_width_kwh": 0.41398900747299194,
+          "households_beating_comparator_percent": 62.8
+        },
+        "packaged_tft": {
+          "windows": 1471,
+          "households": 250,
+          "macro_mae_kwh": 0.14076252296869643,
+          "median_household_mae_kwh": 0.11354885622859001,
+          "p90_household_mae_kwh": 0.2682150155305862,
+          "macro_r2": 0.19491957612784513,
+          "central_80_coverage_percent": 81.51767505098573,
+          "central_80_mean_width_kwh": 0.42259129881858826
+        },
+        "strongest_baseline": {
+          "windows": 1471,
+          "households": 250,
+          "macro_mae_kwh": 0.15840873840963468,
+          "median_household_mae_kwh": 0.12748820334672928,
+          "p90_household_mae_kwh": 0.2981784701347351,
+          "macro_r2": 0.0879380516259067
+        },
+        "origins": [
+          6132,
+          6302,
+          6472,
+          6643,
+          6813,
+          6984
+        ]
+      }
+    },
+    "168": {
+      "architecture": "chronos2_lora_300",
+      "model_path": "runs\\168h\\chronos2_lora_300",
+      "conformal_offsets": [
+        0.046400222927331924,
+        0.10566550493240356
+      ],
+      "baseline": "same_hour_four_week_median",
+      "baseline_scores": [
+        {
+          "name": "same_hour_four_week_median",
+          "mae_kwh": 0.1524096429347992
+        },
+        {
+          "name": "last_week_repeat",
+          "mae_kwh": 0.18405315279960632
+        },
+        {
+          "name": "last_day_repeat",
+          "mae_kwh": 0.19346806406974792
+        }
+      ],
+      "candidate_scores": [
+        {
+          "name": "chronos2_lora_300",
+          "windows": 1465,
+          "households": 249,
+          "macro_mae_kwh": 0.13834998333671442,
+          "median_household_mae_kwh": 0.11392505466938019,
+          "p90_household_mae_kwh": 0.26824831366539004,
+          "macro_r2": 0.2291432597551001,
+          "central_80_coverage_percent": 74.14635137331383,
+          "central_80_mean_width_kwh": 0.39122825860977173
+        },
+        {
+          "name": "chronos2_lora_100",
+          "windows": 1465,
+          "households": 249,
+          "macro_mae_kwh": 0.13835223631799617,
+          "median_household_mae_kwh": 0.11387669295072556,
+          "p90_household_mae_kwh": 0.2678730428218842,
+          "macro_r2": 0.23098326303872718,
+          "central_80_coverage_percent": 74.68104989436047,
+          "central_80_mean_width_kwh": 0.39638620615005493
+        },
+        {
+          "name": "chronos2_zero_shot",
+          "windows": 1465,
+          "households": 249,
+          "macro_mae_kwh": 0.13835319279189068,
+          "median_household_mae_kwh": 0.11377237737178802,
+          "p90_household_mae_kwh": 0.2677813470363617,
+          "macro_r2": 0.23145189749667922,
+          "central_80_coverage_percent": 74.74077685681782,
+          "central_80_mean_width_kwh": 0.39719200134277344
+        }
+      ],
+      "validation": {
+        "candidate": {
+          "windows": 1465,
+          "households": 249,
+          "macro_mae_kwh": 0.13834998333671442,
+          "median_household_mae_kwh": 0.11392505466938019,
+          "p90_household_mae_kwh": 0.26824831366539004,
+          "macro_r2": 0.2291432597551001,
+          "central_80_coverage_percent": 80.0,
+          "central_80_mean_width_kwh": 0.41427549719810486,
+          "households_beating_comparator_percent": 76.70682730923694
+        },
+        "packaged_tft": {
+          "windows": 1465,
+          "households": 249,
+          "macro_mae_kwh": 0.14220366468695161,
+          "median_household_mae_kwh": 0.11510822921991348,
+          "p90_household_mae_kwh": 0.2787630200386049,
+          "macro_r2": 0.17833970469164562,
+          "central_80_coverage_percent": 79.88257760442062,
+          "central_80_mean_width_kwh": 0.4067053496837616
+        },
+        "strongest_baseline": {
+          "windows": 1465,
+          "households": 249,
+          "macro_mae_kwh": 0.15261760821830608,
+          "median_household_mae_kwh": 0.12091617286205292,
+          "p90_household_mae_kwh": 0.29384390711784364,
+          "macro_r2": 0.1339509800734769
+        },
+        "origins": [
+          6132,
+          6273,
+          6415,
+          6556,
+          6698,
+          6840
+        ]
+      }
+    }
+  },
+  "runtime_seconds": 209.06166124343872
+}

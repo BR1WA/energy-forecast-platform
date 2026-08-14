@@ -1,0 +1,39 @@
+{
+  "protocol_version": 1,
+  "frozen_at": "2026-08-14",
+  "purpose": "Leakage-resistant Chronos-2 LoRA challengers for the 24-hour and 168-hour production TFT models.",
+  "dataset": "Low Carbon London 2013 hourly household energy",
+  "prepared_data_sha256": "353d5e21355ada4dd662b74474f021afabcb2300cd1f3cf934a3792bc6487646",
+  "seed": 2026,
+  "context_hours": 672,
+  "horizons": [24, 168],
+  "selection": {
+    "training_households": "the frozen 2,000 known-household cohort only",
+    "training_cutoff_hour": 6132,
+    "validation_households": 250,
+    "validation_origins": 6,
+    "candidate_family": ["chronos2_zero_shot", "chronos2_lora_100", "chronos2_lora_300"],
+    "rule": "Select each horizon by known-household validation macro MAE. Calibrate its central 80% interval on the same validation windows before any challenger access to cold-household targets."
+  },
+  "audit": {
+    "cold_households": "the frozen 500-household cohort excluded from all local training and selection",
+    "cold_origins": 24,
+    "disclosure": "The cohort is unseen by the challengers until selection.json is written, but it was used by prior incumbent experiments and is therefore not a pristine project-level holdout.",
+    "comparators": [
+      "packaged Global TFT with production rolling-window normalization",
+      "previous-week repeat",
+      "previous-day repeat",
+      "same-hour four-week median"
+    ]
+  },
+  "promotion_gates": {
+    "macro_mae_improvement_over_packaged_tft_min": 0.02,
+    "macro_r2_min": 0.0,
+    "central_80_coverage_min": 0.75,
+    "central_80_coverage_max": 0.9,
+    "households_beating_packaged_tft_percent_min": 55,
+    "finite_nonnegative_predictions_required": true,
+    "artifact_reload_relative_error_max": 0.001
+  },
+  "promotion_policy": "A horizon is replaced only if every frozen gate passes. Failure retains the existing Global TFT artifact and records the Chronos challenger as research evidence."
+}

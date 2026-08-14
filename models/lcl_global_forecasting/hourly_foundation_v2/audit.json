@@ -1,0 +1,182 @@
+{
+  "audit_version": 1,
+  "selection_sha256": "60b7b26796f9296655ff046aed6f8af24f7b1358ab7068c8c10de8eec1f1372c",
+  "protocol_sha256": "53bbf4c8ec24f7036c1c67c40e72749528873d4b12796e15dd6e3c47ecc58001",
+  "audit_inference_dtype": "float32",
+  "tasks": {
+    "24": {
+      "architecture": "chronos2_lora_300",
+      "candidate": {
+        "windows": 11789,
+        "households": 499,
+        "macro_mae_kwh": 0.17678835152432423,
+        "median_household_mae_kwh": 0.1404723823070526,
+        "p90_household_mae_kwh": 0.3553252518177032,
+        "macro_r2": 0.29203099203875743,
+        "central_80_coverage_percent": 79.71590748437809,
+        "central_80_mean_width_kwh": 0.5291376113891602,
+        "households_beating_comparator_percent": 79.95991983967936
+      },
+      "packaged_tft": {
+        "windows": 11789,
+        "households": 499,
+        "macro_mae_kwh": 0.18206658903725984,
+        "median_household_mae_kwh": 0.1437881588935852,
+        "p90_household_mae_kwh": 0.3627647638320923,
+        "macro_r2": 0.28470372662965554,
+        "central_80_coverage_percent": 81.0147877965335,
+        "central_80_mean_width_kwh": 0.5682520866394043
+      },
+      "strongest_baseline_name": "same_hour_four_week_median",
+      "strongest_baseline": {
+        "windows": 11789,
+        "households": 499,
+        "macro_mae_kwh": 0.21066265556645974,
+        "median_household_mae_kwh": 0.16578038036823273,
+        "p90_household_mae_kwh": 0.4108576297760008,
+        "macro_r2": 0.15624602025292483
+      },
+      "baseline_scores": [
+        {
+          "name": "same_hour_four_week_median",
+          "mae_kwh": 0.21051684021949768
+        },
+        {
+          "name": "last_day_repeat",
+          "mae_kwh": 0.2439052015542984
+        },
+        {
+          "name": "last_week_repeat",
+          "mae_kwh": 0.25135937333106995
+        }
+      ],
+      "macro_mae_improvement_over_tft_percent": 2.8990698078357546,
+      "artifact_reload_relative_error": 1.4901161193847656e-07,
+      "gates": {
+        "macro_mae": true,
+        "macro_r2": true,
+        "coverage": true,
+        "households_beating_tft": true,
+        "finite_nonnegative": true,
+        "artifact_reload": true
+      },
+      "promoted": true,
+      "origins": [
+        7008,
+        7083,
+        7158,
+        7233,
+        7308,
+        7383,
+        7458,
+        7533,
+        7609,
+        7684,
+        7759,
+        7834,
+        7909,
+        7984,
+        8059,
+        8134,
+        8210,
+        8285,
+        8360,
+        8435,
+        8510,
+        8585,
+        8660,
+        8736
+      ]
+    },
+    "168": {
+      "architecture": "chronos2_lora_300",
+      "candidate": {
+        "windows": 11751,
+        "households": 499,
+        "macro_mae_kwh": 0.1886962389650574,
+        "median_household_mae_kwh": 0.14732323586940765,
+        "p90_household_mae_kwh": 0.37856221199035645,
+        "macro_r2": 0.2472024613726354,
+        "central_80_coverage_percent": 78.41379254450483,
+        "central_80_mean_width_kwh": 0.5513812303543091,
+        "households_beating_comparator_percent": 80.96192384769539
+      },
+      "packaged_tft": {
+        "windows": 11751,
+        "households": 499,
+        "macro_mae_kwh": 0.19376964042444278,
+        "median_household_mae_kwh": 0.1507510542869568,
+        "p90_household_mae_kwh": 0.38439234495162955,
+        "macro_r2": 0.2443286764597845,
+        "central_80_coverage_percent": 78.19820805524151,
+        "central_80_mean_width_kwh": 0.595410168170929
+      },
+      "strongest_baseline_name": "same_hour_four_week_median",
+      "strongest_baseline": {
+        "windows": 11751,
+        "households": 499,
+        "macro_mae_kwh": 0.209145410137105,
+        "median_household_mae_kwh": 0.16294457018375397,
+        "p90_household_mae_kwh": 0.4074803709983826,
+        "macro_r2": 0.16271194714104723
+      },
+      "baseline_scores": [
+        {
+          "name": "same_hour_four_week_median",
+          "mae_kwh": 0.20885229110717773
+        },
+        {
+          "name": "last_week_repeat",
+          "mae_kwh": 0.24853777885437012
+        },
+        {
+          "name": "last_day_repeat",
+          "mae_kwh": 0.2567812204360962
+        }
+      ],
+      "macro_mae_improvement_over_tft_percent": 2.618264372206262,
+      "artifact_reload_relative_error": 2.980232238769531e-07,
+      "gates": {
+        "macro_mae": true,
+        "macro_r2": true,
+        "coverage": true,
+        "households_beating_tft": true,
+        "finite_nonnegative": true,
+        "artifact_reload": true
+      },
+      "promoted": true,
+      "origins": [
+        7008,
+        7076,
+        7145,
+        7214,
+        7283,
+        7352,
+        7421,
+        7490,
+        7558,
+        7627,
+        7696,
+        7765,
+        7834,
+        7903,
+        7972,
+        8041,
+        8109,
+        8178,
+        8247,
+        8316,
+        8385,
+        8454,
+        8523,
+        8592
+      ]
+    }
+  },
+  "all_horizons_promoted": true,
+  "runtime_seconds": 96.04020071029663,
+  "limitations": [
+    "The cold London cohort was unseen by these challengers until selection was frozen, but prior incumbent experiments had already evaluated it.",
+    "London evidence does not establish accuracy for the application's Moroccan households."
+  ]
+}

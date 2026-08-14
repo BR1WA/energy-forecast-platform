@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "model_name": "hourly_chronos2_lora_24h_v2",
+  "version": "2.0.0",
+  "status": "production_eligible_challenger",
+  "deployed": false,
+  "architecture": "Chronos-2 120M plus rank-8 LoRA domain adapter",
+  "base_model": {
+    "model_id": "amazon/chronos-2",
+    "revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+    "model_sha256": "ddcda3c7508bf2528087723e98a20707cc04b7f370ae275a9fd88078ddba4f42"
+  },
+  "adapter": {
+    "filename": "adapter_model.safetensors",
+    "bytes": 4854584,
+    "sha256": "12c447d568cb7c0d2793eedc39df4d2acdd5d14b02173c915b994b06aa647ed4",
+    "rank": 8,
+    "training_updates": 300,
+    "learning_rate": 1e-05
+  },
+  "contract": {
+    "horizon_hours": 24,
+    "target_count": 24,
+    "target_interval_hours": 1,
+    "target_frequency": "hourly",
+    "context_hours": 672,
+    "minimum_observed_hours": 672,
+    "quantiles": [
+      0.1,
+      0.5,
+      0.9
+    ],
+    "inference_dtype": "float32",
+    "negative_output_policy": "clip_to_zero"
+  },
+  "calibration": {
+    "method": "scale-normalized asymmetric split conformal",
+    "scale": "mean absolute first difference over the latest 168 context hours",
+    "lower_offset": 0.04912519082427025,
+    "upper_offset": 0.11531520634889603,
+    "nominal_coverage": 0.8
+  },
+  "cold_household_audit": {
+    "households": 499,
+    "windows": 11789,
+    "macro_mae_kwh": 0.17678835152432423,
+    "packaged_tft_macro_mae_kwh": 0.18206658903725984,
+    "macro_mae_improvement_over_tft_percent": 2.8990698078357546,
+    "macro_r2": 0.29203099203875743,
+    "central_80_coverage_percent": 79.71590748437809,
+    "households_beating_tft_percent": 79.95991983967936,
+    "artifact_reload_relative_error": 1.4901161193847656e-07
+  },
+  "reproducibility": {
+    "protocol_sha256": "53bbf4c8ec24f7036c1c67c40e72749528873d4b12796e15dd6e3c47ecc58001",
+    "selection_sha256": "60b7b26796f9296655ff046aed6f8af24f7b1358ab7068c8c10de8eec1f1372c",
+    "audit_sha256": "da5548ae6d0c172a3818c739e57a3ea6bfb641e0ca0dcd58151235f0ddd794ce",
+    "seed": 2026
+  },
+  "limitations": [
+    "The cold London cohort was unseen by these challengers until selection was frozen, but prior incumbent experiments had already evaluated it.",
+    "London evidence does not establish accuracy for the application's Moroccan households.",
+    "This release is not deployed until CPU latency, memory, container start-up, and API compatibility checks pass.",
+    "It requires 672 observed hours, twice the deployed TFT input window."
+  ]
+}
