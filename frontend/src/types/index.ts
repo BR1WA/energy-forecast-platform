@@ -155,7 +155,7 @@ export interface SimulationStatus {
   preserved_non_simulation_data?: boolean;
 }
 
-export type ForecastHorizon = 24 | 168;
+export type ForecastHorizon = 24 | 168 | 720;
 
 export interface ForecastModelStatus {
   available: boolean;
@@ -171,6 +171,9 @@ export interface ForecastModelStatus {
 
 export interface ForecastCapability {
   horizon_hours: ForecastHorizon;
+  target_count: number;
+  target_interval_hours: number;
+  resolution: 'hourly' | 'daily';
   label: string;
   description: string;
   model: ForecastModelStatus;
@@ -183,7 +186,10 @@ export interface ForecastCapabilities {
 
 export interface ForecastReadiness {
   horizon_hours: ForecastHorizon;
+  target_count: number;
+  target_interval_hours: number;
   status: 'ready' | 'fallback_ready' | 'insufficient_data';
+  ready_for_model: boolean;
   ready_for_tft: boolean;
   fallback_available: boolean;
   required_hours: number;
@@ -194,8 +200,13 @@ export interface ForecastReadiness {
   missing_hours: number;
   imputed_hours: number;
   maximum_gap_hours: number;
+  required_days: number | null;
+  observed_days: number;
+  missing_days: number;
+  imputed_days: number;
+  maximum_gap_days: number;
   unit: 'kWh';
-  resolution: 'hourly';
+  resolution: 'hourly' | 'daily';
   latest_reading_at: string | null;
   forecast_origin: string | null;
   reasons: string[];
@@ -227,11 +238,14 @@ export interface ProductForecast {
   id: number;
   model_name: string;
   model_version: string;
-  method: 'global_tft' | 'seasonal_naive' | 'unknown';
+  method: 'global_tft' | 'chronos2_lora' | 'seasonal_naive' | 'unknown';
   fallback_reason: string | null;
   unit: 'kWh';
   timezone: string;
   horizon_hours: number;
+  target_count: number;
+  target_interval_hours: number;
+  resolution: 'hourly' | 'daily';
   input_start: string | null;
   input_end: string | null;
   forecast_start: string;
@@ -251,6 +265,9 @@ export interface ProductForecastHistoryItem {
   model_name: string;
   method: string;
   horizon_hours: ForecastHorizon;
+  target_count: number;
+  target_interval_hours: number;
+  resolution: 'hourly' | 'daily';
   forecast_start: string | null;
   created_at: string;
 }

@@ -71,8 +71,15 @@ function formatDay(value: string, timezone?: string) {
 
 function methodLabel(method: ProductForecast['method'] | string) {
   if (method === 'global_tft') return 'Global TFT';
+  if (method === 'chronos2_lora') return 'Chronos-2 LoRA';
   if (method === 'seasonal_naive') return 'Seasonal fallback';
   return 'Unknown';
+}
+
+function horizonLabel(horizon: ForecastHorizon | number) {
+  if (horizon === 720) return '30-day daily';
+  if (horizon === 168) return '7-day / 168-hour';
+  return '24-hour';
 }
 
 function Fact({ label, value, detail }: { label: string; value: string; detail?: string }) {
@@ -131,7 +138,12 @@ function dailyChartData(points: ProductForecastPoint[], timezone: string): Chart
 
 function ForecastContent() {
   const searchParams = useSearchParams();
-  const horizon: ForecastHorizon = searchParams.get('horizon') === '168' ? 168 : 24;
+  const requestedHorizon = searchParams.get('horizon');
+  const horizon: ForecastHorizon = requestedHorizon === '720'
+    ? 720
+    : requestedHorizon === '168'
+      ? 168
+      : 24;
   const [capabilities, setCapabilities] = useState<ForecastCapability[]>([]);
   const [readiness, setReadiness] = useState<ForecastReadiness | null>(null);
   const [forecast, setForecast] = useState<ProductForecast | null>(null);
@@ -153,9 +165,8 @@ function ForecastContent() {
         setForecast(null);
         setHistory([]);
         throw new Error(
-          horizon === 168
-            ? 'The 7-day / 168-hour forecast is unavailable in this runtime. Ask the operator to enable the packaged weekly model.'
-            : 'The 24-hour forecast is unavailable in this runtime.',
+          `The ${horizonLabel(horizon)} forecast is unavailable in this runtime. `
+          + 'Ask the operator to enable and warm its packaged model.',
         );
       }
       const [nextReadiness, latest, nextHistory] = await Promise.all([
@@ -190,9 +201,11 @@ function ForecastContent() {
       ]);
       setReadiness(nextReadiness);
       setHistory(nextHistory);
-      toast.success(result.method === 'global_tft'
-        ? `${horizon}-hour forecast generated.`
-        : `${horizon}-hour seasonal fallback generated.`);
+      toast.success(
+        result.method === 'seasonal_naive'
+          ? `${horizonLabel(horizon)} seasonal fallback generated.`
+          : `${horizonLabel(horizon)} forecast generated.`,
+      );
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : 'Forecast generation failed.');
     } finally {
@@ -221,7 +234,8 @@ function ForecastContent() {
     if (!forecast) return;
     setExporting(true);
     try {
-      saveBlob(await analyticsApi.downloadReportPDF(forecast.id), `energy-forecast-${forecast.horizon_hours}h-${forecast.id}.pdf`);
+      const suffix = forecast.resolution === 'daily' ? '30d' : `${forecast.horizon_hours}h`;
+      saveBlob(await analyticsApi.downloadReportPDF(forecast.id), `energy-forecast-${suffix}-${forecast.id}.pdf`);
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : 'Forecast PDF export failed.');
     } finally {
@@ -238,7 +252,9 @@ function ForecastContent() {
       range: point.p10_kwh !== null && point.p90_kwh !== null
         ? [point.p10_kwh, point.p90_kwh]
         : undefined,
-      label: formatDate(point.timestamp, forecast.timezone),
+      label: forecast.resolution === 'daily'
+        ? formatDay(point.timestamp, forecast.timezone)
+        : formatDate(point.timestamp, forecast.timezone),
     }));
   }, [forecast]);
 
@@ -254,9 +270,11 @@ function ForecastContent() {
     return { total, average: total / forecast.points.length, peak, minimum };
   }, [forecast]);
 
-  const canRun = readiness?.ready_for_tft || readiness?.fallback_available;
+  const canRun = readiness?.ready_for_model || readiness?.fallback_available;
   const isWeek = horizon === 168;
-  const chartIsDaily = forecast?.horizon_hours === 168;
+  const isMonth = horizon === 720;
+  const chartIsDaily = forecast?.resolution === 'daily' || forecast?.horizon_hours === 168;
+  const directDailyTargets = forecast?.resolution === 'daily';
 
   return (
     <AppLayout>
@@ -265,9 +283,15 @@ function ForecastContent() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
               <BrainCircuit className="h-6 w-6 text-cyan-400" />
-              {isWeek ? 'Next 7 days · 168-hour energy forecast' : 'Next 24 hours energy forecast'}
+              {isMonth
+                ? 'Next 30 days · daily energy forecast'
+                : isWeek
+                  ? 'Next 7 days · 168-hour energy forecast'
+                  : 'Next 24 hours energy forecast'}
             </h1>
-            <p className="mt-1 text-sm text-slate-400">Primary meter forecast in hourly kWh</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Primary meter forecast in {isMonth ? 'daily' : 'hourly'} kWh
+            </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {capabilities.length > 1 ? (
@@ -289,7 +313,7 @@ function ForecastContent() {
                     scroll={false}
                     title={capability.description}
                   >
-                    {capability.label}{capability.horizon_hours === 168 ? ' · 168h' : ''}
+                    {capability.label}
                   </Link>
                 ))}
               </div>
@@ -325,11 +349,29 @@ function ForecastContent() {
         <section className="border-y border-white/10 bg-white/[0.025] px-4 py-5">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <Fact label="History coverage" value={readiness ? `${readiness.coverage_percent.toFixed(1)}%` : 'Loading'} detail="Minimum 95%" />
-            <Fact label="Complete hours" value={readiness ? `${readiness.observed_hours} / ${readiness.required_hours}` : 'Loading'} detail="Latest 14 days" />
-            <Fact label="Longest gap" value={readiness ? `${readiness.maximum_gap_hours}h` : 'Loading'} detail="Maximum 3h" />
+            <Fact
+              label={isMonth ? 'Complete days' : 'Complete hours'}
+              value={readiness
+                ? isMonth
+                  ? `${readiness.observed_days} / ${readiness.required_days ?? 270}`
+                  : `${readiness.observed_hours} / ${readiness.required_hours}`
+                : 'Loading'}
+              detail={isMonth ? 'Up to 365 rolling daily blocks' : 'Latest 14 days'}
+            />
+            <Fact
+              label="Longest gap"
+              value={readiness
+                ? isMonth
+                  ? `${readiness.maximum_gap_days}d`
+                  : `${readiness.maximum_gap_hours}h`
+                : 'Loading'}
+              detail={isMonth ? 'Maximum 3 internal days' : 'Maximum 3h'}
+            />
             <Fact
               label="Forecast engine"
-              value={readiness?.ready_for_tft ? 'Global TFT ready' : readiness?.fallback_available ? 'Fallback ready' : 'Waiting for data'}
+              value={readiness?.ready_for_model
+                ? isMonth ? 'Chronos-2 LoRA ready' : 'Global TFT ready'
+                : readiness?.fallback_available ? 'Fallback ready' : 'Waiting for data'}
               detail={readiness?.model.version ? `Version ${readiness.model.version}` : undefined}
             />
           </div>
@@ -343,18 +385,24 @@ function ForecastContent() {
                 {readiness.reasons.map((reason) => <li key={reason}>{reason}</li>)}
               </ul>
               <div className="flex flex-wrap gap-3">
-                <Button
-                  className="bg-amber-300 text-slate-950 hover:bg-amber-200"
-                  onClick={() => void prepareDemoHistory()}
-                  disabled={preparingDemo || loading || running}
-                >
-                  {preparingDemo ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {preparingDemo ? 'Preparing history' : 'Prepare demo history'}
-                </Button>
+                {!isMonth ? (
+                  <Button
+                    className="bg-amber-300 text-slate-950 hover:bg-amber-200"
+                    onClick={() => void prepareDemoHistory()}
+                    disabled={preparingDemo || loading || running}
+                  >
+                    {preparingDemo ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {preparingDemo ? 'Preparing history' : 'Prepare demo history'}
+                  </Button>
+                ) : null}
                 <Link href="/usage" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}>Open Usage</Link>
                 <a download href="/samples/forecast-ready" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}><Download className="h-4 w-4" />Download forecast-ready CSV</a>
               </div>
-              <p className="text-xs leading-5 text-amber-100/60">For demos and tests, one-click preparation adds clearly labelled synthetic hourly readings to the current primary meter. It preserves existing readings and is safe to run again. The CSV remains available for testing the manual import journey.</p>
+              <p className="text-xs leading-5 text-amber-100/60">
+                {isMonth
+                  ? 'The production monthly model requires at least 270 complete rolling daily blocks. Short synthetic demo history is deliberately not expanded to satisfy this gate.'
+                  : 'For demos and tests, one-click preparation adds clearly labelled synthetic hourly readings to the current primary meter. It preserves existing readings and is safe to run again. The CSV remains available for testing the manual import journey.'}
+              </p>
             </CardContent>
           </Card>
         ) : null}
@@ -369,14 +417,14 @@ function ForecastContent() {
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Expected energy" value={`${summary.total.toFixed(2)} kWh`} detail={forecast.horizon_hours === 168 ? 'Median total, next 7 days' : 'Median total, next 24 hours'} /></CardContent></Card>
-              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Average hour" value={`${summary.average.toFixed(2)} kWh`} detail={`${forecast.points.length} hourly targets`} /></CardContent></Card>
-              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Peak hour" value={`${summary.peak.p50_kwh.toFixed(2)} kWh`} detail={formatDate(summary.peak.timestamp, forecast.timezone)} /></CardContent></Card>
-              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Minimum hour" value={`${summary.minimum.p50_kwh.toFixed(2)} kWh`} detail={formatDate(summary.minimum.timestamp, forecast.timezone)} /></CardContent></Card>
+              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label="Expected energy" value={`${summary.total.toFixed(2)} kWh`} detail={`Median total, ${horizonLabel(forecast.horizon_hours)}`} /></CardContent></Card>
+              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label={directDailyTargets ? 'Average day' : 'Average hour'} value={`${summary.average.toFixed(2)} kWh`} detail={`${forecast.points.length} ${forecast.resolution} targets`} /></CardContent></Card>
+              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label={directDailyTargets ? 'Peak day' : 'Peak hour'} value={`${summary.peak.p50_kwh.toFixed(2)} kWh`} detail={directDailyTargets ? formatDay(summary.peak.timestamp, forecast.timezone) : formatDate(summary.peak.timestamp, forecast.timezone)} /></CardContent></Card>
+              <Card className="rounded-lg border-white/10 bg-[#111827]/80"><CardContent className="pt-1"><Fact label={directDailyTargets ? 'Minimum day' : 'Minimum hour'} value={`${summary.minimum.p50_kwh.toFixed(2)} kWh`} detail={directDailyTargets ? formatDay(summary.minimum.timestamp, forecast.timezone) : formatDate(summary.minimum.timestamp, forecast.timezone)} /></CardContent></Card>
             </div>
 
             <Card className="rounded-lg border-white/10 bg-[#111827]/80">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><TrendingUp className="h-4 w-4 text-cyan-400" />{chartIsDaily ? 'Daily week-ahead totals' : 'Hourly forecast'}</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-white"><TrendingUp className="h-4 w-4 text-cyan-400" />{directDailyTargets ? '30 daily energy targets' : chartIsDaily ? 'Daily week-ahead totals' : 'Hourly forecast'}</CardTitle></CardHeader>
               <CardContent>
                 <div className="h-[360px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -392,8 +440,8 @@ function ForecastContent() {
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500">
                   <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 bg-cyan-400" />{chartIsDaily ? 'Daily median total' : 'Median forecast'}</span>
-                  {forecast.method === 'global_tft' ? <span className="flex items-center gap-1.5"><span className="h-3 w-5 bg-cyan-400/20" />10th-90th percentile</span> : null}
-                  <span>{chartIsDaily ? 'Chart groups all 168 hourly targets into local calendar days. ' : ''}{forecast.confidence_method}</span>
+                  {forecast.method !== 'seasonal_naive' ? <span className="flex items-center gap-1.5"><span className="h-3 w-5 bg-cyan-400/20" />10th-90th percentile</span> : null}
+                  <span>{chartIsDaily && !directDailyTargets ? 'Chart groups all 168 hourly targets into local calendar days. ' : ''}{forecast.confidence_method}</span>
                 </div>
               </CardContent>
             </Card>
@@ -404,8 +452,8 @@ function ForecastContent() {
                 <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                   <div><dt className="text-slate-500">Input window</dt><dd className="mt-1 text-slate-200">{formatDate(forecast.input_start, forecast.timezone)} to {formatDate(forecast.input_end, forecast.timezone)}</dd></div>
                   <div><dt className="text-slate-500">Forecast window</dt><dd className="mt-1 text-slate-200">{formatDate(forecast.forecast_start, forecast.timezone)} to {formatDate(forecast.forecast_end, forecast.timezone)}</dd></div>
-                  <div><dt className="text-slate-500">Observed hours</dt><dd className="mt-1 text-slate-200">{forecast.observed_hours} / 336</dd></div>
-                  <div><dt className="text-slate-500">Targets</dt><dd className="mt-1 text-slate-200">{forecast.points.length} hourly values</dd></div>
+                  <div><dt className="text-slate-500">Observed history</dt><dd className="mt-1 text-slate-200">{directDailyTargets ? `${readiness?.observed_days ?? 0} complete days` : `${forecast.observed_hours} / 336 hours`}</dd></div>
+                  <div><dt className="text-slate-500">Targets</dt><dd className="mt-1 text-slate-200">{forecast.target_count} {forecast.resolution} values</dd></div>
                   <div><dt className="text-slate-500">Generated</dt><dd className="mt-1 text-slate-200">{formatDate(forecast.created_at, forecast.timezone)}</dd></div>
                   <div><dt className="text-slate-500">Artifact</dt><dd className="mt-1 break-all font-mono text-xs text-slate-300">{forecast.artifact_fingerprint || 'Seasonal fallback; no model artifact'}</dd></div>
                 </dl>
@@ -413,9 +461,11 @@ function ForecastContent() {
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><CheckCircle2 className="h-4 w-4 text-emerald-400" />Model evidence</h2>
                 <p className="mt-4 text-sm leading-6 text-slate-400">
-                  {isWeek
-                    ? 'Cold-start research evaluation: 0.197 kWh macro MAE across 499 held-out households, 20.8% lower MAE than the weekly seasonal baseline; 98.4% of households beat that baseline.'
-                    : 'Cold-start research evaluation: 0.185 kWh macro MAE across 500 held-out households, 26.5% lower MAE than the weekly seasonal baseline.'}
+                  {isMonth
+                    ? 'Fresh Tetouan transfer gate: macro MASE 1.095, 49.8% better than the strongest declared seasonal comparator, daily macro R² 0.450, and 88.1% central-80% coverage. A separate southern-Morocco diagnostic did not beat its seasonal baseline.'
+                    : isWeek
+                      ? 'Cold-start research evaluation: 0.197 kWh macro MAE across 499 held-out households, 20.8% lower MAE than the weekly seasonal baseline; 98.4% of households beat that baseline.'
+                      : 'Cold-start research evaluation: 0.185 kWh macro MAE across 500 held-out households, 26.5% lower MAE than the weekly seasonal baseline.'}
                   {' '}Client-site accuracy is not yet established.
                 </p>
               </div>
@@ -424,18 +474,18 @@ function ForecastContent() {
         ) : !loading && readiness?.status !== 'insufficient_data' ? (
           <div className="border-y border-white/10 py-16 text-center">
             <CalendarClock className="mx-auto h-8 w-8 text-slate-600" />
-            <p className="mt-3 text-sm text-slate-400">No persisted {horizon}-hour forecast yet.</p>
+            <p className="mt-3 text-sm text-slate-400">No persisted {horizonLabel(horizon)} forecast yet.</p>
           </div>
         ) : null}
 
         {history.length ? (
           <Card className="rounded-lg border-white/10 bg-[#111827]/80">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><Clock3 className="h-4 w-4 text-slate-400" />Recent {horizon}-hour forecasts</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-white"><Clock3 className="h-4 w-4 text-slate-400" />Recent {horizonLabel(horizon)} forecasts</CardTitle></CardHeader>
             <CardContent>
               <div className="divide-y divide-white/10">
                 {history.slice(0, 8).map((item) => (
                   <div key={item.id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div><p className="font-medium text-slate-200">{methodLabel(item.method)} · {item.horizon_hours}h</p><p className="text-xs text-slate-500">Forecast from {formatDate(item.forecast_start, forecast?.timezone)}</p></div>
+                    <div><p className="font-medium text-slate-200">{methodLabel(item.method)} · {horizonLabel(item.horizon_hours)}</p><p className="text-xs text-slate-500">Forecast from {formatDate(item.forecast_start, forecast?.timezone)}</p></div>
                     <span className="text-xs text-slate-500">Generated {formatDate(item.created_at, forecast?.timezone)}</span>
                   </div>
                 ))}

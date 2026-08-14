@@ -11,7 +11,7 @@ const USER = {
   email_verified_at: '2026-07-27T08:00:00Z',
 };
 
-function model(horizon: 24 | 168) {
+function model(horizon: 24 | 168 | 720) {
   return { available: true, enabled: true, warmed: true, horizon_hours: horizon, name: `global_tft_${horizon}h`, display_name: `${horizon} hour TFT`, version: '1.0', artifact_fingerprint: `fingerprint-${horizon}`, error: null };
 }
 
@@ -19,8 +19,8 @@ function capabilities(includeWeek = true) {
   return {
     default_horizon_hours: 24,
     capabilities: [
-      { horizon_hours: 24, label: 'Next 24 hours', description: '24 hours', model: model(24) },
-      ...(includeWeek ? [{ horizon_hours: 168, label: 'Next 7 days', description: '168 hours', model: model(168) }] : []),
+      { horizon_hours: 24, target_count: 24, target_interval_hours: 1, resolution: 'hourly', label: 'Next 24 hours', description: '24 hours', model: model(24) },
+      ...(includeWeek ? [{ horizon_hours: 168, target_count: 168, target_interval_hours: 1, resolution: 'hourly', label: 'Next 7 days', description: '168 hours', model: model(168) }] : []),
     ],
   };
 }
@@ -28,7 +28,10 @@ function capabilities(includeWeek = true) {
 function readiness(status: 'ready' | 'insufficient_data') {
   return {
     horizon_hours: 168,
+    target_count: 168,
+    target_interval_hours: 1,
     status,
+    ready_for_model: status === 'ready',
     ready_for_tft: status === 'ready',
     fallback_available: status === 'ready',
     required_hours: 336,
@@ -39,6 +42,11 @@ function readiness(status: 'ready' | 'insufficient_data') {
     missing_hours: status === 'ready' ? 0 : 196,
     imputed_hours: 0,
     maximum_gap_hours: status === 'ready' ? 0 : 12,
+    required_days: null,
+    observed_days: 0,
+    missing_days: 0,
+    imputed_days: 0,
+    maximum_gap_days: 0,
     unit: 'kWh',
     resolution: 'hourly',
     latest_reading_at: '2026-07-23T00:00:00Z',
@@ -81,7 +89,7 @@ test('weekly loading resolves to an actionable readiness-blocked state', async (
   await expect(page.getByRole('link', { name: 'Download forecast-ready CSV' })).toBeVisible();
   await page.getByRole('button', { name: 'Prepare demo history' }).click();
   await expect(page.getByText('More meter history is required')).toHaveCount(0);
-  await expect(page.getByText('No persisted 168-hour forecast yet.')).toBeVisible();
+  await expect(page.getByText('No persisted 7-day / 168-hour forecast yet.')).toBeVisible();
 });
 
 test('weekly empty and error states remain horizon-specific', async ({ page }) => {
@@ -103,7 +111,7 @@ test('weekly empty and error states remain horizon-specific', async ({ page }) =
   });
 
   await page.goto('/forecast?horizon=168');
-  await expect(page.getByText('No persisted 168-hour forecast yet.')).toBeVisible();
+  await expect(page.getByText('No persisted 7-day / 168-hour forecast yet.')).toBeVisible();
   failReadiness = true;
   await page.reload();
   await expect(page.getByText('The 7-day / 168-hour model artifact could not be loaded.')).toBeVisible();
@@ -125,8 +133,65 @@ test('disabled weekly capability is not advertised or silently replaced with 24 
   });
 
   await page.goto('/forecast?horizon=168');
-  await expect(page.getByText('The 7-day / 168-hour forecast is unavailable in this runtime. Ask the operator to enable the packaged weekly model.')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Next 7 days · 168h' })).toHaveCount(0);
+  await expect(page.getByText('The 7-day / 168-hour forecast is unavailable in this runtime. Ask the operator to enable and warm its packaged model.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Next 7 days' })).toHaveCount(0);
   expect(weeklyDataRequests).toBe(0);
   await expect(page).toHaveURL(/\/forecast\?horizon=168$/);
+});
+
+test('monthly capability stays daily and never offers short demo history as a bypass', async ({ page }) => {
+  await page.route(`${API}/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'monthly-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/alerts') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/forecast/capabilities') {
+      return route.fulfill({ json: {
+        default_horizon_hours: 24,
+        capabilities: [
+          { horizon_hours: 24, target_count: 24, target_interval_hours: 1, resolution: 'hourly', label: 'Next 24 hours', description: '24 hours', model: model(24) },
+          { horizon_hours: 720, target_count: 30, target_interval_hours: 24, resolution: 'daily', label: 'Next 30 days', description: '30 daily values', model: { ...model(720), name: 'month_production_v3', display_name: 'Chronos-2 LoRA 30-day daily', version: '3.0.0' } },
+        ],
+      } });
+    }
+    if (pathname === '/api/v1/forecast/readiness') return route.fulfill({ json: {
+      horizon_hours: 720,
+      target_count: 30,
+      target_interval_hours: 24,
+      status: 'insufficient_data',
+      ready_for_model: false,
+      ready_for_tft: false,
+      fallback_available: false,
+      required_hours: 6480,
+      required_days: 270,
+      minimum_coverage_percent: 95,
+      maximum_allowed_gap_hours: 72,
+      coverage_percent: 46,
+      observed_hours: 4032,
+      missing_hours: 2448,
+      imputed_hours: 0,
+      maximum_gap_hours: 240,
+      observed_days: 168,
+      missing_days: 102,
+      imputed_days: 0,
+      maximum_gap_days: 10,
+      unit: 'kWh',
+      resolution: 'daily',
+      latest_reading_at: '2026-07-23T00:00:00Z',
+      forecast_origin: '2026-07-23T00:00:00Z',
+      reasons: ['Only 168 complete daily blocks are available; at least 270 are required.'],
+      model: { ...model(720), name: 'month_production_v3', display_name: 'Chronos-2 LoRA 30-day daily', version: '3.0.0' },
+    } });
+    if (pathname === '/api/v1/forecast/latest') return route.fulfill({ json: null });
+    if (pathname === '/api/v1/forecast/history') return route.fulfill({ json: [] });
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  await page.goto('/forecast?horizon=720');
+  await expect(page.getByRole('heading', { name: 'Next 30 days · daily energy forecast' })).toBeVisible();
+  await expect(page.getByText('168 / 270')).toBeVisible();
+  await expect(page.getByText('The production monthly model requires at least 270 complete rolling daily blocks. Short synthetic demo history is deliberately not expanded to satisfy this gate.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Prepare demo history' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Next 30 days' })).toBeVisible();
 });

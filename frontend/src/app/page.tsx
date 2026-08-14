@@ -47,7 +47,7 @@ export default function ProductLandingPage() {
           <div className="max-w-2xl">
             <p className="mb-5 flex items-center gap-2 text-sm font-medium text-cyan-200"><Activity className="h-4 w-4" />Single-site electricity monitoring and forecasting</p>
             <h1 className="text-4xl font-bold leading-tight text-white sm:text-6xl">EnergyAI</h1>
-            <p className="mt-5 max-w-xl text-base leading-7 text-slate-100 sm:text-lg">Monitor live and historical electricity use, understand tariff cost, and generate a persisted 24-hour hourly-energy forecast from your primary meter.</p>
+            <p className="mt-5 max-w-xl text-base leading-7 text-slate-100 sm:text-lg">Monitor live and historical electricity use, understand tariff cost, and generate persisted hourly or 30-day daily energy forecasts from your primary meter.</p>
             {!isAuthenticated && registrationAvailable === false ? <p className="mt-4 max-w-xl border-l-2 border-amber-300 pl-3 text-sm leading-6 text-amber-100">Public registration is currently unavailable. Existing verified users can still sign in; contact support if you need access.</p> : null}
             <div className="mt-8 flex flex-wrap gap-3"><Link href={primaryHref}><Button size="lg">{isAuthenticated ? 'Go to dashboard' : registrationAvailable ? 'Get started' : 'Sign in'}<ArrowRight className="h-4 w-4" /></Button></Link><Link href="#workflow"><Button size="lg" variant="outline" className="border-white/30 bg-black/25 text-white hover:bg-black/40">Product workflow</Button></Link></div>
           </div>
@@ -63,8 +63,8 @@ export default function ProductLandingPage() {
 
       <section className="border-y border-white/[0.08] bg-[#0d1420] px-5 py-14 sm:px-8">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
-          <div><h2 className="text-2xl font-bold text-white">A fixed, honest forecast contract</h2><p className="mt-4 max-w-2xl leading-7 text-slate-400">The production path uses one versioned Global TFT artifact for the next 24 hourly kWh values. The weekly seasonal baseline appears only as a labelled fallback, never as hidden model output.</p></div>
-          <div className="border-l-2 border-cyan-400/60 pl-5 text-sm"><div className="flex items-center gap-2 text-cyan-300"><FileSpreadsheet className="h-4 w-4" />Readiness gates</div><ul className="mt-4 space-y-2 text-slate-300"><li>336 hours from the primary meter</li><li>At least 95% observed coverage</li><li>No unresolved gap longer than 3 hours</li><li>Finite hourly energy values in kWh</li></ul></div>
+          <div><h2 className="text-2xl font-bold text-white">Fixed, honest forecast contracts</h2><p className="mt-4 max-w-2xl leading-7 text-slate-400">Versioned Global TFT artifacts serve 24 and 168 hourly targets. A separately gated Chronos-2 LoRA artifact serves 30 daily targets; it is never presented as a 720-step hourly forecast. Any seasonal fallback is labelled explicitly.</p></div>
+          <div className="border-l-2 border-cyan-400/60 pl-5 text-sm"><div className="flex items-center gap-2 text-cyan-300"><FileSpreadsheet className="h-4 w-4" />Readiness gates</div><ul className="mt-4 space-y-2 text-slate-300"><li>336 hours for hourly forecasts</li><li>At least 270 daily blocks for 30-day forecasts</li><li>At least 95% observed coverage</li><li>Finite energy values in kWh</li></ul></div>
         </div>
       </section>
 

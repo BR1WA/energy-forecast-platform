@@ -59,7 +59,7 @@ function forecast(horizon: 24 | 168) {
   return {
     id: horizon,
     model_name: `global_tft_${horizon}h`, model_version: '1.0', method: 'global_tft', fallback_reason: null,
-    unit: 'kWh', timezone: 'UTC', horizon_hours: horizon, input_start: '2026-07-09T00:00:00Z', input_end: origin.toISOString(),
+    unit: 'kWh', timezone: 'UTC', horizon_hours: horizon, target_count: horizon, target_interval_hours: 1, resolution: 'hourly', input_start: '2026-07-09T00:00:00Z', input_end: origin.toISOString(),
     forecast_start: origin.toISOString(), forecast_end: new Date(origin.getTime() + horizon * 3600000).toISOString(), coverage_percent: 100,
     observed_hours: 336, maximum_gap_hours: 0, sources: ['push'], confidence_method: 'Controlled quantiles', artifact_fingerprint: `fingerprint-${horizon}`,
     points: Array.from({ length: horizon }, (_, index) => ({ timestamp: new Date(origin.getTime() + index * 3600000).toISOString(), p10_kwh: .8, p50_kwh: 1, p90_kwh: 1.2 })),
@@ -83,10 +83,10 @@ test('forecast journey switches between persisted 24-hour and 168-hour states', 
     if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
     if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
     if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
-    if (pathname === '/api/v1/forecast/capabilities') return route.fulfill({ json: { default_horizon_hours: 24, capabilities: [{ horizon_hours: 24, label: 'Next 24 hours', description: '24 hours', model: model(24) }, { horizon_hours: 168, label: 'Next 7 days', description: '168 hours', model: model(168) }] } });
-    if (pathname === '/api/v1/forecast/readiness') return route.fulfill({ json: { horizon_hours: horizon, status: 'ready', ready_for_tft: true, fallback_available: true, required_hours: 336, minimum_coverage_percent: 90, maximum_allowed_gap_hours: 6, coverage_percent: 100, observed_hours: 336, missing_hours: 0, imputed_hours: 0, maximum_gap_hours: 0, unit: 'kWh', resolution: 'hourly', latest_reading_at: '2026-07-23T00:00:00Z', forecast_origin: '2026-07-23T00:00:00Z', reasons: [], model: model(horizon) } });
+    if (pathname === '/api/v1/forecast/capabilities') return route.fulfill({ json: { default_horizon_hours: 24, capabilities: [{ horizon_hours: 24, target_count: 24, target_interval_hours: 1, resolution: 'hourly', label: 'Next 24 hours', description: '24 hours', model: model(24) }, { horizon_hours: 168, target_count: 168, target_interval_hours: 1, resolution: 'hourly', label: 'Next 7 days', description: '168 hours', model: model(168) }] } });
+    if (pathname === '/api/v1/forecast/readiness') return route.fulfill({ json: { horizon_hours: horizon, target_count: horizon, target_interval_hours: 1, status: 'ready', ready_for_model: true, ready_for_tft: true, fallback_available: true, required_hours: 336, required_days: null, minimum_coverage_percent: 90, maximum_allowed_gap_hours: 6, coverage_percent: 100, observed_hours: 336, missing_hours: 0, imputed_hours: 0, maximum_gap_hours: 0, observed_days: 0, missing_days: 0, imputed_days: 0, maximum_gap_days: 0, unit: 'kWh', resolution: 'hourly', latest_reading_at: '2026-07-23T00:00:00Z', forecast_origin: '2026-07-23T00:00:00Z', reasons: [], model: model(horizon) } });
     if (pathname === '/api/v1/forecast/latest') return route.fulfill({ json: forecast(horizon) });
-    if (pathname === '/api/v1/forecast/history') return route.fulfill({ json: [{ id: horizon, model_name: `global_tft_${horizon}h`, method: 'global_tft', horizon_hours: horizon, forecast_start: '2026-07-23T00:00:00Z', created_at: '2026-07-23T00:00:00Z' }] });
+    if (pathname === '/api/v1/forecast/history') return route.fulfill({ json: [{ id: horizon, model_name: `global_tft_${horizon}h`, method: 'global_tft', horizon_hours: horizon, target_count: horizon, target_interval_hours: 1, resolution: 'hourly', forecast_start: '2026-07-23T00:00:00Z', created_at: '2026-07-23T00:00:00Z' }] });
     if (pathname === '/api/v1/forecast/run') {
       generatedHorizons.push(horizon);
       return route.fulfill({ status: 201, json: forecast(horizon) });
@@ -108,7 +108,7 @@ test('forecast journey switches between persisted 24-hour and 168-hour states', 
   await dayDownload;
   expect(exportedForecastIds).toEqual([24]);
 
-  await page.getByRole('link', { name: 'Next 7 days · 168h' }).click();
+  await page.getByRole('link', { name: 'Next 7 days' }).click();
   await expect(page).toHaveURL(/\/forecast\?horizon=168$/);
   await expect(page.getByRole('heading', { name: 'Next 7 days · 168-hour energy forecast' })).toBeVisible();
   await expect(page.getByText('Daily week-ahead totals')).toBeVisible();
