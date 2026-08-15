@@ -1,14 +1,14 @@
 area,command_or_source,result,status,limitations
 Backend local,python -m pytest -q,116 passed 4 PostgreSQL-only skipped,passed,Verified 2026-08-15 with one-year simulator all-model readiness
 Backend PostgreSQL,disposable migrated PostgreSQL database then python -m pytest -q,100 passed 0 skipped,passed,Database removed after isolated run
-Backend CI PostgreSQL and image,GitHub Actions run 31328212332,migrations suite dependency audit image build and containerized suite passed,passed,Commit 6796b1e
+Backend CI PostgreSQL and image,GitHub Actions run 31893388429,migrations suite dependency audit image build and containerized suite passed,passed,Commit d25295b
 Frontend lint,npm run lint,passed,passed,Verified 2026-08-14
 Frontend type checking,npm run typecheck,passed,passed,Verified 2026-08-14
 Frontend production build,npm run build,25 routes generated,passed,Verified 2026-08-14
 Playwright six-project matrix,npm run test:browser,198 passed 0 failed,passed,Verified 2026-08-14 across three desktop and three responsive projects
 Production npm dependencies,npm audit --omit=dev,0 known vulnerabilities,passed,Full development graph still reported nine high-severity tooling advisories
-Python dependency audit,pip-audit in current CI,0 known vulnerabilities,passed,CI run 31328212332
-Secret scanning,CI full-history gitleaks job,passed,passed,CI run 31328212332
-Docker Compose,CI smoke test,stack started and model readiness passed,passed,CI run 31328212332
+Python dependency audit,pip-audit in current CI,0 known vulnerabilities,passed,CI run 31893388429
+Secret scanning,CI full-history gitleaks job,passed,passed,CI run 31893388429
+Docker Compose,CI smoke test,model-enabled production stack started and core readiness passed,passed,CI run 31893388429
 Artifact contract,manifest hash/readiness/inference tests,24h 168h and 30-day artifacts validated,passed,Month real-wrapper smoke passed; hourly challengers remain undeployed
-Azure active revisions,Azure Container Apps read-only revision check,web v1-f807316 API and worker v1-6796b1e healthy,passed,Snapshot verified 2026-08-09
+Azure active revisions,Azure Container Apps readiness and public smoke,web API and worker v4-d25295b healthy with all three model horizons warmed,passed,Snapshot verified 2026-08-15

@@ -14,4 +14,4 @@ Forecast history,Persisted Forecast records and history endpoint,backend/app/rou
 Alerts,AlertConfig Alert entities and worker,backend/app/routers/alerts.py,alert tests and worker health,implemented
 Reports,Analytics PDF endpoint and reports route,backend/app/routers/analytics.py,report and horizon-specific PDF tests,implemented
 Health monitoring,Liveness readiness health and version endpoints,backend/app/routers/system.py,Docker health checks,implemented
-Public cloud deployment,Azure Container Apps managed PostgreSQL ACR and Key Vault,report/evidence/azure_deployment_evidence_2026-08-09.md,HTTPS readiness active-revision and CI checks,implemented
+Public cloud deployment,Azure Container Apps managed PostgreSQL ACR and Key Vault,report/evidence/azure_deployment_evidence_2026-08-15.md,HTTPS readiness three-model warm-up active-revision and CI checks,implemented

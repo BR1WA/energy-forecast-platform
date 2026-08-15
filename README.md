@@ -15,10 +15,10 @@ forecasts—without hiding missing data, model fallbacks, or deployment limits.
 
 > **Release status:** Product V1 is publicly deployed on Microsoft Azure for
 > controlled academic demonstration and supervisor/jury review. The verified
-> release includes HTTPS web/API access, managed PostgreSQL, both packaged
-> TFT forecasting artifacts, transactional email delivery, and Google signup.
-> The repository release now also contains the gated 30-day daily capability;
-> the last verified Azure revision predates that addition. It is
+> release includes HTTPS web/API access, managed PostgreSQL, the packaged
+> 24-hour and 168-hour TFTs, the 30-day daily Chronos-2 model, transactional
+> email delivery, and Google signup. All three forecast artifacts are enabled
+> and warmed in the active Azure API revision. It is
 > not presented as a globally validated or fully hardened production service.
 
 ## Contents
@@ -387,8 +387,8 @@ for any public deployment.
 
 ## Quality evidence
 
-The latest full CI and deployment verification completed on 9 August 2026 at
-commit `6796b1e`. Historical audit results are retained where they cover a
+The latest full CI and deployment verification completed on 15 August 2026 at
+commit `d25295b`. Historical audit results are retained where they cover a
 different database profile, but the current application totals are:
 
 | Gate | Result |
@@ -400,15 +400,17 @@ different database profile, but the current application totals are:
 | Playwright six-project matrix | 198/198 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
 | Production npm dependency audit | 0 known vulnerabilities |
 | Production Python dependency audit | 0 known vulnerabilities |
-| Compose runtime | Six services running; core health checks passed |
-| Forecast readiness | 24-hour and 168-hour TFTs retained; 30-day daily Chronos capability packaged, API-wired, and real-wrapper warm-up passed |
-| Azure revisions | Web `v1-f807316`; API/email worker `v1-6796b1e`; healthy |
+| Compose runtime | Model-enabled production stack started; core health checks passed |
+| Forecast readiness | Azure reports the 24-hour TFT, 168-hour TFT, and 30-day daily Chronos-2 artifact available, enabled, and warmed |
+| Azure revisions | Web/API/email worker `v4-d25295b`; healthy; web and API receive 100% traffic |
 
 The current CI run also passed full-history secret scanning and Docker Compose
 smoke testing. It covers persistent simulator history and catch-up, the
 simulator-to-CSV confirmation flow, and permanent account deletion with a full
 one-year synthetic history. See the
-[green GitHub Actions run](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31328212332).
+[green GitHub Actions run](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31893388429)
+and the separate
+[immutable Azure image build](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31894053504).
 
 Read the [full application audit](docs/PFE_FULL_APP_AUDIT_2026-07-31.md) and
 [Product V1 validation evidence](docs/PRODUCT_V1_G7_VALIDATION_EVIDENCE.md) for
@@ -473,7 +475,7 @@ while separating completed engineering from future work.
 - [Initial 30-day research experiment](docs/MONTH_STRONG_MODEL_EXPERIMENT.md)
 - [PFE report QA](report/qa/final_report_qa.md)
 - [Persistent simulation and communicative-dashboard design](docs/PERSISTENT_SIMULATION_AND_DASHBOARD_PLAN_2026-08-09.md)
-- [Current Azure deployment evidence](report/evidence/azure_deployment_evidence_2026-08-09.md)
+- [Current Azure deployment evidence](report/evidence/azure_deployment_evidence_2026-08-15.md)
 
 ## Academic context and license
 
