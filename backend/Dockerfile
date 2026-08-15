@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt && \
       fi; \
     fi && \
     pip check && \
+    if [ "$INSTALL_MONTH_MODEL" = "1" ]; then \
+      python -c "from transformers import HybridCache; from chronos import Chronos2Pipeline; import peft"; \
+    fi && \
     python -c "import fastapi, sqlalchemy, uvicorn; from uvicorn.main import main"
 
 FROM dependencies AS test-dependencies
