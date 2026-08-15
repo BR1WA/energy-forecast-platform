@@ -3,7 +3,7 @@
 
 \section{Validation scope and evidence date}
 
-The software-validation evidence in this chapter begins with the full application audit performed on 31 July 2026 and includes the foundation-model work completed on 14 August 2026. Historical reports are retained for chronology because test counts, routes, and capabilities changed over time. The audit uses backend tests, frontend quality commands, browser tests, artifact checks, real-wrapper smoke tests, and source review. The previous coordinated Azure validation still targets commit \texttt{6796b1e}; the new repository release is locally verified but not represented as already promoted to Azure.
+The software-validation evidence in this chapter begins with the full application audit performed on 31 July 2026 and includes the foundation-model work completed on 14 August and the coordinated Azure promotion completed on 15 August 2026. Historical reports are retained for chronology because test counts, routes, and capabilities changed over time. The audit uses backend tests, frontend quality commands, browser tests, artifact checks, real-wrapper smoke tests, source review, immutable image digests, and public cloud readiness. GitHub Actions run \texttt{31893388429} verifies source commit \texttt{d25295b}; Azure revisions with the same suffix serve the verified web, API, and email-worker release.
 
 \section{Backend validation}
 
@@ -31,8 +31,8 @@ Backend on isolated PostgreSQL & 100 passed, 0 skipped & Historical full-audit e
 Frontend lint and type checking & Passed & Static quality gates are green \\
 Frontend production build & Passed, 25 routes & Current route tree compiles for production \\
 Playwright six-project matrix & 198 passed, 0 failed & Desktop and three responsive profiles green \\
-Docker Compose & Core health checks green, workers running & Local deployment validated; public status evaluated separately below \\
-Azure public deployment & Web \texttt{v1-f807316}; API/worker \texttt{v1-6796b1e}; healthy & Managed PostgreSQL and both warmed models retained; alert/avatar workers remain absent \\
+Docker Compose & Model-enabled core health checks green & Remote production stack validated; public status evaluated separately below \\
+Azure public deployment & Web/API/worker \texttt{v4-d25295b}; healthy & Managed PostgreSQL and all three model horizons warmed; alert/avatar workers remain absent \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -51,9 +51,9 @@ One current security-quality concern remains: the frontend application does not 
 
 \section{Docker and deployed service health}
 
-The previously validated six-service Compose stack ran with PostgreSQL, backend, and frontend healthy and all workers running. For the new release, Compose configuration resolves with the month feature flag and the production Dockerfile stages the exact adapter, pinned dependencies, and base-model prefetch step. The full foundation image remains subject to the deployment memory/startup gate documented for the target environment.
+The six-service Compose stack ran with PostgreSQL, backend, and frontend healthy and all workers running. For the new release, Compose configuration resolves with the month feature flag and the production Dockerfile stages the exact adapter, pinned dependencies, and base-model prefetch step. GitHub Actions built and started the full foundation image, and the same immutable backend digest passed Azure startup and warm-up at two vCPU and 4 GiB.
 
-The final Azure smoke test confirmed public TLS and HTTP 200 for the principal public pages, API liveness and readiness, managed-database connectivity, warmed 24-hour and 168-hour models, ready SMTP capability, and a healthy one-replica email worker. Google identity is published for external users, and the live account chooser opened for the exact Azure origin without creating a test user. A subsequent read-only Azure check found \texttt{ca-energyai-web--v1-f807316}, \texttt{ca-energyai-api--v1-6796b1e}, and \texttt{ca-energyai-email-worker--v1-6796b1e} active and healthy, with 100\% traffic on the new web and API revisions. The web and API retain zero-to-one scaling; the email worker remains at one replica. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production hardening remains conditional on security headers, durable avatar storage, centralized monitoring, Azure alert/avatar workers, restore evidence, load testing, and disaster-recovery procedures.
+The final Azure smoke test confirmed public TLS and HTTP 200 for the principal public pages, API liveness and readiness, managed-database connectivity, warmed 24-hour, 168-hour, and 720-hour models, ready SMTP capability, and a healthy one-replica email worker. Google identity remains published for external users; the earlier account-chooser test created no user. A read-only Azure check found \texttt{ca-energyai-web--v4-d25295b}, \texttt{ca-energyai-api--v4-d25295b}, and \texttt{ca-energyai-email-worker--v4-d25295b} healthy, with 100\% traffic on the web and API release. The web and API retain zero-to-one scaling; the email worker remains at one replica. Operational readiness is therefore demonstrated for a controlled public PFE presentation, while production hardening remains conditional on security headers, durable avatar storage, centralized monitoring, Azure alert/avatar workers, restore evidence, load testing, and disaster-recovery procedures.
 
 \section{Requirement-to-test traceability}
 

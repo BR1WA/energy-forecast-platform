@@ -1,13 +1,13 @@
-# Final Report QA - Production Model Update Version 8
+# Final Report QA - Azure Three-Model Release Version 9
 
 ## Build identification
 
-- Output: `output/pdf/PFE_ZOUITNI_Salah_Eddine_production_v8.pdf`.
+- Output: `output/pdf/PFE_ZOUITNI_Salah_Eddine_production_v9.pdf`.
 - Previous draft and supervisor-review PDFs are retained and were not overwritten.
 - Language: academic English with a French resume.
 - Build date: 15 August 2026.
-- Format: A4, 12 pt, one-sided PDF; 98 pages; 1,729,785 bytes.
-- SHA-256: `5434F751FF9809127BB75584A92BD4C93702E81C176353A66AA7A428CBC1043F`.
+- Format: A4, 12 pt, one-sided PDF; 98 pages; 1,729,936 bytes.
+- SHA-256: `AD70C187236EC6F25E46EB0282D97B244827AC0FDBAE8450D7F35F67B82A3986`.
 
 ## Scientific-evidence boundary
 
@@ -26,8 +26,9 @@ doubling the required history to 672 hours, adding the foundation-base memory
 cost, and changing the current serving contract without a geographic audit.
 
 The repository release exposes the month model through the backend and frontend.
-The previously verified Azure revision predates this integration and is still
-reported as a two-TFT deployment; no later Azure promotion is claimed.
+Azure revision `v4-d25295b` now serves this integration. The public readiness
+payload reports the 24-hour, 168-hour, and 720-hour artifacts available, enabled,
+and warmed, including the 30-day daily Chronos-2 model.
 
 ## Current local quality gates
 
@@ -61,7 +62,8 @@ reported as a two-TFT deployment; no later Azure promotion is claimed.
   preserve daily cadence.
 - The production Dockerfile installs the separately pinned foundation runtime,
   copies only the exact release adapter, and defines a build-time base-prefetch
-  step. Its full build was not rerun under the cellular-data constraint above.
+  step. The full model-enabled image was built and tested on GitHub runners,
+  preserving the local cellular-data constraint.
 - Hourly Chronos releases, frozen protocol, audit, hashes, and CPU benchmark are
   retained as production-eligible challengers rather than active models.
 
@@ -84,7 +86,7 @@ reported as a two-TFT deployment; no later Azure promotion is claimed.
 
 The report remains administratively incomplete until the official defense date
 and jury composition are supplied. Model results remain dataset-specific rather
-than a performance guarantee for an arbitrary Moroccan site. The new repository
-release has not yet been promoted to Azure, and the target deployment still needs
-its foundation-image memory/startup check when non-cellular bandwidth is
-available.
+than a performance guarantee for an arbitrary Moroccan site. The Azure release
+passed foundation-image startup, 2-vCPU/4-GiB readiness, and public endpoint
+checks, but it remains a controlled academic deployment rather than a claim of
+universal accuracy or full production maturity.

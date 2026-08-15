@@ -61,7 +61,7 @@ Frontend build & Next.js production compilation & Passed, 25 routes \\
 Browser E2E & Playwright six-project matrix & 198 passed, 0 failed \\
 Model artifacts & Hash, strict load, inference shape, finite values, cadence & Active 24 h, 168 h, and 30-day releases validated; hourly challengers audited separately \\
 Dependency security & npm and production pip audits & Zero known vulnerabilities \\
-Deployment & Docker health plus Azure HTTPS/browser smoke & Prior public web/API, email worker, managed database, both TFTs, SMTP capability, and Google origin verified \\
+Deployment & Docker health plus Azure HTTPS/browser smoke & Public web/API, email worker, managed database, both TFTs, 30-day Chronos-2, SMTP capability, and Google origin verified \\
 \bottomrule
 \end{longtable}
 
@@ -89,7 +89,7 @@ curl http://localhost:8000/api/v1/system/ready
 curl http://localhost:3000/
 \end{lstlisting}
 
-The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. The current web revision is \texttt{v1-f807316}; API and email worker use \texttt{v1-6796b1e}. This verified revision predates the repository's 30-day model integration. A later cloud promotion must use the production backend image that caches the pinned foundation base, enable \texttt{FORECAST\_30D\_ENABLED}, and pass model warm-up and memory checks. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure.
+The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. Web, API, and email worker use revision suffix \texttt{v4-d25295b}. The backend image caches the pinned foundation base, enables \texttt{FORECAST\_30D\_ENABLED}, and passed model warm-up at the API's two-vCPU and 4-GiB allocation. Public readiness reported the 24-hour, 168-hour, and 720-hour artifacts available, enabled, and warmed. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure.
 
 \section{Report reproduction}
 
