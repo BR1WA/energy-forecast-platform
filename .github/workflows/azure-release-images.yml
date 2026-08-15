@@ -1,0 +1,86 @@
+name: Build Azure Release Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact tested commit to package
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: acrenergyaipfe2691.azurecr.io
+
+jobs:
+  backend:
+    name: Backend production image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+
+      - name: Authenticate to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.AZURE_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_ACR_PASSWORD }}
+
+      - name: Configure Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend runtime
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          target: runtime
+          push: true
+          tags: ${{ env.REGISTRY }}/energyai-backend:${{ inputs.source_sha }}
+          cache-from: type=gha,scope=azure-backend-production
+          cache-to: type=gha,mode=max,scope=azure-backend-production
+
+      - name: Record immutable backend image
+        run: echo "Backend ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+
+  frontend:
+    name: Frontend production image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+
+      - name: Authenticate to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.AZURE_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_ACR_PASSWORD }}
+
+      - name: Configure Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push frontend runtime
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/energyai-frontend:${{ inputs.source_sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://ca-energyai-api.calmtree-b020e00c.italynorth.azurecontainerapps.io
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.AZURE_WEB_GOOGLE_CLIENT_ID }}
+          cache-from: type=gha,scope=azure-frontend-production
+          cache-to: type=gha,mode=max,scope=azure-frontend-production
+
+      - name: Record immutable frontend image
+        run: echo "Frontend ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
