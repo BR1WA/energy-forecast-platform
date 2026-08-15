@@ -94,7 +94,7 @@ export default function SimulationPage() {
 
   const changeState = async (action: 'start' | 'stop' | 'reset') => {
     if (action === 'reset' && !window.confirm(
-      'Reset all simulator data and regenerate a clean 30-day seeded history? CSV and push-meter readings will be preserved, and the live feed will stop.',
+      'Reset all simulator data and regenerate a clean one-year hourly history? CSV and push-meter readings will be preserved, and the live feed will stop.',
     )) return;
 
     setChangingState(action);
@@ -108,7 +108,7 @@ export default function SimulationPage() {
       await load();
       if (action === 'start') {
         toast.success(nextStatus.history_action === 'bootstrapped_empty_meter'
-          ? 'Demo started with 30 days of seeded history.'
+          ? 'Demo started with one year of seeded hourly history. All forecast horizons now have enough context.'
           : 'Demo readings started. Existing history was preserved.');
       } else if (action === 'stop') {
         toast.success('Demo feed stopped. This interval will not be backfilled.');
@@ -157,8 +157,8 @@ export default function SimulationPage() {
           </div>
           <div className="rounded-xl border border-violet-400/15 bg-gradient-to-br from-violet-400/10 to-[#111827] p-4">
             <div className="flex items-center gap-2 text-xs font-medium text-violet-200"><ShieldCheck className="h-4 w-4" />Forecast foundation</div>
-            <p className="mt-3 text-xl font-semibold text-white">{status?.history_ready_for_forecast ? 'History available' : 'Building context'}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-400">The demo targets {status?.bootstrap_days ?? 30} days at {status?.bootstrap_interval_minutes ?? 15}-minute intervals, exceeding the {status?.minimum_forecast_history_hours ?? 336}-hour forecast lookback.</p>
+            <p className="mt-3 text-xl font-semibold text-white">{status?.history_ready_for_month_forecast ? 'All model lookbacks available' : status?.history_ready_for_forecast ? 'Hourly models ready' : 'Building context'}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">The demo targets {status?.bootstrap_days ?? 365} days at {status?.bootstrap_interval_minutes ?? 60}-minute intervals. That covers the {status?.minimum_forecast_history_hours ?? 336}-hour TFT lookback and the {status?.minimum_month_forecast_history_days ?? 270}-day month gate without padding.</p>
           </div>
           <div className="rounded-xl border border-emerald-400/15 bg-gradient-to-br from-emerald-400/10 to-[#111827] p-4">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-200"><Clock3 className="h-4 w-4" />Wake continuity</div>

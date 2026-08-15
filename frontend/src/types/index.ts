@@ -139,11 +139,13 @@ export interface SimulationStatus {
   bootstrap_days: number;
   bootstrap_interval_minutes: number;
   minimum_forecast_history_hours: number;
+  minimum_month_forecast_history_days: number;
   history_points: number;
   history_start_at: string | null;
   history_end_at: string | null;
   history_span_hours: number;
   history_ready_for_forecast: boolean;
+  history_ready_for_month_forecast: boolean;
   continuity_enabled_at: string | null;
   last_catch_up_at: string | null;
   last_catch_up_points: number;

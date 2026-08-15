@@ -83,7 +83,7 @@ can be advertised by the API.
   timestamp validation.
 - Per-meter push API keys with one-time reveal, rotation, idempotency, and
   last-seen state.
-- An explicitly labelled deterministic simulator for demonstrations and development. A first start on an empty meter prepares 30 days of 15-minute household history; an already-running session catches up forward after a backend sleep, while old, CSV, push, and deliberately stopped gaps remain untouched.
+- An explicitly labelled deterministic simulator for demonstrations and development. A first start on an empty meter prepares 365 days of hourly household history (8,761 boundary-inclusive readings), making the 24-hour, 168-hour, and 30-day models ready without padding or a weaker short-context policy. An already-running session catches up forward after a backend sleep, while old, CSV, push, and deliberately stopped gaps remain untouched.
 - A confirmed “Reset demo data” action replaces only `source="simulation"` rows with the same seeded scenario and preserves measured/imported readings.
 - CSV preview remains available while the simulator runs. Confirming an import
   first asks to stop the live simulator, preserves its historical rows, and then
@@ -407,7 +407,7 @@ different database profile, but the current application totals are:
 The current CI run also passed full-history secret scanning and Docker Compose
 smoke testing. It covers persistent simulator history and catch-up, the
 simulator-to-CSV confirmation flow, and permanent account deletion with a full
-30-day synthetic history. See the
+one-year synthetic history. See the
 [green GitHub Actions run](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31328212332).
 
 Read the [full application audit](docs/PFE_FULL_APP_AUDIT_2026-07-31.md) and

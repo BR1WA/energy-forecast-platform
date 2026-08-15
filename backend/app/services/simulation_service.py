@@ -17,10 +17,11 @@ from app.services.site_service import ensure_user_site, get_primary_meter
 
 
 PROFILE_VERSION = "household_v1"
-BOOTSTRAP_DAYS = 30
-BOOTSTRAP_INTERVAL_SECONDS = 15 * 60
+BOOTSTRAP_DAYS = 365
+BOOTSTRAP_INTERVAL_SECONDS = 60 * 60
 LIVE_INTERVAL_SECONDS = 5
 MINIMUM_FORECAST_HISTORY_HOURS = 336
+MINIMUM_MONTH_FORECAST_HISTORY_DAYS = 270
 MAX_CATCHUP_POINTS = 5_000
 CATCHUP_INTERVALS_SECONDS = (
     15 * 60,
@@ -138,6 +139,7 @@ class SimulationService:
             "history_end_at": latest_utc,
             "history_span_hours": round(span_hours, 1),
             "history_ready_for_forecast": span_hours >= MINIMUM_FORECAST_HISTORY_HOURS,
+            "history_ready_for_month_forecast": span_hours >= MINIMUM_MONTH_FORECAST_HISTORY_DAYS * 24,
         }
 
     def get_state(self, db: Session, user_id: int) -> dict:
@@ -153,6 +155,7 @@ class SimulationService:
             "history_end_at": None,
             "history_span_hours": 0.0,
             "history_ready_for_forecast": False,
+            "history_ready_for_month_forecast": False,
         }
         return {
             "is_running": session.is_running,
@@ -163,6 +166,7 @@ class SimulationService:
             "bootstrap_days": BOOTSTRAP_DAYS,
             "bootstrap_interval_minutes": BOOTSTRAP_INTERVAL_SECONDS // 60,
             "minimum_forecast_history_hours": MINIMUM_FORECAST_HISTORY_HOURS,
+            "minimum_month_forecast_history_days": MINIMUM_MONTH_FORECAST_HISTORY_DAYS,
             "continuity_enabled_at": _parse_timestamp(config.get("_continuity_started_at")),
             "last_catch_up_at": _parse_timestamp(config.get("_last_catch_up_at")),
             "last_catch_up_points": int(config.get("_last_catch_up_points") or 0),

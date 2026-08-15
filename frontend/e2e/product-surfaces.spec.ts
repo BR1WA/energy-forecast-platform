@@ -37,6 +37,7 @@ test('setup completes through the explicit simulator path', async ({ page }) => 
   await page.getByLabel('Region').selectOption('Marrakech-Safi');
   await page.getByRole('button', { name: /Next/ }).click();
   await page.getByRole('button', { name: /Next/ }).click();
+  await expect(page.getByText('Create one hourly demo year so every forecast horizon is ready.')).toBeVisible();
   await page.getByRole('button', { name: 'Simulator' }).click();
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(page).toHaveURL(/\/dashboard/);
@@ -170,10 +171,12 @@ test('persistent simulator explains history and confirms simulator-only reset', 
   const simulatorStatus = () => ({
     status: resetCalled ? 'reset' : 'stopped', is_running: false, uptime: 0, site_id: 1,
     base_load_kw: 1.2, variation_percent: 10, profile: 'household_v1', is_reproducible: true,
-    bootstrap_days: 30, bootstrap_interval_minutes: 15, minimum_forecast_history_hours: 336,
-    history_points: resetCalled ? 2881 : 120, history_start_at: '2026-07-10T12:00:00Z',
-    history_end_at: '2026-08-09T12:00:00Z', history_span_hours: resetCalled ? 720 : 30,
-    history_ready_for_forecast: resetCalled, continuity_enabled_at: null, last_catch_up_at: null,
+    bootstrap_days: 365, bootstrap_interval_minutes: 60, minimum_forecast_history_hours: 336,
+    minimum_month_forecast_history_days: 270,
+    history_points: resetCalled ? 8761 : 120, history_start_at: '2025-08-09T12:00:00Z',
+    history_end_at: '2026-08-09T12:00:00Z', history_span_hours: resetCalled ? 8760 : 30,
+    history_ready_for_forecast: resetCalled, history_ready_for_month_forecast: resetCalled,
+    continuity_enabled_at: null, last_catch_up_at: null,
     last_catch_up_points: 0, last_catch_up_interval_minutes: null, last_catch_up_was_limited: false,
     deleted_simulation_readings: resetCalled ? 120 : undefined, preserved_non_simulation_data: resetCalled,
   });
@@ -201,8 +204,8 @@ test('persistent simulator explains history and confirms simulator-only reset', 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Reset demo data' }).click();
   await expect.poll(() => resetCalled).toBe(true);
-  await expect(page.getByText('720 hours')).toBeVisible();
-  await expect(page.getByText('History available')).toBeVisible();
+  await expect(page.getByText('8760 hours')).toBeVisible();
+  await expect(page.getByText('All model lookbacks available')).toBeVisible();
   await page.getByRole('button', { name: 'Stop demo and use real data' }).click();
   await expect(page).toHaveURL(/\/usage#csv-import$/);
 });

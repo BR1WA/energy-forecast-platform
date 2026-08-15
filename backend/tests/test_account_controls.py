@@ -302,13 +302,13 @@ def test_local_account_deletion_requires_confirmation_and_removes_owned_data(acc
         db.commit()
 
         started = simulation_service.start_simulation(db, user.id)
-        assert started["bootstrap_accepted_rows"] == 2881
+        assert started["bootstrap_accepted_rows"] == 8761
         reading_count = (
             db.query(SmartMeterReading)
             .filter_by(meter_id=get_default_meter(db, user.id).id)
             .count()
         )
-        assert reading_count >= 2881
+        assert reading_count >= 8761
 
         missing_confirmation = client.request(
             "DELETE", "/api/v1/account", headers=_headers(user), json={"current_password": "password123"},

@@ -394,13 +394,17 @@ function ForecastContent() {
                     {preparingDemo ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     {preparingDemo ? 'Preparing history' : 'Prepare demo history'}
                   </Button>
-                ) : null}
+                ) : (
+                  <Link href="/simulation" className={cn(buttonVariants(), 'bg-amber-300 text-slate-950 hover:bg-amber-200')}>
+                    <Sparkles className="h-4 w-4" />Create one-year demo history
+                  </Link>
+                )}
                 <Link href="/usage" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}>Open Usage</Link>
-                <a download href="/samples/forecast-ready" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}><Download className="h-4 w-4" />Download forecast-ready CSV</a>
+                {!isMonth ? <a download href="/samples/forecast-ready" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}><Download className="h-4 w-4" />Download forecast-ready CSV</a> : null}
               </div>
               <p className="text-xs leading-5 text-amber-100/60">
                 {isMonth
-                  ? 'The production monthly model requires at least 270 complete rolling daily blocks. Short synthetic demo history is deliberately not expanded to satisfy this gate.'
+                  ? 'The production monthly model requires at least 270 complete rolling daily blocks. The simulator creates 365 days at the models\' native hourly resolution, without padding history or lowering this gate.'
                   : 'For demos and tests, one-click preparation adds clearly labelled synthetic hourly readings to the current primary meter. It preserves existing readings and is safe to run again. The CSV remains available for testing the manual import journey.'}
               </p>
             </CardContent>

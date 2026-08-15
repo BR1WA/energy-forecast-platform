@@ -9,7 +9,9 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base
 from app.models import AuditEvent, SimulationSession, SmartMeterReading, User
 from app.services.auth_service import hash_password
+from app.services.product_forecast_service import product_forecast_service
 from app.services.simulation_service import (
+    BOOTSTRAP_DAYS,
     BOOTSTRAP_INTERVAL_SECONDS,
     MAX_CATCHUP_POINTS,
     SimulationService,
@@ -80,7 +82,7 @@ def test_household_profile_is_deterministic_and_has_expected_daily_shapes():
     )["active_power_kw"]
 
 
-def test_first_start_bootstraps_thirty_days_with_truthful_source_and_no_duplicates():
+def test_first_start_bootstraps_one_year_for_every_model_without_duplicates():
     engine, db = _database()
     try:
         user, meter = _account(db)
@@ -96,12 +98,29 @@ def test_first_start_bootstraps_thirty_days_with_truthful_source_and_no_duplicat
         ).filter(SmartMeterReading.meter_id == meter.id).one()
 
         assert first["history_action"] == "bootstrapped_empty_meter"
-        assert first["bootstrap_accepted_rows"] == 2_881
+        assert first["bootstrap_accepted_rows"] == 8_761
+        assert first["bootstrap_days"] == 365
+        assert first["bootstrap_interval_minutes"] == 60
         assert first["history_ready_for_forecast"] is True
-        assert first["history_span_hours"] >= 720
+        assert first["history_ready_for_month_forecast"] is True
+        assert first["history_span_hours"] >= 8_760
         assert second["history_action"] == "preserved_existing_simulation_history"
         assert count == distinct_count
-        assert (latest - earliest).total_seconds() >= 720 * 3600
+        assert (latest - earliest).total_seconds() >= 8_760 * 3600
+
+        hourly = product_forecast_service.prepare_input(db, user.id)
+        month = product_forecast_service.prepare_month_input(db, user.id)
+        assert hourly.ready is True
+        # A live reading inside the current hour can leave only that final
+        # bucket below the 95% coverage threshold. The production preprocessor
+        # fills it through its normal bounded-gap path; no simulator-specific
+        # padding or weakened readiness rule is used.
+        assert hourly.observed_hours >= 335
+        assert len(hourly.imputed_timestamps) <= 1
+        assert len(hourly.values) == 336
+        assert month.ready is True
+        assert month.observed_days == 365
+        assert len(month.values) == 365
         assert db.query(SmartMeterReading).filter(
             SmartMeterReading.meter_id == meter.id,
             SmartMeterReading.source != "simulation",
@@ -222,7 +241,7 @@ def test_reset_replaces_only_simulation_rows_and_leaves_feed_stopped():
         assert result["deleted_simulation_readings"] == 1
         assert result["preserved_non_simulation_data"] is True
         assert result["is_running"] is False
-        assert result["history_span_hours"] >= 720
+        assert result["history_span_hours"] >= BOOTSTRAP_DAYS * 24
         assert db.query(SmartMeterReading).filter(
             SmartMeterReading.meter_id == meter.id,
             SmartMeterReading.timestamp == preserved_at,
