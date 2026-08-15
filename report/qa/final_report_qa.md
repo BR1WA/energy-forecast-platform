@@ -5,9 +5,9 @@
 - Output: `output/pdf/PFE_ZOUITNI_Salah_Eddine_production_v8.pdf`.
 - Previous draft and supervisor-review PDFs are retained and were not overwritten.
 - Language: academic English with a French resume.
-- Build date: 14 August 2026.
-- Format: A4, 12 pt, one-sided PDF; 98 pages; 1,729,660 bytes.
-- SHA-256: `16B0C813633115424A45F137BE6C96AEDCDAB2671130BDFA1A048C62D3BC3031`.
+- Build date: 15 August 2026.
+- Format: A4, 12 pt, one-sided PDF; 98 pages; 1,729,785 bytes.
+- SHA-256: `5434F751FF9809127BB75584A92BD4C93702E81C176353A66AA7A428CBC1043F`.
 
 ## Scientific-evidence boundary
 
@@ -37,8 +37,8 @@ reported as a two-TFT deployment; no later Azure promotion is claimed.
 - Frontend ESLint and TypeScript: passed.
 - Next.js production build: passed; 25 routes.
 - Playwright six-project matrix: 198 passed, 0 failed.
-- Focused month browser coverage: daily cadence, long-history readiness, and no
-  short demonstration-history bypass.
+- Simulator browser coverage: one-year hourly context, all-model readiness,
+  synthetic provenance, reset isolation, and CSV handoff.
 - Python compileall: passed.
 - Docker Compose configuration: resolved successfully.
 - Production Docker image build: intentionally stopped before completion at the
@@ -53,6 +53,9 @@ reported as a two-TFT deployment; no later Azure promotion is claimed.
 - Month input preparation integrates meter intervals into rolling 24-hour totals,
   requires at least 270 valid days in a maximum 365-day context, and permits only
   bounded causal interpolation.
+- A new empty account can bootstrap 365 days of deterministic hourly simulation
+  history (8,761 boundary-inclusive readings). This makes all three active model
+  contracts ready without lowering the month gate or changing TFT inputs.
 - The month runtime is offline-only and verifies pinned base and adapter checksums.
 - Forecast persistence, history serialization, charts, readiness, and PDF export
   preserve daily cadence.

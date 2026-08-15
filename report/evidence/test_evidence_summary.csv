@@ -1,5 +1,5 @@
 area,command_or_source,result,status,limitations
-Backend local,python -m pytest -q,116 passed 4 PostgreSQL-only skipped,passed,Verified 2026-08-14 with month serving and hourly challenger tests
+Backend local,python -m pytest -q,116 passed 4 PostgreSQL-only skipped,passed,Verified 2026-08-15 with one-year simulator all-model readiness
 Backend PostgreSQL,disposable migrated PostgreSQL database then python -m pytest -q,100 passed 0 skipped,passed,Database removed after isolated run
 Backend CI PostgreSQL and image,GitHub Actions run 31328212332,migrations suite dependency audit image build and containerized suite passed,passed,Commit 6796b1e
 Frontend lint,npm run lint,passed,passed,Verified 2026-08-14
