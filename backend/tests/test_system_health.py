@@ -7,6 +7,7 @@ from app.models import EmailOutbox
 from app.routers.system import build_readiness
 from app.config import Settings
 from app.services.product_forecast_service import product_forecast_service
+from app.main import api_documentation_url
 
 
 def make_session():
@@ -32,6 +33,8 @@ def model_status(*, available: bool, warmed: bool, error: str | None = None) -> 
 
 
 def test_readiness_requires_the_packaged_runtime(monkeypatch):
+    assert api_documentation_url("/docs", debug=True) == "/docs"
+    assert api_documentation_url("/docs", debug=False) is None
     db = make_session()
     try:
         monkeypatch.setattr(

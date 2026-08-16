@@ -107,10 +107,10 @@ class TestAuthAndTokens(unittest.TestCase):
         self.assertEqual(response.json()["detail"]["code"], "email_verification_required")
         self.assertIsNone(response.cookies.get("refresh_token"))
 
-    def test_registration_rejects_short_password(self):
+    def test_registration_rejects_password_below_twelve_characters(self):
         response = client.post(
             "/api/v1/auth/register",
-            json={"email": "weak@example.com", "password": "short", "full_name": "Weak Password"},
+            json={"email": "weak@example.com", "password": "short-pass1", "full_name": "Weak Password"},
         )
         self.assertEqual(response.status_code, 422)
 
