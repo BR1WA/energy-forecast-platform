@@ -396,7 +396,7 @@ def layered_architecture():
         (0.76, "Experience layer", "Next.js 16 / React 19\nDashboard, Usage, Forecast, Actions, Settings", BLUE),
         (0.58, "API and policy layer", "FastAPI routers, JWT sessions, RBAC, validation", CYAN),
         (0.40, "Domain services", "Forecasting, ingestion, analytics, alerts, email, account lifecycle", GREEN),
-        (0.22, "Persistence and background work", "PostgreSQL 16; alert, email, and\navatar-cleanup workers", AMBER),
+        (0.22, "Persistence and background work", "PostgreSQL 16; simulation, alert,\nemail, and avatar-cleanup workers", AMBER),
         (0.04, "Model artifacts", "Global TFT 24 h and 168 h, manifests, hashes, readiness gates", NAVY),
     ]
     for y, title, text, color in layers:
@@ -648,7 +648,7 @@ def azure_deployment_topology():
     arrow(ax, 0.78, 0.28, 0.59, 0.46, color="#75529b", ls="--")
     ax.text(0.75, 0.42, "secrets", fontsize=7.3, color="#75529b")
 
-    ax.text(0.18, 0.055, "Managed HTTPS, the email worker, SMTP capability, and Google identity are verified; alert/avatar workers and durable avatar storage remain outside this boundary.", fontsize=7.9, color=GREY)
+    ax.text(0.18, 0.055, "Managed HTTPS, the email worker, SMTP capability, and Google identity are verified; simulation/alert/avatar workers and durable avatar storage remain outside this boundary.", fontsize=7.9, color=GREY)
     save(fig, DIA / "azure_deployment_topology.pdf")
 
 

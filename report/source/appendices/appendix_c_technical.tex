@@ -53,14 +53,15 @@ Layer & Technique & Current evidence \\
 \midrule
 \endhead
 Schemas/services & Unit and focused integration tests & Validation, auth, settings, forecast, alert, report, and account behavior \\
-Database/API & Full pytest suite on PostgreSQL & 100 passed, 0 skipped \\
-Database/API & Current local pytest suite & 116 passed, 4 PostgreSQL-only skips \\
-Database/API & Current CI PostgreSQL and test-image gates & Passed \\
+Database/API & Full repository suite on PostgreSQL & 146 passed, 0 skipped; 18 migrations; zero drift \\
+Database/API & Current SQLite suite with coverage & 142 passed, 4 PostgreSQL-only skips; 82\% application coverage \\
+Database/API & ML-enabled backend test image & 117 passed, 4 skipped; non-root runtime; no compiler \\
 Frontend static & ESLint and TypeScript & Both passed \\
 Frontend build & Next.js production compilation & Passed, 25 routes \\
-Browser E2E & Playwright six-project matrix & 198 passed, 0 failed \\
+Browser E2E & Playwright six-project matrix & 204 passed, 0 failed \\
 Model artifacts & Hash, strict load, inference shape, finite values, cadence & Active 24 h, 168 h, and 30-day releases validated; hourly challengers audited separately \\
-Dependency security & npm and production pip audits & Zero known vulnerabilities \\
+Dependency security & npm and hash-locked Python audits & Zero known vulnerabilities; custom CPU Torch wheel identified outside PyPI audit data \\
+Repository security & Full-history secret scan & 407 commits scanned; no leaks found \\
 Deployment & Docker health plus Azure HTTPS/browser smoke & Public web/API, email worker, managed database, both TFTs, 30-day Chronos-2, SMTP capability, and Google origin verified \\
 \bottomrule
 \end{longtable}
@@ -89,7 +90,7 @@ curl http://localhost:8000/api/v1/system/ready
 curl http://localhost:3000/
 \end{lstlisting}
 
-The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. Web, API, and email worker use revision suffix \texttt{v4-d25295b}. The backend image caches the pinned foundation base, enables \texttt{FORECAST\_30D\_ENABLED}, and passed model warm-up at the API's two-vCPU and 4-GiB allocation. Public readiness reported the 24-hour, 168-hour, and 720-hour artifacts available, enabled, and warmed. Remaining production work includes an application security-header policy, custom domain, managed identity, durable avatar storage, centralized monitoring, Azure alert/avatar workers, and a tested backup-restore procedure.
+The verified Azure deployment supplies managed TLS, Azure hostnames, private images, externalized secrets, a healthy email worker, ready SMTP capability, and a production Google identity origin. Web, API, and email worker use revision suffix \texttt{v4-d25295b}. The backend image caches the pinned foundation base, enables \texttt{FORECAST\_30D\_ENABLED}, and passed model warm-up at the API's two-vCPU and 4-GiB allocation. Public readiness reported the 24-hour, 168-hour, and 720-hour artifacts available, enabled, and warmed. The remediated source adds application security headers and a dedicated simulation worker; a new image promotion and cloud worker provision are required before those changes become Azure evidence. Remaining production work includes a custom domain, managed identity, durable avatar storage, centralized monitoring, simulation/alert/avatar workers, a shared rate-limit backend for horizontal scaling, and a tested backup-restore procedure.
 
 \section{Report reproduction}
 

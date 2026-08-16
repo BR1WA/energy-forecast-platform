@@ -9,6 +9,7 @@ This file lists information that could not be established from the repository or
 - Host organization, if the PFE was conducted with an external organization.
 - Official defense date. The earlier tentative 9 September 2026 value was removed because no official evidence is preserved locally.
 - Jury members, grades, institutions, and roles.
+- Institutionally approved AI-tool disclosure wording, if required.
 - Official FS-UMI rules for citation style, margins, font, line spacing, binding, cover wording, and front-matter order for this Master programme.
 - Final personal dedication text.
 
@@ -19,13 +20,15 @@ This file lists information that could not be established from the repository or
 - The exploratory TSMixer work has no frozen successful metric artifact.
 - MultiCycleNet is represented by local experimental results; exact reproduction of a named published implementation is not claimed.
 - The serving-normalization comparison validates the scaler and inverse-transform change on the exact frozen LCL cohort only. Site-specific calibration, conformal recalibration, time-zone transfer, and Moroccan household transfer remain unvalidated.
-- Code-coverage evidence was not found and is not claimed.
+- Application coverage is now measured at 82% with a 70% CI floor; provider,
+  accessibility, load, recovery, and penetration-test coverage remain unclaimed.
 
 ## Deployment and operational gaps
 
 - The Azure jury release is verified through public HTTPS web/API endpoints, managed PostgreSQL, a private registry, Key Vault secrets, model-readiness checks, email-worker health, and responsive browser smoke tests.
 - Public email registration, verification delivery, SMTP capability, and a production Google Web identity origin are enabled and smoke-tested. Sustained provider delivery and recovery behavior have not been load-tested.
-- Alert and avatar-cleanup workers are not deployed in Azure; uploaded avatars are not durably persisted.
+- Simulation, alert, and avatar-cleanup workers are not deployed in Azure;
+  uploaded avatars are not durably persisted.
 - The deployment uses Azure-generated hostnames, registry credentials rather than workload identity, and no centralized Log Analytics retention.
 - Backup retention is configured, but restoration, load testing, disaster recovery, formal accessibility testing, and multi-tenant penetration testing remain outside the verified evidence.
 
@@ -34,6 +37,7 @@ This file lists information that could not be established from the repository or
 1. Confirm the final English title or provide the institutionally approved wording.
 2. Supply the jury composition, any required host/laboratory information, and final defense-date confirmation.
 3. Confirm the FS-UMI Master PFE cover and formatting rules.
-4. Approve the neutral wording of the DEPM methodological audit.
-5. Decide whether interval recalibration or a Moroccan pilot study must be completed before defense.
-6. Decide whether a custom domain, durable avatar storage, and the remaining Azure workers are required before the defense.
+4. Provide or approve the required AI-tool disclosure wording.
+5. Approve the neutral wording of the DEPM methodological audit.
+6. Decide whether interval recalibration or a Moroccan pilot study must be completed before defense.
+7. Decide whether a custom domain, durable avatar storage, and the remaining Azure workers are required before the defense.

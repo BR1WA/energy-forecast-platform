@@ -194,13 +194,14 @@ Artifact contracts:
 └──────────────────┴───────────────────────┴──────────────────┘
 ```
 
-The Compose deployment contains six services:
+The Compose deployment contains seven services:
 
 | Service | Responsibility |
 |---|---|
 | `db` | PostgreSQL 16 persistence |
 | `backend` | FastAPI application, policy, reports, and forecast inference |
 | `frontend` | Next.js user and administrator interface |
+| `simulation-worker` | Durable advancement of explicitly started simulator sessions |
 | `alerts-worker` | Missing-data and threshold alert processing |
 | `email-worker` | Transactional outbox delivery, retry, and dead-letter handling |
 | `avatar-cleanup-worker` | Durable removal of superseded avatar objects |
@@ -257,7 +258,7 @@ Open:
 Inspect logs when a service does not become ready:
 
 ```powershell
-docker compose logs --tail 150 backend frontend alerts-worker email-worker avatar-cleanup-worker
+docker compose logs --tail 150 backend frontend simulation-worker alerts-worker email-worker avatar-cleanup-worker
 ```
 
 Stop the application without deleting its volumes:
@@ -387,25 +388,29 @@ for any public deployment.
 
 ## Quality evidence
 
-The latest full CI and deployment verification completed on 15 August 2026 at
-commit `d25295b`. Historical audit results are retained where they cover a
-different database profile, but the current application totals are:
+The latest repository-wide local revalidation completed on 16 August 2026. The
+last promoted CI and Azure evidence remains the 15 August 2026 release at commit
+`d25295b`; it is retained separately so local source changes are not presented as
+already deployed. The current source totals are:
 
 | Gate | Result |
 |---|---|
-| Backend local suite | 116 passed; 4 explicit PostgreSQL-only skips |
-| Backend CI with migrated PostgreSQL | Passed, including migrations and containerized rerun |
-| Historical isolated-PostgreSQL audit | 100 passed; 0 skipped |
+| Backend and training suite on SQLite | 142 passed; 4 explicit PostgreSQL-only skips; 82% application coverage |
+| Fresh migrated PostgreSQL suite | 146 passed; 0 skipped; all 18 migrations applied; zero Alembic drift |
+| Hash-locked ML-enabled backend test image | 117 passed; 4 skipped; non-root UID 10001; compiler absent |
 | Frontend lint, type check, production build | Passed; 25 routes generated |
-| Playwright six-project matrix | 198/198 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
+| Playwright six-project matrix | 204/204 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
 | Production npm dependency audit | 0 known vulnerabilities |
-| Production Python dependency audit | 0 known vulnerabilities |
-| Compose runtime | Model-enabled production stack started; core health checks passed |
+| Production Python dependency audits | 0 known vulnerabilities in runtime, development, and foundation locks; custom CPU Torch wheel is outside PyPI's audit database |
+| Secret scan | 407 commits scanned; no leaks found |
+| Compose and images | Seven-service configuration valid; non-root backend/frontend images and model prefetch verified locally |
 | Forecast readiness | Azure reports the 24-hour TFT, 168-hour TFT, and 30-day daily Chronos-2 artifact available, enabled, and warmed |
 | Azure revisions | Web/API/email worker `v4-d25295b`; healthy; web and API receive 100% traffic |
 
-The current CI run also passed full-history secret scanning and Docker Compose
-smoke testing. It covers persistent simulator history and catch-up, the
+The current source CI definition includes full-history secret scanning, fresh
+PostgreSQL migration/drift checks, hash-enforced Python installation, dependency
+audits, container tests, and a Docker Compose smoke test. It covers persistent
+simulator history and catch-up, the
 simulator-to-CSV confirmation flow, and permanent account deletion with a full
 one-year synthetic history. See the
 [green GitHub Actions run](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31893388429)
@@ -441,8 +446,9 @@ The following remain outside the verified Product V1 public-deployment claim:
 - SMTP delivery, the cloud email worker, and Google OAuth origin configuration are
   enabled and smoke-tested in Azure, but sustained provider delivery and recovery
   behavior have not been load-tested.
-- Azure alert and avatar-cleanup workers are not deployed, and avatars are not yet
-  stored in durable object storage.
+- Azure simulation, alert, and avatar-cleanup workers are not deployed, and
+  avatars are not yet stored in durable object storage. The local source now
+  requires the dedicated simulation worker for continuous catch-up.
 - The 30-day model passed its fresh Tetouan gate, but a southern-Morocco
   diagnostic did not beat its seasonal baseline; monitored local rollout and
   recalibration remain necessary.

@@ -1,13 +1,13 @@
-# Final Report QA - Azure Three-Model Release Version 9
+# Final Report QA - Audit-Remediated Version 10
 
 ## Build identification
 
-- Output: `output/pdf/PFE_ZOUITNI_Salah_Eddine_production_v9.pdf`.
+- Output: `output/pdf/PFE_ZOUITNI_Salah_Eddine_production_v10.pdf`.
 - Previous draft and supervisor-review PDFs are retained and were not overwritten.
 - Language: academic English with a French resume.
-- Build date: 15 August 2026.
-- Format: A4, 12 pt, one-sided PDF; 98 pages; 1,729,936 bytes.
-- SHA-256: `AD70C187236EC6F25E46EB0282D97B244827AC0FDBAE8450D7F35F67B82A3986`.
+- Build date: 16 August 2026.
+- Format: A4, 12 pt, one-sided PDF; 98 pages; 1,732,542 bytes.
+- SHA-256: `1E6C094D30A0AE23BA86FC67C694629D553212402A02E1EFC9C4B7F1EB2F9283`.
 
 ## Scientific-evidence boundary
 
@@ -30,21 +30,32 @@ Azure revision `v4-d25295b` now serves this integration. The public readiness
 payload reports the 24-hour, 168-hour, and 720-hour artifacts available, enabled,
 and warmed, including the 30-day daily Chronos-2 model.
 
-## Current local quality gates
+## Current source quality gates
 
-- Backend and training suite: 116 passed, 4 explicit PostgreSQL-only skips.
+- Backend and training suite on SQLite: 142 passed, 4 explicit
+  PostgreSQL-only skips; 82.38% application coverage against a 70% CI floor.
+- Fresh PostgreSQL 16 database: all 18 migrations applied; 146 passed, 0
+  skipped; `alembic check` reported no schema drift.
+- ML-enabled backend test image: 117 passed, 4 skipped; UID 10001; no compiler;
+  exact Chronos-2 revision prefetched.
 - Month real-wrapper smoke: exact base and adapter loaded; 30 finite ordered
   quantile outputs returned.
 - Frontend ESLint and TypeScript: passed.
 - Next.js production build: passed; 25 routes.
-- Playwright six-project matrix: 198 passed, 0 failed.
+- Playwright six-project matrix: 204 passed, 0 failed. The final password and
+  production-documentation policy change was additionally rechecked in a
+  36-case six-project authentication matrix.
 - Simulator browser coverage: one-year hourly context, all-model readiness,
   synthetic provenance, reset isolation, and CSV handoff.
 - Python compileall: passed.
 - Docker Compose configuration: resolved successfully.
-- Production Docker image build: intentionally stopped before completion at the
-  user's request to avoid PyTorch/model downloads over limited cellular data.
-  No later dependency, dataset, or container download was attempted.
+- Backend and frontend production/test images: built and smoke-tested as
+  non-root runtimes. The backend foundation image installed only hash-locked
+  dependencies and prefetched the exact base revision.
+- Dependency audits: npm and Python runtime/development/foundation locks report
+  zero known vulnerabilities. The custom CPU Torch wheel is explicitly outside
+  PyPI's advisory database.
+- Full-history secret scan: 407 commits scanned; no leaks found.
 
 ## Release implementation evidence
 
@@ -60,7 +71,7 @@ and warmed, including the 30-day daily Chronos-2 model.
 - The month runtime is offline-only and verifies pinned base and adapter checksums.
 - Forecast persistence, history serialization, charts, readiness, and PDF export
   preserve daily cadence.
-- The production Dockerfile installs the separately pinned foundation runtime,
+- The production Dockerfile installs the transitively hash-locked foundation runtime,
   copies only the exact release adapter, and defines a build-time base-prefetch
   step. The full model-enabled image was built and tested on GitHub runners,
   preserving the local cellular-data constraint.
@@ -69,24 +80,32 @@ and warmed, including the 30-day daily Chronos-2 model.
 
 ## Compilation and visual QA
 
-- Build method: clean isolated MiKTeX pdfLaTeX, Biber, and two stabilizing
-  pdfLaTeX passes.
+- Build method: MiKTeX pdfLaTeX, Biber, and two stabilizing pdfLaTeX passes.
+  `latexmk` was unavailable because its local wrapper requires Perl; the direct
+  equivalent sequence completed without an added dependency.
 - Fatal LaTeX errors: 0.
 - Undefined references or citations: 0.
 - Overfull horizontal or vertical boxes: 0.
-- All 98 pages rendered with Poppler at 90 dpi.
-- All pages inspected in nine numbered contact sheets.
+- All 98 final pages rendered with Poppler at 90 dpi.
+- All pages inspected in nine numbered contact sheets after the final figure
+  update; changed architecture, simulation, security, validation, and appendix
+  pages were also reviewed at full-page resolution.
 - Full-page checks covered both abstracts, the new month/hourly model tables,
   current validation summary, evidence registry, requirement matrix, and final
   installation page.
 - No clipped text, overlapping content, broken tables, unreadable glyphs,
   accidental blank pages, or content outside the margins was observed.
+- The reopened PDF has 98 readable pages, is not encrypted, contains no local
+  Windows path or tool token, and retains only the two approved visible
+  administrative placeholders on the cover.
 
 ## Remaining boundaries
 
-The report remains administratively incomplete until the official defense date
-and jury composition are supplied. Model results remain dataset-specific rather
-than a performance guarantee for an arbitrary Moroccan site. The Azure release
-passed foundation-image startup, 2-vCPU/4-GiB readiness, and public endpoint
-checks, but it remains a controlled academic deployment rather than a claim of
-universal accuracy or full production maturity.
+The report remains administratively incomplete until the official defense date,
+jury composition, any required host/laboratory line, and approved AI-tool
+disclosure are supplied. Model results remain dataset-specific rather than a
+performance guarantee for an arbitrary Moroccan site. The existing Azure
+release passed foundation-image startup, 2-vCPU/4-GiB readiness, and public
+endpoint checks, but the remediated source images and dedicated simulation
+worker have not yet been promoted. It remains a controlled academic deployment,
+not a claim of universal accuracy or full production maturity.
