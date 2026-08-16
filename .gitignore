@@ -11,6 +11,7 @@ __pycache__/
 .ruff_cache/
 coverage/
 htmlcov/
+.coverage
 
 # Models (binary, tracked via Git LFS or stored externally)
 models/*.pt
@@ -33,6 +34,10 @@ backend/.env
 # SQLite DB
 backend/energy_forecast.db
 energy_forecast.db
+
+# Runtime user uploads
+backend/static/avatars/*
+!backend/static/avatars/.gitkeep
 
 # Node.js dependencies
 node_modules/
