@@ -60,13 +60,15 @@ class AccountActionToken(Base):
             "purpose IN ('verify_email', 'reset_password')",
             name="ck_account_action_tokens_purpose",
         ),
+        UniqueConstraint("token_hash"),
+        Index("ix_account_action_tokens_token_hash", "token_hash"),
         Index("ix_action_tokens_user_purpose", "user_id", "purpose"),
     )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     purpose = Column(String(40), nullable=False)
-    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
@@ -98,13 +100,15 @@ class OAuthChallenge(Base):
             "action IN ('login', 'link', 'delete_account')",
             name="ck_oauth_challenges_action",
         ),
+        UniqueConstraint("state_hash"),
+        Index("ix_oauth_challenges_state_hash", "state_hash", unique=True),
         Index("ix_oauth_challenges_expiry", "expires_at", "used_at"),
     )
 
     id = Column(String(36), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     action = Column(String(20), nullable=False)
-    state_hash = Column(String(64), unique=True, nullable=False, index=True)
+    state_hash = Column(String(64), nullable=False)
     nonce_hash = Column(String(64), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
@@ -167,7 +171,7 @@ class Site(Base):
     __tablename__ = "sites"
     __table_args__ = (UniqueConstraint("user_id", name="uq_sites_user_id"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(120), nullable=False)
     address = Column(String(255), nullable=True)
@@ -195,7 +199,7 @@ class Meter(Base):
         ),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
     external_id = Column(String(100), nullable=True, index=True)
     name = Column(String(120), nullable=False)
@@ -235,7 +239,7 @@ class IngestionBatch(Base):
 class SiteSettings(Base):
     __tablename__ = "site_settings"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, unique=True, index=True)
     country = Column(String(100), nullable=False, default="Morocco")
     region = Column(String(100), nullable=True)
@@ -255,7 +259,7 @@ class SimulationSession(Base):
     __tablename__ = "simulation_sessions"
     __table_args__ = (UniqueConstraint("site_id", name="uq_simulation_sessions_site_id"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     is_running = Column(Boolean, nullable=False, default=False)
@@ -269,7 +273,7 @@ class SimulationSession(Base):
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     actor_user_id = Column(Integer, nullable=True, index=True)
     target_user_id = Column(Integer, nullable=True, index=True)
     site_id = Column(Integer, nullable=True, index=True)
@@ -326,6 +330,7 @@ class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (
         Index("ix_alerts_user_created", "user_id", "created_at", "id"),
+        Index("ix_alerts_site_rule_created", "site_id", "rule_key", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -333,7 +338,7 @@ class Alert(Base):
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
     forecast_id = Column(Integer, ForeignKey("forecasts.id"), nullable=True)
     alert_type = Column(String(30), nullable=False)  # peak_demand, cost_threshold
-    rule_key = Column(String(160), nullable=True, index=True)
+    rule_key = Column(String(160), nullable=True)
     severity = Column(String(10), default="medium")  # low, medium, high
     message = Column(Text, nullable=True)
     peak_kw = Column(Float, nullable=True)
@@ -353,7 +358,7 @@ class Recommendation(Base):
     __tablename__ = "recommendations"
     __table_args__ = (UniqueConstraint("alert_id", name="uq_recommendations_alert_id"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
     alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=True, index=True)
@@ -372,7 +377,14 @@ class Recommendation(Base):
 
 class SmartMeterReading(Base):
     __tablename__ = "smart_meter_readings"
-    __table_args__ = (UniqueConstraint("meter_id", "timestamp", name="uq_smart_meter_readings_meter_timestamp"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "meter_id",
+            "timestamp",
+            name="uq_smart_meter_readings_meter_timestamp",
+        ),
+        Index("ix_smart_meter_readings_meter_timestamp", "meter_id", "timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     meter_id = Column(Integer, ForeignKey("meters.id"), nullable=False, index=True)
@@ -395,6 +407,16 @@ class SmartMeterReading(Base):
 
 class ModelRegistry(Base):
     __tablename__ = "model_registry"
+    __table_args__ = (
+        Index(
+            "uq_model_registry_active_dataset_horizon",
+            "dataset",
+            "horizon",
+            unique=True,
+            postgresql_where=text("active IS TRUE"),
+            sqlite_where=text("active = 1"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), nullable=False) # e.g. patchtst_ihepc_24h
@@ -403,7 +425,7 @@ class ModelRegistry(Base):
     dataset = Column(String(50), nullable=False, default="ihepc")
     horizon = Column(Integer, nullable=False, default=24)
     lookback = Column(Integer, nullable=True)
-    experiment_path = Column(String(255), nullable=False)
+    experiment_path = Column(String(512), nullable=False)
     model_fingerprint = Column(String(64), nullable=True) # SHA-256 hash
     artifact_contract = Column(JSON, nullable=True)
     contract_validated_at = Column(DateTime(timezone=True), nullable=True)

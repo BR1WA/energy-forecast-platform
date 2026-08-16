@@ -11,6 +11,7 @@ from app.config import get_settings
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 PRE_SITE_OWNERSHIP_REVISION = "bf09bfef2e1e"
+MIGRATION_ADVISORY_LOCK_ID = 184_836_519
 
 
 def _revision_before_site_ownership(database_url: str) -> bool:
@@ -53,12 +54,36 @@ def _prepare_legacy_subscription_default(database_url: str) -> None:
         engine.dispose()
 
 
-def run_migrations() -> None:
-    """Upgrade the configured database to the latest committed revision."""
-    config = Config(str(BACKEND_DIR / "alembic.ini"))
-    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-    database_url = get_settings().DATABASE_URL
+def _upgrade_to_head(config: Config, database_url: str) -> None:
+    """Run the legacy bridge and committed migrations while a caller owns serialization."""
     if _revision_before_site_ownership(database_url):
         command.upgrade(config, PRE_SITE_OWNERSHIP_REVISION)
         _prepare_legacy_subscription_default(database_url)
     command.upgrade(config, "head")
+
+
+def run_migrations() -> None:
+    """Upgrade to head, serializing concurrent PostgreSQL application starts."""
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    database_url = get_settings().DATABASE_URL
+    if not database_url.startswith(("postgresql://", "postgresql+")):
+        _upgrade_to_head(config, database_url)
+        return
+
+    lock_engine = create_engine(database_url, pool_pre_ping=True)
+    try:
+        with lock_engine.connect() as connection:
+            connection.execute(
+                text("SELECT pg_advisory_lock(:lock_id)"),
+                {"lock_id": MIGRATION_ADVISORY_LOCK_ID},
+            )
+            try:
+                _upgrade_to_head(config, database_url)
+            finally:
+                connection.execute(
+                    text("SELECT pg_advisory_unlock(:lock_id)"),
+                    {"lock_id": MIGRATION_ADVISORY_LOCK_ID},
+                )
+    finally:
+        lock_engine.dispose()
