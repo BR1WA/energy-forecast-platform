@@ -1,8 +1,10 @@
 """Meter data ingestion endpoints for CSV imports and device push clients."""
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.config import get_settings
+from app.limiter import limiter
 from app.models import Meter, SimulationSession, Site, User
 from app.schemas import IngestionKeyResponse, IngestionResult, MeterConfiguration, MeterSampleBatch
 from app.services.auth_service import get_current_user
@@ -12,6 +14,7 @@ from app.services.audit_service import record_audit_event
 
 router = APIRouter(prefix="/api/v1/ingestion", tags=["Ingestion"])
 MAX_CSV_BYTES = 5 * 1024 * 1024
+settings = get_settings()
 
 
 def _owned_meter(db: Session, user_id: int, meter_id: int) -> Meter:
@@ -99,8 +102,10 @@ def rotate_push_key(
 
 
 @router.post("/meters/{meter_id}/csv/preview")
+@limiter.limit(settings.EXPENSIVE_RATE_LIMIT)
 async def preview_csv(
     meter_id: int,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -113,8 +118,10 @@ async def preview_csv(
 
 
 @router.post("/meters/{meter_id}/csv/import", response_model=IngestionResult)
+@limiter.limit(settings.EXPENSIVE_RATE_LIMIT)
 async def import_csv(
     meter_id: int,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

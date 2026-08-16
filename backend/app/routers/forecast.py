@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.config import get_settings
+from app.limiter import limiter
 from app.models import Forecast, User
 from app.schemas import (
     ForecastCapabilitiesResponse,
@@ -29,6 +31,7 @@ from app.services.product_forecast_service import (
 
 router = APIRouter(prefix="/api/v1/forecast", tags=["Forecast"])
 PRODUCT_MODELS = PRODUCT_MODEL_NAMES
+settings = get_settings()
 
 
 def _capability_error(exc: ForecastCapabilityError) -> HTTPException:
@@ -107,7 +110,9 @@ def get_readiness(
 
 
 @router.post("/prepare-demo-history", response_model=ForecastDemoHistoryResponse)
+@limiter.limit(settings.EXPENSIVE_RATE_LIMIT)
 def prepare_demo_history(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -130,7 +135,9 @@ def prepare_demo_history(
 @router.post(
     "/run", response_model=ProductForecastResponse, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit(settings.EXPENSIVE_RATE_LIMIT)
 def run_forecast(
+    request: Request,
     data: ForecastRunRequest | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

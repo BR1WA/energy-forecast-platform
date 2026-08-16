@@ -2,14 +2,14 @@
 services:
   # ======================== DATABASE ========================
   db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     container_name: energy_db
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-energy_forecast}
       POSTGRES_USER: ${POSTGRES_USER:-pfe}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -114,6 +114,26 @@ services:
       LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       LEGAL_EFFECTIVE_DATE: ${LEGAL_EFFECTIVE_DATE:-}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  simulation-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m app.cli run-simulation-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfe}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-energy_forecast}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      DEBUG: ${DEBUG:-false}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      LEGAL_OWNER_NAME: ${LEGAL_OWNER_NAME:-}
+      LEGAL_CONTACT_EMAIL: ${LEGAL_CONTACT_EMAIL:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      LEGAL_EFFECTIVE_DATE: ${LEGAL_EFFECTIVE_DATE:-}
+      SIMULATION_WORKER_INTERVAL_SECONDS: ${SIMULATION_WORKER_INTERVAL_SECONDS:-5}
       PYTHONUNBUFFERED: "1"
     depends_on:
       backend:

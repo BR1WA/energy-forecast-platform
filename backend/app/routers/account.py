@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.limiter import limiter
 from app.models import AuthIdentity, User
 from app.routers import auth as auth_router
 from app.schemas import AccountDeletionCapabilities, AccountDeletionRequest, GoogleChallengeResponse
@@ -27,6 +28,7 @@ from app.services.oauth_challenge_service import consume_oauth_challenge, issue_
 
 
 router = APIRouter(prefix="/api/v1/account", tags=["Account"])
+settings = get_settings()
 
 
 def _archive_chunks(archive, chunk_size: int = 64 * 1024) -> Iterator[bytes]:
@@ -48,7 +50,8 @@ def _deletion_method(db: Session, user: User) -> tuple[str, bool]:
 
 
 @router.get("/export")
-def export_account(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit(settings.EXPENSIVE_RATE_LIMIT)
+def export_account(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return a documented owner-scoped ZIP while excluding every credential class."""
     record_audit_event(
         db,

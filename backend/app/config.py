@@ -61,9 +61,12 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     RATE_LIMIT: str = "10/minute"
+    EXPENSIVE_RATE_LIMIT: str = "10/minute"
+    MUTATION_RATE_LIMIT: str = "30/minute"
 
-    # Alert worker
+    # Background workers
     ALERT_WORKER_INTERVAL_SECONDS: int = 60
+    SIMULATION_WORKER_INTERVAL_SECONDS: int = 5
 
     # Product V1 capabilities. New integrations stay invisible until an operator
     # explicitly enables them and supplies their complete configuration.

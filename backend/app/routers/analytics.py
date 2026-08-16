@@ -6,11 +6,13 @@ import io
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.config import get_settings
+from app.limiter import limiter
 from app.models import Alert, Forecast, Recommendation, Site, SiteSettings, User
 from app.schemas import AnalyticsSummary, ReportForecastItem
 from app.services.auth_service import get_current_user
@@ -19,6 +21,7 @@ from app.services.product_forecast_service import PRODUCT_MODEL_NAMES
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics"])
 PRODUCT_MODELS = PRODUCT_MODEL_NAMES
 FORECAST_PEAK_SAMPLE_LIMIT = 500
+settings = get_settings()
 
 
 def _forecast_values(forecast: Forecast) -> list[float]:
@@ -98,7 +101,9 @@ def get_summary(
 
 
 @router.get("/report/pdf")
+@limiter.limit(settings.EXPENSIVE_RATE_LIMIT)
 def export_pdf_report(
+    request: Request,
     forecast_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

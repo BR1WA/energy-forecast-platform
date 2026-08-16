@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import get_db
 from app.models import Meter, Site, SmartMeterReading, User
@@ -33,6 +33,51 @@ def _reading_event(reading: SmartMeterReading) -> dict:
     }
 
 
+def _load_snapshot(session_factory: sessionmaker, user_id: int) -> dict:
+    """Load one owned snapshot in a short-lived synchronous session."""
+    with session_factory() as db:
+        user = db.query(User).filter(User.id == user_id).one_or_none()
+        if user is None or not user.is_active:
+            raise PermissionError("User is unavailable")
+        meter = get_primary_meter(db, user.id)
+        if meter is None:
+            raise PermissionError("No primary meter is configured")
+        latest = (
+            db.query(SmartMeterReading)
+            .filter(
+                SmartMeterReading.meter_id == meter.id,
+                SmartMeterReading.source.in_(LIVE_SOURCES),
+            )
+            .order_by(SmartMeterReading.id.desc())
+            .first()
+        )
+        return {
+            "meter_id": meter.id,
+            "expected_interval_seconds": meter.expected_interval_seconds,
+            "reading": _reading_event(latest) if latest else None,
+        }
+
+
+def _load_readings(session_factory: sessionmaker, user_id: int, cursor: int) -> list[dict]:
+    """Fetch a bounded page without holding a connection between polls."""
+    with session_factory() as db:
+        rows = (
+            db.query(SmartMeterReading)
+            .join(Meter, SmartMeterReading.meter_id == Meter.id)
+            .join(Site, Meter.site_id == Site.id)
+            .filter(
+                Site.user_id == user_id,
+                Meter.is_primary.is_(True),
+                SmartMeterReading.id > cursor,
+                SmartMeterReading.source.in_(LIVE_SOURCES),
+            )
+            .order_by(SmartMeterReading.id.asc())
+            .limit(100)
+            .all()
+        )
+        return [_reading_event(reading) for reading in rows]
+
+
 async def _close(websocket: WebSocket, reason: str) -> None:
     await websocket.close(code=1008, reason=reason)
 
@@ -58,14 +103,14 @@ async def live_monitoring(
             await _close(websocket, "Invalid access token")
             return
 
-        user = db.query(User).filter(User.id == user_id).one_or_none()
-        if user is None or not user.is_active:
-            await _close(websocket, "User is unavailable")
-            return
-        meter = get_primary_meter(db, user.id)
-        if meter is None:
-            await _close(websocket, "No primary meter is configured")
-            return
+        # Preserve dependency overrides (notably isolated test databases), then
+        # release the request-scoped session before the long-lived socket loop.
+        session_factory = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=db.get_bind(),
+        )
+        db.close()
 
         requested_cursor = auth_message.get("last_reading_id")
         try:
@@ -73,47 +118,32 @@ async def live_monitoring(
         except (TypeError, ValueError):
             await _close(websocket, "Invalid reading cursor")
             return
-        latest = (
-            db.query(SmartMeterReading)
-            .filter(
-                SmartMeterReading.meter_id == meter.id,
-                SmartMeterReading.source.in_(LIVE_SOURCES),
-            )
-            .order_by(SmartMeterReading.id.desc())
-            .first()
-        )
+        try:
+            snapshot = await asyncio.to_thread(_load_snapshot, session_factory, user_id)
+        except PermissionError as exc:
+            await _close(websocket, str(exc))
+            return
         await websocket.send_json(
             {
                 "type": "snapshot",
-                "meter_id": meter.id,
-                "expected_interval_seconds": meter.expected_interval_seconds,
-                "reading": _reading_event(latest) if latest else None,
+                **snapshot,
             }
         )
-        if requested_cursor is None and latest is not None:
-            cursor = latest.id
+        if requested_cursor is None and snapshot["reading"] is not None:
+            cursor = snapshot["reading"]["reading_id"]
 
         while True:
-            db.expire_all()
-            rows = (
-                db.query(SmartMeterReading)
-                .join(Meter, SmartMeterReading.meter_id == Meter.id)
-                .join(Site, Meter.site_id == Site.id)
-                .filter(
-                    Site.user_id == user_id,
-                    Meter.is_primary.is_(True),
-                    SmartMeterReading.id > cursor,
-                    SmartMeterReading.source.in_(LIVE_SOURCES),
-                )
-                .order_by(SmartMeterReading.id.asc())
-                .limit(100)
-                .all()
+            rows = await asyncio.to_thread(
+                _load_readings,
+                session_factory,
+                user_id,
+                cursor,
             )
             for reading in rows:
                 await websocket.send_json(
-                    {"type": "reading", "reading": _reading_event(reading)}
+                    {"type": "reading", "reading": reading}
                 )
-                cursor = reading.id
+                cursor = reading["reading_id"]
             await asyncio.sleep(1)
     except (WebSocketDisconnect, asyncio.TimeoutError):
         return

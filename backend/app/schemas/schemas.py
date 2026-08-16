@@ -8,6 +8,8 @@ from datetime import datetime
 from enum import Enum
 import math
 
+MIN_PASSWORD_LENGTH = 12
+
 # ======================== AUTH ========================
 
 
@@ -18,7 +20,7 @@ class UserRole(str, Enum):
 
 class UserRegister(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=100)
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=100)
     full_name: str = Field(min_length=1, max_length=100)
 
     @field_validator("email", mode="before")
@@ -177,7 +179,7 @@ class PasswordResetRequest(BaseModel):
 
 class PasswordResetConfirm(BaseModel):
     token: str = Field(min_length=20, max_length=512)
-    new_password: str = Field(min_length=8, max_length=100)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=100)
 
 
 class AccountDeletionRequest(BaseModel):
@@ -307,7 +309,7 @@ class UserUpdateMe(BaseModel):
 
 class PasswordUpdate(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=8, max_length=100)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=100)
 
 
 # ======================== FORECAST ========================

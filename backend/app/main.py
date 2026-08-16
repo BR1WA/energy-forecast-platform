@@ -2,7 +2,6 @@
 EnergyForecast API — Main FastAPI Application
 Master's PFE: Residential Energy Consumption Forecasting Platform
 """
-import time
 import os
 import logging
 import mimetypes
@@ -22,13 +21,18 @@ from app.routers import (
 )
 from app.migrations import run_migrations
 from app.limiter import limiter
-from app.logging_config import configure_logging, RequestIDMiddleware
+from app.logging_config import configure_logging, RequestIDMiddleware, SecurityHeadersMiddleware
 
 # Configure logging at startup
 configure_logging()
 logger = logging.getLogger("app.main")
 
 settings = get_settings()
+
+
+def api_documentation_url(path: str, *, debug: bool) -> str | None:
+    """Expose interactive API discovery only in an explicitly debug deployment."""
+    return path if debug else None
 
 # Debian slim images do not always load an OS MIME database. Register the
 # normalized avatar format explicitly so the public avatar route is usable by
@@ -58,36 +62,6 @@ async def lifespan(app: FastAPI):
         logger.exception("[DB] Database migration failed; refusing to start.")
         raise
 
-    # Start only explicitly user-controlled simulator sessions. Alerts are
-    # evaluated from persisted meter data in a later worker phase.
-    import asyncio
-
-    async def simulation_loop():
-        logger.info("[SIMULATION-LOOP] Starting background simulation loop...")
-        from app.services.simulation_service import simulation_service
-        from app.database import SessionLocal
-        from app.models import SimulationSession
-
-        while True:
-            try:
-                db = SessionLocal()
-                try:
-                    sessions = db.query(SimulationSession).filter(SimulationSession.is_running.is_(True)).all()
-                    for session in sessions:
-                        simulation_service.advance_session(db, session)
-                    if sessions:
-                        db.commit()
-                except Exception as db_err:
-                    logger.error(f"[SIMULATION-LOOP] Database write error: {db_err}")
-                    db.rollback()
-                finally:
-                    db.close()
-            except Exception as e:
-                logger.error(f"[SIMULATION-LOOP] Loop exception: {e}")
-            await asyncio.sleep(5)
-
-    sim_task = asyncio.create_task(simulation_loop())
-
     logger.info("[APP] Server ready!")
     logger.info("=" * 60)
 
@@ -95,7 +69,6 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("[APP] Shutting down...")
-    sim_task.cancel()
 
 
 
@@ -108,13 +81,15 @@ app = FastAPI(
         "one-site monitoring with truthful fixed 24-hour, 168-hour, and 30-day daily forecasts, "
         "with JWT authentication and alert management."
     ),
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=api_documentation_url("/docs", debug=settings.DEBUG),
+    redoc_url=api_documentation_url("/redoc", debug=settings.DEBUG),
+    openapi_url=api_documentation_url("/openapi.json", debug=settings.DEBUG),
     lifespan=lifespan,
 )
 
 # Register RequestIDMiddleware early in middleware stack
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Rate limiter
 app.state.limiter = limiter
@@ -160,7 +135,7 @@ def root():
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "operational",
-        "docs": "/docs",
+        "docs": app.docs_url,
     }
 
 

@@ -882,12 +882,9 @@ class ProductForecastService:
             raise RuntimeError("PyTorch is not installed in this runtime.") from exc
 
         checkpoint_path = spec.artifact_dir / manifest["checkpoint_file"]
-        try:
-            checkpoint = torch.load(
-                checkpoint_path, map_location="cpu", weights_only=True
-            )
-        except TypeError:
-            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        checkpoint = torch.load(
+            checkpoint_path, map_location="cpu", weights_only=True
+        )
         architecture = manifest.get("architecture", {})
         model = GlobalTFT(
             hidden_size=int(architecture.get("hidden_size", 128)),
