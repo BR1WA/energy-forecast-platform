@@ -32,7 +32,7 @@ import { toast } from 'sonner';
 import AppLayout from '@/components/layout/app-layout';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { analyticsApi, forecastApi } from '@/lib/api';
+import { analyticsApi, forecastApi, simulationApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type {
   ForecastCapability,
@@ -217,6 +217,12 @@ function ForecastContent() {
   const prepareDemoHistory = async () => {
     setPreparingDemo(true);
     try {
+      if (horizon === 720) {
+        await simulationApi.reset();
+        await load(true);
+        toast.success('One-year demo history created. The simulator remains stopped until you start it.');
+        return;
+      }
       const result = await forecastApi.prepareDemoHistory();
       await load(true);
       if (result.status === 'ready') {
@@ -386,26 +392,20 @@ function ForecastContent() {
                 {readiness.reasons.map((reason) => <li key={reason}>{reason}</li>)}
               </ul>
               <div className="flex flex-wrap gap-3">
-                {!isMonth ? (
-                  <Button
-                    className="bg-amber-300 text-slate-950 hover:bg-amber-200"
-                    onClick={() => void prepareDemoHistory()}
-                    disabled={preparingDemo || loading || running}
-                  >
-                    {preparingDemo ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    {preparingDemo ? 'Preparing history' : 'Prepare demo history'}
-                  </Button>
-                ) : (
-                  <Link href="/simulation" className={cn(buttonVariants(), 'bg-amber-300 text-slate-950 hover:bg-amber-200')}>
-                    <Sparkles className="h-4 w-4" />Create one-year demo history
-                  </Link>
-                )}
+                <Button
+                  className="bg-amber-300 text-slate-950 hover:bg-amber-200"
+                  onClick={() => void prepareDemoHistory()}
+                  disabled={preparingDemo || loading || running}
+                >
+                  {preparingDemo ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {preparingDemo ? 'Preparing history' : isMonth ? 'Create one-year demo history' : 'Prepare demo history'}
+                </Button>
                 <Link href="/usage" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}>Open Usage</Link>
                 {!isMonth ? <a download href="/samples/forecast-ready" className={cn(buttonVariants({ variant: 'outline' }), 'border-amber-300/20 text-amber-100')}><Download className="h-4 w-4" />Download forecast-ready CSV</a> : null}
               </div>
               <p className="text-xs leading-5 text-amber-100/60">
                 {isMonth
-                  ? 'The production monthly model requires at least 270 complete rolling daily blocks. The simulator creates 365 days at the models\' native hourly resolution, without padding history or lowering this gate.'
+                  ? 'The production monthly model requires at least 270 complete rolling daily blocks. The simulator creates 365 days at the models\' native hourly resolution, without padding history or lowering this gate. This replaces only existing demo-simulator readings; imported or measured readings are preserved.'
                   : 'For demos and tests, one-click preparation adds clearly labelled synthetic hourly readings to the current primary meter. It preserves existing readings and is safe to run again. The CSV remains available for testing the manual import journey.'}
               </p>
             </CardContent>

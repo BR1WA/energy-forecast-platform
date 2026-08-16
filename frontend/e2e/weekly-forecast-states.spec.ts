@@ -140,6 +140,7 @@ test('disabled weekly capability is not advertised or silently replaced with 24 
 });
 
 test('monthly capability stays daily and offers the contract-safe one-year simulator', async ({ page }) => {
+  let resetRequests = 0;
   await page.route(`${API}/**`, async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'monthly-token', token_type: 'bearer' } });
@@ -185,15 +186,21 @@ test('monthly capability stays daily and offers the contract-safe one-year simul
     } });
     if (pathname === '/api/v1/forecast/latest') return route.fulfill({ json: null });
     if (pathname === '/api/v1/forecast/history') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/simulation/reset') {
+      resetRequests += 1;
+      return route.fulfill({ json: { status: 'reset' } });
+    }
     return route.fulfill({ status: 200, json: {} });
   });
 
   await page.goto('/forecast?horizon=720');
   await expect(page.getByRole('heading', { name: 'Next 30 days · daily energy forecast' })).toBeVisible();
   await expect(page.getByText('168 / 270')).toBeVisible();
-  await expect(page.getByText("The production monthly model requires at least 270 complete rolling daily blocks. The simulator creates 365 days at the models' native hourly resolution, without padding history or lowering this gate.")).toBeVisible();
+  await expect(page.getByText("The production monthly model requires at least 270 complete rolling daily blocks. The simulator creates 365 days at the models' native hourly resolution, without padding history or lowering this gate. This replaces only existing demo-simulator readings; imported or measured readings are preserved.")).toBeVisible();
   await expect(page.getByRole('button', { name: 'Prepare demo history' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Create one-year demo history' })).toHaveAttribute('href', '/simulation');
+  await page.getByRole('button', { name: 'Create one-year demo history' }).click();
+  await expect.poll(() => resetRequests).toBe(1);
+  await expect(page).toHaveURL(/\/forecast\?horizon=720$/);
   await expect(page.getByRole('link', { name: 'Download forecast-ready CSV' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Next 30 days' })).toBeVisible();
 });
