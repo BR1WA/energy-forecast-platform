@@ -33,6 +33,21 @@ import type {
   AccountDeletionCapabilities,
 } from '@/types';
 
+const ALERT_TYPES = new Set<Alert['type']>([
+  'high_consumption',
+  'missing_data',
+  'anomaly',
+  'threshold',
+  'system',
+  'peak_demand',
+  'cost_threshold',
+  'budget_warning',
+]);
+
+function isAlertType(value: string): value is Alert['type'] {
+  return ALERT_TYPES.has(value as Alert['type']);
+}
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const systemApi = {
@@ -331,7 +346,7 @@ export const alertsApi = {
     const raw = await apiFetch<RawAlertResponse[]>(`/api/v1/alerts?state=${state}`);
     return raw.map((a) => ({
       id: String(a.id),
-      type: a.alert_type as any,
+      type: isAlertType(a.alert_type) ? a.alert_type : 'system',
       severity: a.severity,
       title: a.alert_type ? a.alert_type.replace(/_/g, ' ').toUpperCase() : 'ALERT',
       message: a.message || '',

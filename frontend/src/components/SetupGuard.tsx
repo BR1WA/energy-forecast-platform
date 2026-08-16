@@ -10,20 +10,14 @@ export function SetupGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const [isChecking, setIsChecking] = useState(true);
+  const setupCheckKey = isAuthenticated && user?.role !== 'admin'
+    ? `${user?.id ?? 'authenticated'}:${pathname}`
+    : null;
+  const [checkedKey, setCheckedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (authLoading) return;
-
-    if (!isAuthenticated) {
-      setIsChecking(false);
-      return;
-    }
-
-    if (user?.role === 'admin') {
-      setIsChecking(false);
-      return;
-    }
+    if (authLoading || !setupCheckKey) return;
+    let cancelled = false;
 
     const checkSetupStatus = async () => {
       try {
@@ -36,12 +30,17 @@ export function SetupGuard({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error("Failed to check setup status", err);
       } finally {
-        setIsChecking(false);
+        if (!cancelled) setCheckedKey(setupCheckKey);
       }
     };
 
-    checkSetupStatus();
-  }, [pathname, router, user?.role, isAuthenticated, authLoading]);
+    void checkSetupStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, pathname, router, setupCheckKey]);
+
+  const isChecking = authLoading || (setupCheckKey !== null && checkedKey !== setupCheckKey);
 
   if (isChecking || authLoading) {
     return (

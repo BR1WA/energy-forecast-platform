@@ -132,7 +132,7 @@ test('forecast journey switches between persisted 24-hour and 168-hour states', 
 
 test('dashboard monitoring exposes a controlled live reading without browser token storage', async ({ page }) => {
   await page.addInitScript(() => {
-    (window as any).WebSocket = class {
+    const MockWebSocket = class {
       onopen: (() => void) | null = null;
       onmessage: ((event: { data: string }) => void) | null = null;
       onclose: (() => void) | null = null;
@@ -141,6 +141,7 @@ test('dashboard monitoring exposes a controlled live reading without browser tok
       send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: 'snapshot', reading: { reading_id: 99, timestamp: '2026-07-23T00:00:00Z', active_power_kw: 2.75, voltage_v: 230, current_a: 12, source: 'push', quality: 'validated' } }) }), 0); }
       close() { this.onclose?.(); }
     };
+    window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   });
   await page.route(`${API}/**`, async (route) => {
     const pathname = new URL(route.request().url()).pathname;

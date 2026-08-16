@@ -17,6 +17,7 @@ import {
   Settings,
   User,
   Shield,
+  type LucideIcon,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -33,7 +34,7 @@ interface NavItem {
   label: string;
   translationKey: string;
   href: string;
-  icon: any;
+  icon: LucideIcon;
   adminOnly?: boolean;
   disabled?: boolean;
 }

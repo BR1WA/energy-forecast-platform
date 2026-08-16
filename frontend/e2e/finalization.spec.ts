@@ -75,3 +75,32 @@ test('registration remains identity-only and explains the Morocco setup step', a
   await expect(page.getByLabel('Provider')).toHaveCount(0);
   await expect(page.getByLabel('Currency')).toHaveCount(0);
 });
+
+test('settings preserve a zero budget and persist language changes', async ({ page }) => {
+  let savedPreferences: Record<string, unknown> | null = null;
+  await page.route(`${API}/**`, async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === '/api/v1/auth/refresh') return route.fulfill({ json: { access_token: 'preferences-token', token_type: 'bearer' } });
+    if (pathname === '/api/v1/auth/me') return route.fulfill({ json: USER });
+    if (pathname === '/api/v1/auth/capabilities') return route.fulfill({ json: { email_delivery_enabled: true, google_auth_enabled: false, google_client_id: null } });
+    if (pathname === '/api/v1/settings/setup-status') return route.fulfill({ json: { is_setup_complete: true } });
+    if (pathname === '/api/v1/settings' && request.method() === 'GET') return route.fulfill({ json: { country: 'Morocco', region: 'Casablanca-Settat', electricity_provider: null, currency: 'MAD', peak_rate: 1.1, off_peak_rate: 0.8, peak_start_hour: 6, peak_end_hour: 22, sensor_type: 'csv' } });
+    if (pathname === '/api/v1/settings/budget' && request.method() === 'GET') return route.fulfill({ json: { monthly_budget_mad: 0 } });
+    if (pathname === '/api/v1/settings/preferences' && request.method() === 'PUT') {
+      savedPreferences = request.postDataJSON() as Record<string, unknown>;
+      return route.fulfill({ json: { message: 'Saved', preferences: savedPreferences } });
+    }
+    if (pathname === '/api/v1/ingestion/meters') return route.fulfill({ json: [] });
+    if (pathname === '/api/v1/account/deletion/capabilities') return route.fulfill({ json: { method: 'password', google_reauthentication_available: false } });
+    if (pathname === '/api/v1/alerts') return route.fulfill({ json: [] });
+    return route.fulfill({ status: 200, json: {} });
+  });
+
+  await page.goto('/settings?tab=budget');
+  await expect(page.getByLabel('Budget (MAD)')).toHaveValue('0');
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await page.getByLabel('Language Selection').selectOption('fr');
+  await expect.poll(() => savedPreferences).toEqual({ language: 'fr' });
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+});

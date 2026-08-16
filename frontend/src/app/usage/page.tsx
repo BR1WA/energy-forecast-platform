@@ -69,24 +69,33 @@ export default function UsagePage() {
   useEffect(() => {
     ingestionApi.getMeters().then((meters) => setMeter(meters[0] ?? null)).catch(() => setMeter(null));
     simulationApi.getStatus().then((nextStatus) => setSimulatorRunning(nextStatus.is_running)).catch(() => setSimulatorRunning(false));
-    const now = new Date();
-    setCustomStart(localInputValue(new Date(now.getTime() - 7 * 86400_000)));
-    setCustomEnd(localInputValue(now));
+    const timer = window.setTimeout(() => {
+      const now = new Date();
+      setCustomStart(localInputValue(new Date(now.getTime() - 7 * 86400_000)));
+      setCustomEnd(localInputValue(now));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (timeframe === 'custom') {
-      setSummary(null);
-      setLoading(false);
-      return;
-    }
-    void loadSummary(timeframe);
+    const timer = window.setTimeout(() => {
+      if (timeframe === 'custom') {
+        setSummary(null);
+        setLoading(false);
+        return;
+      }
+      void loadSummary(timeframe);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadSummary, timeframe]);
 
   useEffect(() => {
-    setReadings([]);
-    setReadingCursor(null);
-    if (summary) void loadReadings(false);
+    const timer = window.setTimeout(() => {
+      setReadings([]);
+      setReadingCursor(null);
+      if (summary) void loadReadings(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
     // A new period summary resets the keyset cursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary?.period_start, summary?.period_end]);

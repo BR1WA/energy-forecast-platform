@@ -12,14 +12,8 @@ export interface User {
   avatar_url?: string;
   last_activity?: string;
   is_setup_complete?: boolean;
-  preferences?: Record<string, any>;
+  preferences?: Record<string, unknown>;
   email_verified_at?: string | null;
-}
-
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
 }
 
 export interface LoginResponse {

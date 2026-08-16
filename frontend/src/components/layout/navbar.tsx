@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { alertsApi, API_BASE_URL } from '@/lib/api';
+import type { Alert } from '@/types';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { Bell, Search, X, LayoutDashboard, LineChart, AlertTriangle, Shield, Settings as SettingsIcon, Menu, Zap, CircleAlert } from 'lucide-react';
@@ -32,7 +33,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
   // Notifications state
   const [notifOpen, setNotifOpen] = useState(false);
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +90,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
       try {
         const data = await alertsApi.getAlerts();
         setAlerts(data.slice(0, 8));
-        setUnreadCount(data.filter((a: any) => !a.is_read).length);
+        setUnreadCount(data.filter((alert) => !alert.is_read).length);
       } catch {
         // silently fail if not authenticated
       }
@@ -107,6 +108,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
       }
       if (e.key === 'Escape') {
         setSearchOpen(false);
+        setSearchQuery('');
         setNotifOpen(false);
       }
     };
@@ -117,8 +119,6 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   useEffect(() => {
     if (searchOpen) {
       setTimeout(() => searchInputRef.current?.focus(), 50);
-    } else {
-      setSearchQuery('');
     }
   }, [searchOpen]);
 
@@ -126,6 +126,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setSearchOpen(false);
+        setSearchQuery('');
       }
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false);
@@ -155,6 +156,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const handleNavigate = (path: string) => {
     router.push(path);
     setSearchOpen(false);
+    setSearchQuery('');
   };
 
   const handleAcknowledge = async (alertId: string) => {
@@ -197,7 +199,10 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <div className="relative" ref={searchRef}>
           <button
             id="navbar-search"
-            onClick={() => setSearchOpen(!searchOpen)}
+            onClick={() => {
+              if (searchOpen) setSearchQuery('');
+              setSearchOpen(!searchOpen);
+            }}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.06] transition-all duration-200 text-sm"
           >
             <Search className="w-4 h-4" />
@@ -227,7 +232,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                     }
                   }}
                 />
-                <button onClick={() => setSearchOpen(false)} className="text-slate-500 hover:text-white">
+                <button onClick={() => { setSearchOpen(false); setSearchQuery(''); }} className="text-slate-500 hover:text-white">
                   <X className="w-4 h-4" />
                 </button>
               </div>

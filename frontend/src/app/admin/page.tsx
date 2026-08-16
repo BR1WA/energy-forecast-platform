@@ -86,9 +86,12 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (user?.role !== 'admin') return;
-    void load();
+    const initialTimer = window.setTimeout(() => void load(), 0);
     const timer = window.setInterval(() => void load(true), 30_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [load, user?.role]);
 
   const filtered = useMemo(() => {

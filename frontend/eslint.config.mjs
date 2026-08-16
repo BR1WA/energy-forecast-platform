@@ -7,11 +7,11 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "react-hooks/set-state-in-effect": "off",
-      "react-hooks/rules-of-hooks": "off",
-      "react-hooks/immutability": "off",
-      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
+      "react-hooks/set-state-in-effect": "error",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/immutability": "error",
+      "@typescript-eslint/no-unused-vars": "error",
     }
   },
   // Override default ignores of eslint-config-next.

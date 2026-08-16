@@ -71,9 +71,12 @@ export default function SimulationPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    const initialTimer = window.setTimeout(() => void load(), 0);
     const timer = window.setInterval(() => void load(), isRunning ? 5000 : 15_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [isRunning, load]);
 
   const saveScenario = async () => {

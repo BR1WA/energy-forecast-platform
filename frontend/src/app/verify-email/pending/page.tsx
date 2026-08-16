@@ -14,7 +14,13 @@ export default function VerificationPendingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('Check your inbox for a single-use verification link.');
 
-  useEffect(() => { setEmail(new URLSearchParams(window.location.search).get('email') || ''); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setEmail(new URLSearchParams(window.location.search).get('email') || ''),
+      0,
+    );
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => {
     if (cooldown <= 0) return;
     const timer = window.setInterval(() => setCooldown((value) => Math.max(0, value - 1)), 1000);

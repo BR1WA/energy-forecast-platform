@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useSyncExternalStore } from 'react';
 
 export type Language = 'en' | 'fr' | 'ar';
 
@@ -294,32 +294,55 @@ interface I18nContextType {
 
 const I18nContext = React.createContext<I18nContextType | undefined>(undefined);
 
-export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>('en');
+const LANGUAGE_STORAGE_KEY = 'pfe_language';
+const LANGUAGE_EVENT = 'energyforecast-language-change';
 
-  const updateDirection = (lang: Language) => {
-    const dir = lang === 'ar' ? 'rtl' : 'ltr';
-    document.documentElement.dir = dir;
-    if (lang === 'ar') {
-      document.documentElement.classList.add('rtl-active');
-    } else {
-      document.documentElement.classList.remove('rtl-active');
-    }
+function isLanguage(value: string | null): value is Language {
+  return value === 'en' || value === 'fr' || value === 'ar';
+}
+
+function getLanguageSnapshot(): Language {
+  try {
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return isLanguage(saved) ? saved : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+function subscribeLanguage(onStoreChange: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === LANGUAGE_STORAGE_KEY) onStoreChange();
   };
+  window.addEventListener('storage', onStorage);
+  window.addEventListener(LANGUAGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener('storage', onStorage);
+    window.removeEventListener(LANGUAGE_EVENT, onStoreChange);
+  };
+}
 
-  // Load saved language on mount
+function updateDocumentLanguage(lang: Language): void {
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = lang;
+  document.documentElement.dir = dir;
+  document.documentElement.classList.toggle('rtl-active', lang === 'ar');
+}
+
+export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const language = useSyncExternalStore<Language>(
+    subscribeLanguage,
+    getLanguageSnapshot,
+    () => 'en',
+  );
+
   useEffect(() => {
-    const saved = localStorage.getItem('pfe_language') as Language;
-    if (saved && ['en', 'fr', 'ar'].includes(saved)) {
-      setLanguageState(saved);
-      updateDirection(saved);
-    }
-  }, []);
+    updateDocumentLanguage(language);
+  }, [language]);
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem('pfe_language', lang);
-    updateDirection(lang);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    window.dispatchEvent(new Event(LANGUAGE_EVENT));
   };
 
   const t = (key: string): string => {

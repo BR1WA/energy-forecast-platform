@@ -12,7 +12,13 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get('token') || '';
     window.history.replaceState({}, '', window.location.pathname);
-    if (!token) { setState('error'); setMessage('This verification link is missing its token.'); return; }
+    if (!token) {
+      const timer = window.setTimeout(() => {
+        setState('error');
+        setMessage('This verification link is missing its token.');
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
     authApi.confirmVerification(token)
       .then((response) => { setState('success'); setMessage(response.message); })
       .catch((caught) => { setState('error'); setMessage(caught instanceof Error ? caught.message : 'This verification link is invalid or expired.'); });

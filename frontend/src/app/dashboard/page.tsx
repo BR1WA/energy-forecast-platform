@@ -144,26 +144,34 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    setLiveReading(null);
-    if (timeframe === 'custom') {
-      setSummary(null);
-      setLoading(false);
-      return;
-    }
-    void loadSummary(timeframe);
-    if (timeframe !== 'live') return;
-    const timer = window.setInterval(() => void loadSummary('live', true), 30_000);
-    return () => window.clearInterval(timer);
+    let refreshTimer: number | null = null;
+    const initialTimer = window.setTimeout(() => {
+      setLiveReading(null);
+      if (timeframe === 'custom') {
+        setSummary(null);
+        setLoading(false);
+        return;
+      }
+      void loadSummary(timeframe);
+      if (timeframe === 'live') {
+        refreshTimer = window.setInterval(() => void loadSummary('live', true), 30_000);
+      }
+    }, 0);
+    return () => {
+      window.clearTimeout(initialTimer);
+      if (refreshTimer !== null) window.clearInterval(refreshTimer);
+    };
   }, [loadSummary, timeframe]);
 
   useEffect(() => {
-    void loadContext();
+    const timer = window.setTimeout(() => void loadContext(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadContext]);
 
   useEffect(() => {
     if (timeframe !== 'live') {
-      setLiveState('off');
-      return;
+      const timer = window.setTimeout(() => setLiveState('off'), 0);
+      return () => window.clearTimeout(timer);
     }
 
     let socket: WebSocket | null = null;
@@ -201,9 +209,10 @@ export default function DashboardPage() {
       socket.onerror = () => socket?.close();
     };
 
-    connect();
+    const initialTimer = window.setTimeout(connect, 0);
     return () => {
       stopped = true;
+      window.clearTimeout(initialTimer);
       if (retryTimer) window.clearTimeout(retryTimer);
       socket?.close();
     };

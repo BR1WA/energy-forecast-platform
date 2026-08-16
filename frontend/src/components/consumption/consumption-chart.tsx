@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Activity, BarChart3, Clock3, TriangleAlert } from 'lucide-react';
 import {
   Area,
@@ -19,7 +19,7 @@ import {
 import type { TooltipContentProps } from 'recharts';
 
 import { cn } from '@/lib/utils';
-import type { ConsumptionPeriodSummary } from '@/types';
+import type { ConsumptionPeriodSummary, ConsumptionTimeframe } from '@/types';
 
 type ChartMode = 'power' | 'energy';
 type ChartVariant = 'compact' | 'detailed';
@@ -155,7 +155,11 @@ interface ConsumptionChartProps {
 }
 
 export function ConsumptionChart({ summary, variant = 'compact' }: ConsumptionChartProps) {
-  const [mode, setMode] = useState<ChartMode>(() => defaultMode(summary.timeframe));
+  const [selection, setSelection] = useState<{ timeframe: ConsumptionTimeframe; mode: ChartMode }>(() => ({
+    timeframe: summary.timeframe,
+    mode: defaultMode(summary.timeframe),
+  }));
+  const mode = selection.timeframe === summary.timeframe ? selection.mode : defaultMode(summary.timeframe);
   const id = useId().replace(/:/g, '');
   const { data, gapCount } = useMemo(() => buildChartData(summary), [summary]);
   const detailed = variant === 'detailed';
@@ -172,10 +176,6 @@ export function ConsumptionChart({ summary, variant = 'compact' }: ConsumptionCh
 
   const candidateTicks = data.length <= 31 ? data.map((point) => point.timestampMs) : undefined;
 
-  useEffect(() => {
-    setMode(defaultMode(summary.timeframe));
-  }, [summary.timeframe]);
-
   return (
     <figure aria-label={`${metricLabel} chart for ${summary.site_name}`} className="min-w-0">
       {detailed && (
@@ -190,8 +190,8 @@ export function ConsumptionChart({ summary, variant = 'compact' }: ConsumptionCh
             <span className={cn('rounded-full border px-2.5 py-1', coverageTone)}>{summary.coverage_pct.toFixed(1)}% coverage</span>
           </div>
           <div aria-label="Chart metric" className="inline-flex w-fit rounded-lg border border-white/10 bg-black/20 p-1" role="group">
-            <button aria-pressed={mode === 'power'} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors', mode === 'power' ? 'bg-cyan-400 text-slate-950' : 'text-slate-400 hover:bg-white/5 hover:text-white')} onClick={() => setMode('power')} type="button"><Activity className="h-3.5 w-3.5" />Power</button>
-            <button aria-pressed={mode === 'energy'} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors', mode === 'energy' ? 'bg-indigo-400 text-slate-950' : 'text-slate-400 hover:bg-white/5 hover:text-white')} onClick={() => setMode('energy')} type="button"><BarChart3 className="h-3.5 w-3.5" />Energy</button>
+            <button aria-pressed={mode === 'power'} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors', mode === 'power' ? 'bg-cyan-400 text-slate-950' : 'text-slate-400 hover:bg-white/5 hover:text-white')} onClick={() => setSelection({ timeframe: summary.timeframe, mode: 'power' })} type="button"><Activity className="h-3.5 w-3.5" />Power</button>
+            <button aria-pressed={mode === 'energy'} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors', mode === 'energy' ? 'bg-indigo-400 text-slate-950' : 'text-slate-400 hover:bg-white/5 hover:text-white')} onClick={() => setSelection({ timeframe: summary.timeframe, mode: 'energy' })} type="button"><BarChart3 className="h-3.5 w-3.5" />Energy</button>
           </div>
         </div>
       )}

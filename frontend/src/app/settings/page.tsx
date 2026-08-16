@@ -9,11 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
+import { useI18n, type Language } from '@/lib/i18n';
 import { API_BASE_URL, accountApi, authApi, ingestionApi, settingsApi } from '@/lib/api';
 import { requestGoogleCredential } from '@/lib/google';
 import type { PrimaryMeter } from '@/types';
 import { toast } from 'sonner';
-import { CheckCircle2, Clipboard, Database, KeyRound, Link2, PlayCircle, Radio, Settings2, Unlink, Upload, Wallet } from 'lucide-react';
+import { CheckCircle2, Clipboard, Database, KeyRound, Languages, Link2, PlayCircle, Radio, Settings2, Unlink, Upload, Wallet } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { AccountDeletionCapabilities } from '@/types';
@@ -39,9 +40,12 @@ const initialSettings = {
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
+  const { language, setLanguage, t } = useI18n();
   const [siteSettings, setSiteSettings] = useState(initialSettings);
   const [budget, setBudget] = useState('400');
   const [saving, setSaving] = useState(false);
+  const [budgetSaving, setBudgetSaving] = useState(false);
+  const [languageSaving, setLanguageSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [deletionPassword, setDeletionPassword] = useState('');
@@ -75,7 +79,7 @@ export default function SettingsPage() {
           peak_end_hour: settings.peak_end_hour,
           sensor_type: settings.sensor_type,
         });
-        if (savedBudget?.monthly_budget_mad) setBudget(String(savedBudget.monthly_budget_mad));
+        if (savedBudget !== null) setBudget(String(savedBudget.monthly_budget_mad));
         const primary = meters[0] ?? null;
         setMeter(primary);
         setMeterInterval(String(primary?.expected_interval_seconds ?? 60));
@@ -83,7 +87,9 @@ export default function SettingsPage() {
       })
       .catch(() => toast.error('Unable to load site settings.'));
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    if (requestedTab && ['site', 'data', 'budget', 'security'].includes(requestedTab)) setActiveTab(requestedTab);
+    const tabTimer = requestedTab && ['site', 'data', 'budget', 'preferences', 'security'].includes(requestedTab)
+      ? window.setTimeout(() => setActiveTab(requestedTab), 0)
+      : null;
     authApi.getCapabilities()
       .then(async (capabilities) => {
         const browserClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -96,6 +102,9 @@ export default function SettingsPage() {
         }
       })
       .catch(() => setGoogleEnabled(false));
+    return () => {
+      if (tabTimer !== null) window.clearTimeout(tabTimer);
+    };
   }, []);
 
   const refreshMeter = async () => {
@@ -171,9 +180,8 @@ export default function SettingsPage() {
         peak_end_hour: siteSettings.peak_end_hour,
         sensor_type: siteSettings.sensor_type,
       });
-      await settingsApi.setBudget({ monthly_budget_mad: Number(budget) || 0 });
       await refreshUser();
-      toast.success('Settings saved.');
+      toast.success('Site settings saved.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to save settings.');
     } finally {
@@ -181,10 +189,42 @@ export default function SettingsPage() {
     }
   };
 
+  const saveBudget = async () => {
+    const numericBudget = Number(budget);
+    if (!Number.isFinite(numericBudget) || numericBudget < 0) {
+      toast.error('Budget must be a non-negative number.');
+      return;
+    }
+    setBudgetSaving(true);
+    try {
+      const savedBudget = await settingsApi.setBudget({ monthly_budget_mad: numericBudget });
+      setBudget(String(savedBudget.monthly_budget_mad));
+      toast.success('Monthly budget saved.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save the budget.');
+    } finally {
+      setBudgetSaving(false);
+    }
+  };
+
+  const saveLanguage = async (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+    setLanguageSaving(true);
+    try {
+      await settingsApi.updatePreferences({ language: nextLanguage });
+      await refreshUser();
+      toast.success('Language preference saved.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save the language preference.');
+    } finally {
+      setLanguageSaving(false);
+    }
+  };
+
   const changePassword = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!currentPassword || newPassword.length < 8) {
-      toast.error('Use your current password and a new password of at least 8 characters.');
+    if (!currentPassword || newPassword.length < 12) {
+      toast.error('Use your current password and a new password of at least 12 characters.');
       return;
     }
     try {
@@ -317,6 +357,7 @@ export default function SettingsPage() {
             <TabsTrigger value="site"><Settings2 className="mr-2 h-4 w-4" />Site</TabsTrigger>
             <TabsTrigger value="data"><Database className="mr-2 h-4 w-4" />Data sources</TabsTrigger>
             <TabsTrigger value="budget"><Wallet className="mr-2 h-4 w-4" />Budget</TabsTrigger>
+            <TabsTrigger value="preferences"><Languages className="mr-2 h-4 w-4" />{t('settings.preferences')}</TabsTrigger>
             <TabsTrigger value="security"><KeyRound className="mr-2 h-4 w-4" />Security</TabsTrigger>
           </TabsList>
           <TabsContent value="site" className="mt-6">
@@ -366,12 +407,32 @@ export default function SettingsPage() {
             </div>
           </TabsContent>
           <TabsContent value="budget" className="mt-6">
-            <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Monthly budget</CardTitle><CardDescription>Set the monthly limit used for your budget progress and alerts.</CardDescription></CardHeader><CardContent className="flex max-w-sm items-end gap-3"><div className="flex-1 space-y-2"><Label>Budget (MAD)</Label><Input type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></div><Button onClick={saveSiteSettings} disabled={saving}>Save</Button></CardContent></Card>
+            <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Monthly budget</CardTitle><CardDescription>Set the monthly limit used for your budget progress and alerts.</CardDescription></CardHeader><CardContent className="flex max-w-sm items-end gap-3"><div className="flex-1 space-y-2"><Label htmlFor="monthly-budget">Budget (MAD)</Label><Input id="monthly-budget" type="number" min="0" value={budget} onChange={(event) => setBudget(event.target.value)} /></div><Button onClick={saveBudget} disabled={budgetSaving}>{budgetSaving ? 'Saving...' : 'Save budget'}</Button></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="preferences" className="mt-6">
+            <Card className="border-white/[0.06] bg-[#111827]/50">
+              <CardHeader><CardTitle>{t('settings.display')}</CardTitle><CardDescription>{t('settings.language_desc')}</CardDescription></CardHeader>
+              <CardContent className="max-w-sm space-y-2">
+                <Label htmlFor="language-preference">{t('settings.language')}</Label>
+                <select
+                  id="language-preference"
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm text-white outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  disabled={languageSaving}
+                  onChange={(event) => void saveLanguage(event.target.value as Language)}
+                  value={language}
+                >
+                  <option className="bg-[#111827]" value="en">English</option>
+                  <option className="bg-[#111827]" value="fr">Français</option>
+                  <option className="bg-[#111827]" value="ar">العربية</option>
+                </select>
+                {languageSaving ? <p className="text-xs text-slate-400">Saving preference...</p> : null}
+              </CardContent>
+            </Card>
           </TabsContent>
           <TabsContent value="security" className="mt-6">
             <div className="space-y-4">
               <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Profile image</CardTitle><CardDescription>JPEG, PNG, WebP, HEIC, or HEIF up to 2 MB and 2048 pixels per side. Images are normalized to a safe web format.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center gap-4"><Avatar className="h-16 w-16">{user?.avatar_url ? <AvatarImage alt={user.full_name || 'Account avatar'} className="object-cover" src={user.avatar_url.startsWith('http') ? user.avatar_url : `${API_BASE_URL}${user.avatar_url}`} /> : null}<AvatarFallback>{user?.full_name?.slice(0, 2).toUpperCase() || 'U'}</AvatarFallback></Avatar><div className="flex flex-wrap gap-2"><Label className={buttonVariants({ variant: 'outline' })} htmlFor="avatar-upload">{avatarSaving ? 'Working…' : user?.avatar_url ? 'Replace avatar' : 'Upload avatar'}</Label><Input accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" disabled={avatarSaving} id="avatar-upload" onChange={uploadAvatar} type="file" />{user?.avatar_url ? <Button disabled={avatarSaving} onClick={deleteAvatar} type="button" variant="outline">Remove avatar</Button> : null}</div></CardContent></Card>
-              <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card>
+              <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Password</CardTitle><CardDescription>Signed in as {user?.email}.</CardDescription></CardHeader><CardContent><form className="max-w-md space-y-4" onSubmit={changePassword}><div className="space-y-2"><Label>Current password</Label><Input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div><div className="space-y-2"><Label>New password</Label><Input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div><Button type="submit">Update password</Button></form></CardContent></Card>
               {googleEnabled ? <Card className="border-white/[0.06] bg-[#111827]/50"><CardHeader><CardTitle>Google sign-in</CardTitle><CardDescription>{googleLinked ? 'Google is linked. Unlinking revokes every active session.' : 'Link the Google account with the same verified email.'}</CardDescription></CardHeader><CardContent className="max-w-md space-y-4"><div className="space-y-2"><Label htmlFor="google-current-password">Current password</Label><Input id="google-current-password" autoComplete="current-password" onChange={(event) => setGooglePassword(event.target.value)} type="password" value={googlePassword} /></div>{googleLinked ? <Button disabled={googleSaving || !googleCanUnlink} onClick={unlinkGoogle} variant="destructive"><Unlink />{googleSaving ? 'Unlinking...' : 'Unlink Google'}</Button> : <Button disabled={googleSaving} onClick={linkGoogle}><Link2 />{googleSaving ? 'Linking...' : 'Link Google'}</Button>}{googleLinked && !googleCanUnlink ? <p className="text-xs text-amber-300">Set a local password before removing your last usable sign-in method.</p> : null}</CardContent></Card> : null}
               <Card className="border-red-500/20 bg-[#111827]/50"><CardHeader><CardTitle>Privacy controls</CardTitle><CardDescription>Download a complete machine-readable archive before permanently deleting the account.</CardDescription></CardHeader><CardContent className="space-y-5"><Button onClick={exportAccount} variant="outline">Download account archive</Button><div className="max-w-md space-y-3 border-t border-red-500/20 pt-4"><p className="text-xs leading-5 text-red-200">Deletion removes owned readings, forecasts, alerts, recommendations, configuration, sessions, and the avatar. It cannot be undone.</p>{deletionCapabilities?.method === 'password' ? <Input aria-label="Password to delete account" autoComplete="current-password" onChange={(event) => setDeletionPassword(event.target.value)} placeholder="Current password" type="password" value={deletionPassword} /> : <p className="text-xs text-slate-400">Google will ask you to reauthenticate before deletion.</p>}<Input aria-label="Type DELETE to confirm" autoComplete="off" onChange={(event) => setDeletionConfirmation(event.target.value)} placeholder="Type DELETE" value={deletionConfirmation} /><Button disabled={deletingAccount || deletionConfirmation !== 'DELETE'} onClick={deleteAccount} variant="destructive">{deletingAccount ? 'Deleting permanently…' : 'Permanently delete account'}</Button></div></CardContent></Card>
             </div>

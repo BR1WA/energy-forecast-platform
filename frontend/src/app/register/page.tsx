@@ -44,7 +44,7 @@ export default function RegisterPage() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (password.length < 12) { setError('Password must be at least 12 characters.'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
     setSubmitting(true);
     try {
@@ -84,8 +84,8 @@ export default function RegisterPage() {
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div className="space-y-2"><Label htmlFor="register-name">Full name</Label><div className="relative"><User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="register-name" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required minLength={1} className="h-11 pl-10" /></div></div>
             <div className="space-y-2"><Label htmlFor="register-email">Email</Label><div className="relative"><Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="register-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required className="h-11 pl-10" /></div></div>
-            <div className="space-y-2"><Label htmlFor="register-password">Password</Label><div className="relative"><Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="register-password" type="password" autoComplete="new-password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required className="h-11 pl-10" /></div><p className="text-xs text-slate-500">At least 8 characters</p></div>
-            <div className="space-y-2"><Label htmlFor="register-confirm">Confirm password</Label><div className="relative"><Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="register-confirm" type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required className="h-11 pl-10" /></div></div>
+            <div className="space-y-2"><Label htmlFor="register-password">Password</Label><div className="relative"><Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="register-password" type="password" autoComplete="new-password" minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} required className="h-11 pl-10" /></div><p className="text-xs text-slate-500">At least 12 characters</p></div>
+            <div className="space-y-2"><Label htmlFor="register-confirm">Confirm password</Label><div className="relative"><Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input id="register-confirm" type="password" autoComplete="new-password" minLength={12} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required className="h-11 pl-10" /></div></div>
             <Button id="register-submit" type="submit" disabled={submitting || registrationAvailable !== true} className="h-11 w-full">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}{submitting ? 'Creating account' : registrationAvailable === null ? 'Checking availability' : 'Create account'}</Button>
           </form>
           {googleClientId ? <><div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-slate-500"><span className="h-px flex-1 bg-white/10" /><span>or</span><span className="h-px flex-1 bg-white/10" /></div><Button type="button" variant="outline" disabled={googleSubmitting} onClick={signUpWithGoogle} className="h-11 w-full">{googleSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Continue with Google</Button></> : null}
