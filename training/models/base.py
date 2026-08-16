@@ -40,4 +40,6 @@ class ForecastModel(nn.Module, ABC):
         """
         Load model weights.
         """
-        self.load_state_dict(torch.load(filepath, map_location=device))
+        self.load_state_dict(
+            torch.load(filepath, map_location=device, weights_only=True)
+        )

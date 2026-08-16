@@ -55,6 +55,10 @@ class MonthProductionForecaster:
             device_map=device,
             dtype=torch.float32,
             local_files_only=True,
+            # PEFT 0.20 blocks dynamic adapter mappings unless the exact local
+            # model module is explicitly trusted. The adapter and base weights
+            # above are both pinned and checksum-verified before this import.
+            import_allowlist=["chronos.chronos2.model"],
         )
 
     @staticmethod

@@ -528,40 +528,42 @@ def select(args: argparse.Namespace) -> dict:
         y_morocco, morocco_baselines
     )
 
-    # Train supervised specialists only on known Portugal and known Morocco data.
-    portugal_frame = training_frame_portugal(
-        portugal, dates, portugal_ids, np.datetime64("2013-06-30")
-    )
-    morocco_frame = training_frame_morocco(morocco, reserve_days=90)
-    # N-HiTS/TiDE require input_size observations plus a validation tail.  The
-    # Marrakech development series is shorter than that at this selection
-    # cutoff, so it remains an out-of-domain validation series for supervised
-    # models and is still included in Chronos-2 domain adaptation.
-    supervised_morocco = morocco_frame.groupby("unique_id").filter(
-        lambda group: len(group) >= CONTEXT + 60
-    )
-    supervised_portugal = portugal_frame.groupby("unique_id").filter(
-        lambda group: len(group) >= CONTEXT + 60
-    )
-    supervised_frame = pd.concat(
-        [supervised_portugal, supervised_morocco], ignore_index=True
-    )
-    supervised_portugal: dict[str, np.ndarray] = {}
-    supervised_morocco: dict[str, np.ndarray] = {}
-    for name in ("nhits", "tide"):
-        print(f"Training {name} supervised specialist...", flush=True)
-        model, p_prediction = train_supervised(
-            name,
-            supervised_frame,
-            portugal_windows,
-            models_dir / name,
-            args.supervised_steps,
-            args.seed,
+    supervised_portugal_predictions: dict[str, np.ndarray] = {}
+    supervised_morocco_predictions: dict[str, np.ndarray] = {}
+    supervised_morocco_frame = pd.DataFrame()
+    if args.include_neuralforecast_challengers:
+        # Historical N-HiTS/TiDE comparisons are opt-in because the supported
+        # NeuralForecast releases currently cap an advisory-affected Lightning
+        # version. The production-selected Chronos path remains fully supported.
+        portugal_frame = training_frame_portugal(
+            portugal, dates, portugal_ids, np.datetime64("2013-06-30")
         )
-        supervised_portugal[name] = p_prediction
-        supervised_morocco[name] = supervised_predict(model, morocco_windows)
-        del model
-        torch.cuda.empty_cache()
+        morocco_frame = training_frame_morocco(morocco, reserve_days=90)
+        supervised_morocco_frame = morocco_frame.groupby("unique_id").filter(
+            lambda group: len(group) >= CONTEXT + 60
+        )
+        supervised_portugal_frame = portugal_frame.groupby("unique_id").filter(
+            lambda group: len(group) >= CONTEXT + 60
+        )
+        supervised_frame = pd.concat(
+            [supervised_portugal_frame, supervised_morocco_frame], ignore_index=True
+        )
+        for name in ("nhits", "tide"):
+            print(f"Training {name} supervised specialist...", flush=True)
+            model, p_prediction = train_supervised(
+                name,
+                supervised_frame,
+                portugal_windows,
+                models_dir / name,
+                args.supervised_steps,
+                args.seed,
+            )
+            supervised_portugal_predictions[name] = p_prediction
+            supervised_morocco_predictions[name] = supervised_predict(
+                model, morocco_windows
+            )
+            del model
+            torch.cuda.empty_cache()
 
     from chronos import Chronos2Pipeline
 
@@ -631,8 +633,8 @@ def select(args: argparse.Namespace) -> dict:
         del pipeline
         torch.cuda.empty_cache()
 
-    all_portugal = {**supervised_portugal, **chronos_portugal}
-    all_morocco = {**supervised_morocco, **chronos_morocco}
+    all_portugal = {**supervised_portugal_predictions, **chronos_portugal}
+    all_morocco = {**supervised_morocco_predictions, **chronos_morocco}
     model_name, weight, selected_portugal, selected_morocco, leaderboard = (
         choose_multidataset_blend(
             y_portugal,
@@ -664,7 +666,9 @@ def select(args: argparse.Namespace) -> dict:
         refit_portugal = refit_portugal.groupby("unique_id").filter(
             lambda group: len(group) >= CONTEXT + 60
         )
-        refit_frame = pd.concat([refit_portugal, supervised_morocco], ignore_index=True)
+        refit_frame = pd.concat(
+            [refit_portugal, supervised_morocco_frame], ignore_index=True
+        )
         final_model, _ = train_supervised(
             model_name,
             refit_frame,
@@ -962,7 +966,6 @@ def audit(args: argparse.Namespace) -> dict:
             "python": "3.11",
             "torch": torch.__version__,
             "chronos_forecasting": "2.3.1",
-            "neuralforecast": "3.1.8",
         },
         "promotion_note": "Backend artifacts are replaced only when all frozen gates pass.",
     }
@@ -984,6 +987,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora-batch-size", type=int, default=8)
     parser.add_argument("--lora-steps", type=int, nargs="+", default=[100, 300, 600])
     parser.add_argument("--supervised-steps", type=int, default=1000)
+    parser.add_argument(
+        "--include-neuralforecast-challengers",
+        action="store_true",
+        help=(
+            "Opt into historical N-HiTS/TiDE challengers only in an isolated "
+            "research environment after reviewing their Lightning dependency."
+        ),
+    )
     return parser.parse_args()
 
 

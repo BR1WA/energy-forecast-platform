@@ -58,6 +58,76 @@ def set_seed(seed=42):
         pass
 
 
+def load_real_data(filepath: str | Path, limit_rows: int | None = None) -> pd.DataFrame:
+    """Load and hourly-resample the UCI household power dataset.
+
+    This compatibility helper remains the canonical loader for the metric
+    recomputation utility; the main training CLI uses the dataset registry.
+    """
+    data = pd.read_csv(filepath, sep=";", na_values=["?"], nrows=limit_rows)
+    required = {"Date", "Time", "Global_active_power"}
+    missing = required.difference(data.columns)
+    if missing:
+        raise ValueError(f"Dataset is missing required columns: {sorted(missing)}")
+    data["timestamp"] = pd.to_datetime(
+        data["Date"] + " " + data["Time"],
+        format="%d/%m/%Y %H:%M:%S",
+        errors="raise",
+    )
+    data["gap"] = pd.to_numeric(data["Global_active_power"], errors="coerce")
+    return (
+        data[["timestamp", "gap"]]
+        .set_index("timestamp")
+        .resample("1h")
+        .mean()
+        .reset_index()
+    )
+
+
+def prepare_tensors(
+    data: pd.DataFrame,
+    time_col: str,
+    target_col: str,
+    lookback: int,
+    horizon: int,
+):
+    """Create legacy deep-model tensors without making Torch a CLI import dependency."""
+    import torch
+
+    if lookback <= 0 or horizon <= 0:
+        raise ValueError("lookback and horizon must both be positive")
+    required = {time_col, target_col}
+    missing = required.difference(data.columns)
+    if missing:
+        raise ValueError(f"Processed data is missing required columns: {sorted(missing)}")
+
+    features = data.drop(columns=[time_col, target_col]).to_numpy(dtype=np.float32)
+    targets = data[target_col].to_numpy(dtype=np.float32)
+    window_count = len(data) - lookback - horizon + 1
+    if window_count <= 0:
+        raise ValueError(
+            f"Dataset needs at least {lookback + horizon} rows; got {len(data)}"
+        )
+
+    x_values = np.stack(
+        [targets[index : index + lookback] for index in range(window_count)]
+    )
+    y_values = np.stack(
+        [
+            targets[index + lookback : index + lookback + horizon]
+            for index in range(window_count)
+        ]
+    )
+    temporal_values = np.stack(
+        [features[index : index + lookback] for index in range(window_count)]
+    )
+    return (
+        torch.from_numpy(x_values).unsqueeze(-1),
+        torch.from_numpy(y_values).unsqueeze(-1),
+        torch.from_numpy(temporal_values),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Window generation
 # ---------------------------------------------------------------------------
