@@ -42,6 +42,7 @@ FROM base AS application
 
 ARG INSTALL_TORCH=1
 ARG INSTALL_MONTH_MODEL=1
+ENV HF_HOME=/app/.cache/huggingface
 
 RUN groupadd --system --gid 10001 appuser && \
     useradd --system --uid 10001 --gid appuser --home-dir /app --shell /usr/sbin/nologin appuser
