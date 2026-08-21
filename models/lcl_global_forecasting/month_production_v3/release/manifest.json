@@ -73,8 +73,8 @@
     "selection_file": "selection.json",
     "audit_file": "audit.json",
     "protocol_sha256": "252c3a26e8ca5c82f153c148f0f188c1c3be263d7788aeb11781f9af082f8e3d",
-    "selection_sha256": "37eebee454ed1e68bf7f64b91154de1ce8cada850c7a0b69726c76d14ef48f5f",
-    "audit_sha256": "448936067532f7facdc6ae323a4e510ab7ec05e208017420a6a554fd7e640332",
+    "selection_sha256": "8eaa8b82e42284ecdf2441dfde3184d9d55545f58a2eafa7a85e7853e094d7ac",
+    "audit_sha256": "87906780273b9e143489f7227da6d2fb56539e64fce794d8dc122a6609f8bcfe",
     "artifact_reload_relative_error": 6.576540008644204e-08,
     "seed": 2026
   },

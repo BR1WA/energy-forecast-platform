@@ -179,15 +179,15 @@ test('forecast timestamps use each persisted forecast timezone, not the browser 
     if (pathname === '/api/v1/alerts/unacknowledged') return route.fulfill({ json: [] });
     if (pathname === '/api/v1/forecast/capabilities') return route.fulfill({ json: { default_horizon_hours: 24, capabilities: [{ horizon_hours: 24, target_count: 24, target_interval_hours: 1, resolution: 'hourly', label: 'Next 24 hours', description: '24 hours', model: model(24) }] } });
     if (pathname === '/api/v1/forecast/readiness') return route.fulfill({ json: { horizon_hours: 24, target_count: 24, target_interval_hours: 1, status: 'ready', ready_for_model: true, ready_for_tft: true, fallback_available: true, required_hours: 336, required_days: null, minimum_coverage_percent: 90, maximum_allowed_gap_hours: 6, coverage_percent: 100, observed_hours: 336, missing_hours: 0, imputed_hours: 0, maximum_gap_hours: 0, observed_days: 0, missing_days: 0, imputed_days: 0, maximum_gap_days: 0, unit: 'kWh', resolution: 'hourly', latest_reading_at: '2026-07-23T00:00:00Z', forecast_origin: '2026-07-23T00:00:00Z', reasons: [], model: model(24) } });
-    if (pathname === '/api/v1/forecast/latest') return route.fulfill({ json: forecast(24, 'Asia/Tokyo') });
+    if (pathname === '/api/v1/forecast/latest') return route.fulfill({ json: forecast(24, 'Asia/Kathmandu') });
     if (pathname === '/api/v1/forecast/history') return route.fulfill({ json: [{ id: 1, model_name: 'global_tft_24h', method: 'global_tft', horizon_hours: 24, target_count: 24, target_interval_hours: 1, resolution: 'hourly', timezone: 'UTC', forecast_start: '2026-07-23T00:00:00Z', forecast_end: '2026-07-24T00:00:00Z', freshness_status: 'expired', created_at: '2026-07-23T00:00:00Z' }] });
     return route.fulfill({ status: 200, json: {} });
   });
 
   await page.goto('/forecast');
-  await expect(page.getByText('Jul 23, 2026, 9:00 AM to Jul 24, 2026, 9:00 AM', { exact: true })).toBeVisible();
+  await expect(page.getByText('Jul 23, 2026, 5:45 AM to Jul 24, 2026, 5:45 AM', { exact: true })).toBeVisible();
   await expect(page.getByText('Expired forecast · Window Jul 23, 2026, 12:00 AM to Jul 24, 2026, 12:00 AM', { exact: true })).toBeVisible();
-  expect((await page.locator('svg').allTextContents()).join(' ')).toContain('11:00 AM');
+  expect((await page.locator('svg').allTextContents()).join(' ')).toMatch(/\d{1,2}:45 [AP]M/);
 });
 });
 

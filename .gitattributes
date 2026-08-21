@@ -1,1 +1,3 @@
 output/pdf/*.pdf binary
+models/lcl_global_forecasting/month_production_v3/release/selection.json text eol=lf
+models/lcl_global_forecasting/month_production_v3/release/audit.json text eol=lf
