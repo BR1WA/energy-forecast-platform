@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from app.config import get_settings
 from app.database import get_db
 from app.limiter import limiter
@@ -6,6 +6,7 @@ from app.models import User
 from sqlalchemy.orm import Session
 from app.services.auth_service import get_current_user
 from app.services.simulation_service import simulation_service
+from app.services.worker_health_service import worker_status
 from app.schemas import SimulationConfiguration
 
 router = APIRouter(prefix="/api/v1/simulation", tags=["Simulation"])
@@ -14,6 +15,15 @@ settings = get_settings()
 @router.post("/start")
 @limiter.limit(settings.MUTATION_RATE_LIMIT)
 def start_simulation(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    worker = worker_status(db, "simulation")
+    if not worker["operational"]:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "simulation_worker_unavailable",
+                "message": "The simulator is unavailable because its dedicated worker is not operational.",
+            },
+        )
     return simulation_service.start_simulation(db, current_user.id)
 
 @router.post("/stop")

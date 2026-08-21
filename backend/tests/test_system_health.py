@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -7,6 +9,7 @@ from app.models import EmailOutbox
 from app.routers.system import build_readiness
 from app.config import Settings
 from app.services.product_forecast_service import product_forecast_service
+from app.services.worker_health_service import record_worker_success, worker_status
 from app.main import api_documentation_url
 
 
@@ -137,8 +140,44 @@ def test_dead_mail_is_reported_as_optional_degradation(monkeypatch):
             ),
         )
         monkeypatch.setattr(product_forecast_service, "warmup", lambda horizon_hours=24: model_status(available=True, warmed=True))
+        monkeypatch.setattr(
+            "app.routers.system.worker_statuses",
+            lambda _db: {
+                name: {"operational": name == "email"}
+                for name in ("simulation", "alerts", "email", "avatar_cleanup")
+            },
+        )
         result = build_readiness(db)
         assert result["ready"] is True
         assert result["email"] == {"enabled": True, "status": "degraded", "processing": 0, "retry": 0, "dead": 1}
+    finally:
+        db.close()
+
+
+def test_worker_health_requires_a_recent_successful_loop():
+    db = make_session()
+    try:
+        now = datetime(2026, 8, 21, 12, tzinfo=timezone.utc)
+        assert worker_status(db, "simulation", now=now)["operational"] is False
+        record_worker_success(db, "simulation", now=now)
+        db.commit()
+        assert worker_status(db, "simulation", now=now)["operational"] is True
+        stale_after_seconds = worker_status(db, "simulation", now=now)[
+            "stale_after_seconds"
+        ]
+        assert worker_status(
+            db, "simulation", now=now + timedelta(seconds=stale_after_seconds)
+        )["operational"] is True
+        assert worker_status(
+            db,
+            "simulation",
+            now=now + timedelta(seconds=stale_after_seconds, microseconds=1),
+        )["operational"] is False
+        assert worker_status(db, "simulation", now=now - timedelta(seconds=5))[
+            "operational"
+        ] is True
+        assert worker_status(db, "simulation", now=now - timedelta(seconds=5, microseconds=1))[
+            "operational"
+        ] is False
     finally:
         db.close()

@@ -412,8 +412,9 @@ class ProductForecastResponse(BaseModel):
     resolution: Literal["hourly", "daily"]
     input_start: Optional[datetime] = None
     input_end: Optional[datetime] = None
-    forecast_start: datetime
+    forecast_start: Optional[datetime] = None
     forecast_end: Optional[datetime] = None
+    freshness_status: Literal["future", "partially_elapsed", "expired", "unknown"]
     coverage_percent: float
     observed_hours: int
     maximum_gap_hours: int
@@ -434,7 +435,10 @@ class ProductForecastHistoryItem(BaseModel):
     target_count: int
     target_interval_hours: int
     resolution: Literal["hourly", "daily"]
+    timezone: str
     forecast_start: Optional[datetime] = None
+    forecast_end: Optional[datetime] = None
+    freshness_status: Literal["future", "partially_elapsed", "expired", "unknown"]
     created_at: datetime
 
 
@@ -458,8 +462,10 @@ class AlertConfigResponse(BaseModel):
     email_enabled: bool
     email_delivery_available: bool
     email_delivery_unavailable_reason: Optional[
-        Literal["mail_disabled", "email_unverified"]
+        Literal["mail_disabled", "email_unverified", "email_worker_unavailable"]
     ] = None
+    missing_data_monitoring_available: bool
+    missing_data_monitoring_last_success_at: Optional[datetime] = None
     created_at: datetime
 
 

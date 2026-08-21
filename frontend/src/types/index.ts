@@ -149,6 +149,12 @@ export interface SimulationStatus {
   bootstrap_accepted_rows?: number;
   deleted_simulation_readings?: number;
   preserved_non_simulation_data?: boolean;
+  worker: {
+    status: 'operational' | 'unavailable';
+    operational: boolean;
+    last_success_at: string | null;
+    stale_after_seconds: number;
+  };
 }
 
 export type ForecastHorizon = 24 | 168 | 720;
@@ -244,8 +250,9 @@ export interface ProductForecast {
   resolution: 'hourly' | 'daily';
   input_start: string | null;
   input_end: string | null;
-  forecast_start: string;
+  forecast_start: string | null;
   forecast_end: string | null;
+  freshness_status: 'future' | 'partially_elapsed' | 'expired' | 'unknown';
   coverage_percent: number;
   observed_hours: number;
   maximum_gap_hours: number;
@@ -264,7 +271,10 @@ export interface ProductForecastHistoryItem {
   target_count: number;
   target_interval_hours: number;
   resolution: 'hourly' | 'daily';
+  timezone: string;
   forecast_start: string | null;
+  forecast_end: string | null;
+  freshness_status: 'future' | 'partially_elapsed' | 'expired' | 'unknown';
   created_at: string;
 }
 
@@ -325,7 +335,9 @@ export interface AlertConfig {
   missing_data_minutes: number;
   email_enabled: boolean;
   email_delivery_available: boolean;
-  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | null;
+  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | 'email_worker_unavailable' | null;
+  missing_data_monitoring_available: boolean;
+  missing_data_monitoring_last_success_at: string | null;
 }
 
 export interface Recommendation {
@@ -447,7 +459,9 @@ export interface AlertConfigResponse {
   missing_data_minutes: number;
   email_enabled: boolean;
   email_delivery_available: boolean;
-  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | null;
+  email_delivery_unavailable_reason: 'mail_disabled' | 'email_unverified' | 'email_worker_unavailable' | null;
+  missing_data_monitoring_available: boolean;
+  missing_data_monitoring_last_success_at: string | null;
   created_at: string;
   updated_at: string;
 }

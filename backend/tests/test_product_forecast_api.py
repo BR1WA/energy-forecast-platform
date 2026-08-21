@@ -12,7 +12,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import SmartMeterReading, User
+from app.models import Forecast, SmartMeterReading, User
+from app.routers.forecast import _serialize
 from app.services.auth_service import create_access_token, hash_password
 from app.services.product_forecast_service import (
     ARTIFACT_SPECS,
@@ -21,6 +22,122 @@ from app.services.product_forecast_service import (
     product_forecast_service,
 )
 from app.services.site_service import ensure_default_site, get_default_meter
+
+
+@pytest.mark.parametrize(
+    ("target_count", "target_interval_hours", "now_offset", "expected"),
+    [
+        (24, 1, timedelta(microseconds=-1), "future"),
+        (24, 1, timedelta(), "partially_elapsed"),
+        (24, 1, timedelta(hours=24), "expired"),
+        (168, 1, timedelta(hours=168), "expired"),
+        (30, 24, timedelta(hours=720), "expired"),
+    ],
+)
+def test_persisted_forecast_exposes_exact_window_and_freshness_boundaries(
+    target_count, target_interval_hours, now_offset, expected
+):
+    origin = datetime(2026, 8, 21, tzinfo=timezone.utc)
+    forecast = Forecast(
+        id=1,
+        user_id=1,
+        model_name="global_tft_24h",
+        horizon=24,
+        predictions=[[1.0], [1.1]],
+        confidence_method="quantile",
+        input_snapshot={
+            "forecast_origin": origin.isoformat(),
+            "target_count": target_count,
+            "target_interval_hours": target_interval_hours,
+        },
+    )
+    serialized = _serialize(forecast, now=origin + now_offset)
+    assert serialized["forecast_start"] == origin
+    assert serialized["forecast_end"] == origin + timedelta(
+        hours=target_count * target_interval_hours
+    )
+    assert serialized["freshness_status"] == expected
+
+
+def test_persisted_forecast_normalizes_equivalent_timezone_representations():
+    forecast = Forecast(
+        id=1,
+        user_id=1,
+        model_name="global_tft_24h",
+        horizon=24,
+        predictions=[[1.0]],
+        input_snapshot={
+            "forecast_origin": "2026-08-21T02:00:00+02:00",
+            "forecast_end": "2026-08-22T02:00:00+02:00",
+            "target_interval_hours": 1,
+            "target_count": 24,
+        },
+    )
+
+    serialized = _serialize(forecast, now=datetime(2026, 8, 21, tzinfo=timezone.utc))
+
+    assert serialized["forecast_start"] == datetime(2026, 8, 21, tzinfo=timezone.utc)
+    assert serialized["forecast_end"] == datetime(2026, 8, 22, tzinfo=timezone.utc)
+    assert serialized["points"][0]["timestamp"] == datetime(
+        2026, 8, 21, tzinfo=timezone.utc
+    )
+
+
+@pytest.mark.parametrize(
+    ("snapshot", "has_start"),
+    [
+        ({"target_count": 24, "target_interval_hours": 1}, False),
+        (
+            {
+                "forecast_origin": "not-a-timestamp",
+                "target_count": 24,
+                "target_interval_hours": 1,
+            },
+            False,
+        ),
+        (
+            {
+                "forecast_origin": "2026-08-21T00:00:00+00:00",
+                "forecast_end": "not-a-timestamp",
+                "target_count": "not-a-count",
+                "target_interval_hours": "not-an-interval",
+            },
+            True,
+        ),
+        (
+            {
+                "forecast_origin": "2026-08-21T00:00:00+00:00",
+                "forecast_end": "2026-08-21T00:00:00+00:00",
+            },
+            True,
+        ),
+        (
+            {
+                "forecast_origin": "2026-08-21T00:00:00+00:00",
+                "forecast_end": "2026-08-20T23:00:00+00:00",
+            },
+            True,
+        ),
+    ],
+)
+def test_persisted_forecast_tolerates_missing_or_malformed_timing_snapshot(
+    snapshot, has_start
+):
+    forecast = Forecast(
+        id=1,
+        user_id=1,
+        model_name="global_tft_24h",
+        horizon=24,
+        predictions=[[1.0]],
+        input_snapshot=snapshot,
+    )
+
+    serialized = _serialize(forecast)
+
+    assert (serialized["forecast_start"] is not None) is has_start
+    assert serialized["forecast_end"] is None
+    assert serialized["freshness_status"] == "unknown"
+    assert len(serialized["points"]) == (1 if has_start else 0)
 
 
 def test_forecast_api_persists_an_owned_explicit_fallback(monkeypatch):
@@ -222,6 +339,7 @@ def test_forecast_api_persists_an_owned_explicit_fallback(monkeypatch):
         ).json()
         assert len(week_history) == 1
         assert week_history[0]["horizon_hours"] == 168
+        assert week_history[0]["timezone"] == "UTC"
         assert (
             client.get(
                 "/api/v1/forecast/latest?horizon_hours=168",

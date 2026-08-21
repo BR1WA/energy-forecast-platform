@@ -14,6 +14,7 @@ from app.schemas import MeterSample
 from app.services.audit_service import record_audit_event
 from app.services.ingestion_service import ingestion_service
 from app.services.site_service import ensure_user_site, get_primary_meter
+from app.services.worker_health_service import worker_status
 
 
 PROFILE_VERSION = "household_v1"
@@ -176,6 +177,7 @@ class SimulationService:
                 else None
             ),
             "last_catch_up_was_limited": bool(config.get("_last_catch_up_was_limited", False)),
+            "worker": worker_status(db, "simulation"),
             **history,
             **{key: config[key] for key in DEFAULT_CONFIGURATION},
         }
@@ -273,7 +275,6 @@ class SimulationService:
         else:
             history_action = "preserved_existing_simulation_history"
 
-        advance = self.advance_session(db, session, now=now)
         record_audit_event(
             db,
             "simulation.started",
@@ -283,7 +284,7 @@ class SimulationService:
             metadata={
                 "history_action": history_action,
                 "bootstrap_accepted_rows": (bootstrap_result or {}).get("accepted_rows", 0),
-                "catch_up_points": advance["catch_up_points"],
+                "catch_up_points": 0,
             },
         )
         db.commit()

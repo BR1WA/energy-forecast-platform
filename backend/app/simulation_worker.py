@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.models import SimulationSession
 from app.services.simulation_service import simulation_service
+from app.services.worker_health_service import record_worker_success
 
 
 logger = logging.getLogger(__name__)
@@ -23,8 +24,8 @@ def run_once() -> int:
         )
         for session in sessions:
             simulation_service.advance_session(db, session)
-        if sessions:
-            db.commit()
+        record_worker_success(db, "simulation")
+        db.commit()
         return len(sessions)
     except Exception:
         db.rollback()

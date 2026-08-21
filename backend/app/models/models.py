@@ -270,6 +270,16 @@ class SimulationSession(Base):
     site = relationship("Site", back_populates="simulation_sessions")
 
 
+class WorkerHeartbeat(Base):
+    """Last successful loop completed by each durable worker."""
+
+    __tablename__ = "worker_heartbeats"
+
+    worker_name = Column(String(64), primary_key=True)
+    last_success_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

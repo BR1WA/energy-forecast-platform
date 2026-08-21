@@ -76,10 +76,26 @@ function methodLabel(method: ProductForecast['method'] | string) {
   return 'Unknown';
 }
 
+function formatTime(value: string, timezone?: string) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+    }).format(new Date(value));
+  } catch {
+    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+}
+
 function horizonLabel(horizon: ForecastHorizon | number) {
   if (horizon === 720) return '30-day daily';
   if (horizon === 168) return '7-day / 168-hour';
   return '24-hour';
+}
+
+function freshnessLabel(status: ProductForecast['freshness_status'] | undefined) {
+  return status === 'expired' ? 'Expired forecast' : status === 'partially_elapsed' ? 'Partially elapsed forecast' : status === 'future' ? 'Future forecast' : 'Forecast timing unavailable';
 }
 
 function Fact({ label, value, detail }: { label: string; value: string; detail?: string }) {
@@ -291,10 +307,10 @@ function ForecastContent() {
             <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
               <BrainCircuit className="h-6 w-6 text-cyan-400" />
               {isMonth
-                ? 'Next 30 days · daily energy forecast'
+                ? '30-day daily energy forecast'
                 : isWeek
-                  ? 'Next 7 days · 168-hour energy forecast'
-                  : 'Next 24 hours energy forecast'}
+                  ? '7-day / 168-hour energy forecast'
+                  : '24-hour energy forecast'}
             </h1>
             <p className="mt-1 text-sm text-slate-400">
               Primary meter forecast in {isMonth ? 'daily' : 'hourly'} kWh
@@ -352,6 +368,8 @@ function ForecastContent() {
             <AlertTriangle className="h-4 w-4 shrink-0" />{error}
           </div>
         ) : null}
+
+        {forecast ? <div className={cn('flex items-start gap-3 border px-4 py-3 text-sm', forecast.freshness_status === 'expired' ? 'border-amber-400/25 bg-amber-400/[0.04] text-amber-100' : 'border-cyan-400/25 bg-cyan-400/[0.04] text-cyan-100')}><CalendarClock className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-medium">{freshnessLabel(forecast.freshness_status)}</p><p className="mt-1 opacity-80">Prediction window: {formatDate(forecast.forecast_start, forecast.timezone)} to {formatDate(forecast.forecast_end, forecast.timezone)}.{forecast.freshness_status === 'expired' ? ' Generate a new forecast from current meter history before relying on it.' : ''}</p></div></div> : null}
 
         <section className="border-y border-white/10 bg-white/[0.025] px-4 py-5">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -435,7 +453,7 @@ function ForecastContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
                       <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="timestamp" tickFormatter={(value) => chartIsDaily ? formatDay(value, forecast.timezone) : new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} stroke="#94a3b8" minTickGap={28} />
+                      <XAxis dataKey="timestamp" tickFormatter={(value) => chartIsDaily ? formatDay(value, forecast.timezone) : formatTime(value, forecast.timezone)} stroke="#94a3b8" minTickGap={28} />
                       <YAxis stroke="#94a3b8" unit=" kWh" width={72} />
                       <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6 }} labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''} formatter={(value, name) => [typeof value === 'number' ? `${value.toFixed(3)} kWh` : value, name === 'p50_kwh' ? (chartIsDaily ? 'Daily median total' : 'Median') : '10th-90th percentile']} />
                       <Area type="monotone" dataKey="range" fill="#22d3ee" fillOpacity={0.16} stroke="none" connectNulls={false} />
@@ -457,6 +475,7 @@ function ForecastContent() {
                 <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                   <div><dt className="text-slate-500">Input window</dt><dd className="mt-1 text-slate-200">{formatDate(forecast.input_start, forecast.timezone)} to {formatDate(forecast.input_end, forecast.timezone)}</dd></div>
                   <div><dt className="text-slate-500">Forecast window</dt><dd className="mt-1 text-slate-200">{formatDate(forecast.forecast_start, forecast.timezone)} to {formatDate(forecast.forecast_end, forecast.timezone)}</dd></div>
+                  <div><dt className="text-slate-500">Timing status</dt><dd className="mt-1 text-slate-200">{freshnessLabel(forecast.freshness_status)}</dd></div>
                   <div><dt className="text-slate-500">Observed history</dt><dd className="mt-1 text-slate-200">{directDailyTargets ? `${readiness?.observed_days ?? 0} complete days` : `${forecast.observed_hours} / 336 hours`}</dd></div>
                   <div><dt className="text-slate-500">Targets</dt><dd className="mt-1 text-slate-200">{forecast.target_count} {forecast.resolution} values</dd></div>
                   <div><dt className="text-slate-500">Generated</dt><dd className="mt-1 text-slate-200">{formatDate(forecast.created_at, forecast.timezone)}</dd></div>
@@ -490,8 +509,8 @@ function ForecastContent() {
               <div className="divide-y divide-white/10">
                 {history.slice(0, 8).map((item) => (
                   <div key={item.id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div><p className="font-medium text-slate-200">{methodLabel(item.method)} · {horizonLabel(item.horizon_hours)}</p><p className="text-xs text-slate-500">Forecast from {formatDate(item.forecast_start, forecast?.timezone)}</p></div>
-                    <span className="text-xs text-slate-500">Generated {formatDate(item.created_at, forecast?.timezone)}</span>
+                    <div><p className="font-medium text-slate-200">{methodLabel(item.method)} · {horizonLabel(item.horizon_hours)}</p><p className="text-xs text-slate-500">{freshnessLabel(item.freshness_status)} · Window {formatDate(item.forecast_start, item.timezone)} to {formatDate(item.forecast_end, item.timezone)}</p></div>
+                    <span className="text-xs text-slate-500">Generated {formatDate(item.created_at, item.timezone)}</span>
                   </div>
                 ))}
               </div>

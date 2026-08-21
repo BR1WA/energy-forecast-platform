@@ -7,6 +7,7 @@ import time
 from app.config import get_settings
 from app.database import SessionLocal
 from app.services.avatar_storage import process_avatar_cleanup
+from app.services.worker_health_service import record_worker_success
 
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,10 @@ logger = logging.getLogger(__name__)
 def run_once() -> int:
     db = SessionLocal()
     try:
-        return process_avatar_cleanup(db)
+        processed = process_avatar_cleanup(db)
+        record_worker_success(db, "avatar_cleanup")
+        db.commit()
+        return processed
     except Exception:
         db.rollback()
         raise

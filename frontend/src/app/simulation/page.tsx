@@ -52,6 +52,7 @@ export default function SimulationPage() {
   const [baseLoadKw, setBaseLoadKw] = useState(1.2);
   const [variationPercent, setVariationPercent] = useState(10);
   const isRunning = status?.is_running ?? false;
+  const workerUnavailable = status?.worker?.operational === false;
 
   const load = useCallback(async () => {
     try {
@@ -152,6 +153,8 @@ export default function SimulationPage() {
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">A reproducible household scenario with weekday and weekend routines, morning and evening peaks, and seeded variation. Every generated reading is stored as simulation data and is never presented as a real meter measurement.</p>
         </header>
 
+        {workerUnavailable ? <div className="flex items-start gap-3 rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-100"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-medium">Simulator unavailable</p><p className="mt-1 text-amber-100/75">Its dedicated worker has not completed a recent loop. Starting is disabled until the worker is operational.</p></div></div> : null}
+
         <section className="grid gap-3 md:grid-cols-3" aria-label="Persistent demo history status">
           <div className="rounded-xl border border-cyan-400/15 bg-gradient-to-br from-cyan-400/10 to-[#111827] p-4">
             <div className="flex items-center gap-2 text-xs font-medium text-cyan-200"><History className="h-4 w-4" />Persisted context</div>
@@ -172,11 +175,11 @@ export default function SimulationPage() {
 
         <section className="grid gap-4 lg:grid-cols-[320px_1fr]">
           <Card className="rounded-lg border-white/10 bg-[#111827]">
-            <CardHeader><CardTitle className="flex items-center justify-between text-sm"><span>Feed state</span><span className={isRunning ? 'text-emerald-300' : 'text-slate-400'}>{loading ? 'Checking' : isRunning ? 'Running' : 'Stopped'}</span></CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center justify-between text-sm"><span>Feed state</span><span className={workerUnavailable ? 'text-amber-300' : isRunning ? 'text-emerald-300' : 'text-slate-400'}>{loading ? 'Checking' : workerUnavailable ? 'Worker unavailable' : isRunning ? 'Running' : 'Stopped'}</span></CardTitle></CardHeader>
             <CardContent className="space-y-5">
               <div><p className="text-xs text-slate-500">Session uptime</p><p className="mt-1 font-mono text-2xl text-white">{durationLabel(status?.uptime ?? 0)}</p></div>
               <div className="grid grid-cols-2 gap-2">
-                <Button aria-label="Start demo" disabled={loading || isRunning || changingState !== null} onClick={() => changeState('start')} title="Start"><Play />{changingState === 'start' ? 'Preparing…' : 'Start'}</Button>
+                <Button aria-label="Start demo" disabled={loading || isRunning || workerUnavailable || changingState !== null} onClick={() => changeState('start')} title={workerUnavailable ? 'Simulator worker unavailable' : 'Start'}><Play />{changingState === 'start' ? 'Preparing…' : 'Start'}</Button>
                 <Button aria-label="Stop demo" disabled={loading || !isRunning || changingState !== null} onClick={() => changeState('stop')} title="Stop" variant="destructive"><Square />Stop</Button>
               </div>
               <Button className="w-full border-amber-300/20 text-amber-200 hover:bg-amber-400/10" disabled={loading || changingState !== null} onClick={() => changeState('reset')} variant="outline"><RotateCcw />{changingState === 'reset' ? 'Regenerating…' : 'Reset demo data'}</Button>

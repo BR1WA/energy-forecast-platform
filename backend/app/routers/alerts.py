@@ -12,13 +12,22 @@ from app.services.alert_service import alert_service, critical_email_delivery_st
 from app.services.audit_service import record_audit_event
 from app.services.auth_service import get_current_user
 from app.services.site_service import ensure_default_site
+from app.services.worker_health_service import worker_status
 
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
 
 
-def _config_response(config: AlertConfig, current_user: User) -> AlertConfigResponse:
+def _email_delivery_status(db: Session, current_user: User) -> tuple[bool, str | None]:
     available, reason = critical_email_delivery_status(current_user)
+    if available and not worker_status(db, "email")["operational"]:
+        return False, "email_worker_unavailable"
+    return available, reason
+
+
+def _config_response(db: Session, config: AlertConfig, current_user: User) -> AlertConfigResponse:
+    available, reason = _email_delivery_status(db, current_user)
+    alerts_worker = worker_status(db, "alerts")
     return AlertConfigResponse(
         id=config.id,
         threshold_kw=config.threshold_kw,
@@ -27,6 +36,8 @@ def _config_response(config: AlertConfig, current_user: User) -> AlertConfigResp
         email_enabled=bool(config.email_enabled),
         email_delivery_available=available,
         email_delivery_unavailable_reason=reason,
+        missing_data_monitoring_available=alerts_worker["operational"],
+        missing_data_monitoring_last_success_at=alerts_worker["last_success_at"],
         created_at=config.created_at,
     )
 
@@ -168,7 +179,7 @@ def get_alert_config(
     config = alert_service.config_for_site(db, site)
     db.commit()
     db.refresh(config)
-    return _config_response(config, current_user)
+    return _config_response(db, config, current_user)
 
 
 @router.post("/config", response_model=AlertConfigResponse)
@@ -179,7 +190,7 @@ def update_alert_config(
 ):
     site = ensure_default_site(db, current_user.id)
     config = alert_service.config_for_site(db, site)
-    email_available, email_unavailable_reason = critical_email_delivery_status(current_user)
+    email_available, email_unavailable_reason = _email_delivery_status(db, current_user)
     if data.email_enabled and not email_available and not config.email_enabled:
         if email_unavailable_reason == "email_unverified":
             message = "Verify your current email before enabling critical-alert delivery."
@@ -203,4 +214,4 @@ def update_alert_config(
     )
     db.commit()
     db.refresh(config)
-    return _config_response(config, current_user)
+    return _config_response(db, config, current_user)

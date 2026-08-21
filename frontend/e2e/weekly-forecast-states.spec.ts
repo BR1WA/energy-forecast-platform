@@ -81,7 +81,7 @@ test('weekly loading resolves to an actionable readiness-blocked state', async (
   });
 
   await page.goto('/forecast?horizon=168');
-  await expect(page.getByRole('heading', { name: 'Next 7 days · 168-hour energy forecast' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '7-day / 168-hour energy forecast' })).toBeVisible();
   await expect(page.getByText('Loading')).toHaveCount(3);
   releaseReadiness();
   await expect(page.getByText('More meter history is required')).toBeVisible();
@@ -115,7 +115,7 @@ test('weekly empty and error states remain horizon-specific', async ({ page }) =
   failReadiness = true;
   await page.reload();
   await expect(page.getByText('The 7-day / 168-hour model artifact could not be loaded.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Next 7 days · 168-hour energy forecast' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '7-day / 168-hour energy forecast' })).toBeVisible();
 });
 
 test('disabled weekly capability is not advertised or silently replaced with 24 hours', async ({ page }) => {
@@ -194,7 +194,7 @@ test('monthly capability stays daily and offers the contract-safe one-year simul
   });
 
   await page.goto('/forecast?horizon=720');
-  await expect(page.getByRole('heading', { name: 'Next 30 days · daily energy forecast' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '30-day daily energy forecast' })).toBeVisible();
   await expect(page.getByText('168 / 270')).toBeVisible();
   await expect(page.getByText("The production monthly model requires at least 270 complete rolling daily blocks. The simulator creates 365 days at the models' native hourly resolution, without padding history or lowering this gate. This replaces only existing demo-simulator readings; imported or measured readings are preserved.")).toBeVisible();
   await expect(page.getByRole('button', { name: 'Prepare demo history' })).toHaveCount(0);

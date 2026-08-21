@@ -46,7 +46,7 @@ def _deletion_method(db: Session, user: User) -> tuple[str, bool]:
         AuthIdentity.user_id == user.id,
         AuthIdentity.provider == "google",
     ).first() is not None
-    return "google", bool(linked and get_settings().GOOGLE_AUTH_ENABLED)
+    return "google", bool(linked and auth_router.settings.GOOGLE_AUTH_ENABLED)
 
 
 @router.get("/export")
@@ -165,5 +165,9 @@ def delete_account(
     db.commit()
     auth_router._clear_refresh_cookie(response)
     if old_object_key:
-        process_avatar_cleanup(db, storage=get_avatar_storage(), settings=get_settings())
+        process_avatar_cleanup(
+            db,
+            storage=get_avatar_storage(auth_router.settings),
+            settings=auth_router.settings,
+        )
     return {"message": "Account and owned product data were permanently deleted."}

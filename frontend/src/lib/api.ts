@@ -367,6 +367,8 @@ export const alertsApi = {
       email_enabled: raw.email_enabled,
       email_delivery_available: raw.email_delivery_available,
       email_delivery_unavailable_reason: raw.email_delivery_unavailable_reason,
+      missing_data_monitoring_available: raw.missing_data_monitoring_available,
+      missing_data_monitoring_last_success_at: raw.missing_data_monitoring_last_success_at,
     };
   },
 
@@ -388,6 +390,8 @@ export const alertsApi = {
       email_enabled: raw.email_enabled,
       email_delivery_available: raw.email_delivery_available,
       email_delivery_unavailable_reason: raw.email_delivery_unavailable_reason,
+      missing_data_monitoring_available: raw.missing_data_monitoring_available,
+      missing_data_monitoring_last_success_at: raw.missing_data_monitoring_last_success_at,
     };
   },
 

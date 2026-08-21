@@ -5,6 +5,7 @@ import time
 from app.config import get_settings
 from app.database import SessionLocal
 from app.services.email_service import process_due_email
+from app.services.worker_health_service import record_worker_success
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,7 @@ def run_once() -> int:
     db = SessionLocal()
     try:
         result = process_due_email(db)
+        record_worker_success(db, "email")
         db.commit()
         return result
     except Exception:

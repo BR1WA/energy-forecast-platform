@@ -84,7 +84,7 @@ def test_owned_report_summary_pdf_and_consumption_csv():
                 "method": "global_tft",
                 "model_version": "1.0.0",
                 "forecast_origin": start.isoformat(),
-                "timezone": "UTC",
+                "timezone": "Asia/Tokyo",
                 "sources": ["csv"],
                 "coverage_percent": 100,
             },
@@ -154,7 +154,11 @@ def test_owned_report_summary_pdf_and_consumption_csv():
             page.extract_text() or ""
             for page in PdfReader(io.BytesIO(pdf.content)).pages
         )
-        assert "Next 24 Hours Energy Forecast Report" in day_pdf_text
+        assert "24-Hour Energy Forecast Report" in day_pdf_text
+        assert "Forecast window:" in day_pdf_text
+        assert "2026-07-02T19:00:00+09:00" in day_pdf_text
+        assert "2026-07-03T19:00:00+09:00" in day_pdf_text
+        assert "expired" in day_pdf_text
         assert "Output: 24 hourly energy values in kWh across 24 hours" in day_pdf_text
         assert (
             client.get(

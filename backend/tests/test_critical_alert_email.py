@@ -15,6 +15,7 @@ from app.main import app
 from app.models import Alert, AlertConfig, EmailOutbox, SmartMeterReading, User
 from app.schemas import MeterSample
 from app.services.auth_service import create_access_token, hash_password
+from app.services.worker_health_service import record_worker_success
 from app.services.email_providers import CapturingMailProvider
 from app.services.email_service import process_due_email
 from app.services.email_templates import render_email
@@ -314,6 +315,8 @@ def test_config_exposes_eligibility_and_rejects_invalid_opt_in(db, monkeypatch):
         assert rejected.status_code == 409
         assert rejected.json()["detail"]["code"] == "alert_email_delivery_unavailable"
 
+        record_worker_success(db, "email")
+        db.commit()
         enabled = client.post(
             "/api/v1/alerts/config",
             headers=verified_headers,

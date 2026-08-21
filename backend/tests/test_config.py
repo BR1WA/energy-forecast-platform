@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import Settings
+from app.config import Settings, get_settings
 
 
 LEGAL_CONFIGURATION = {
@@ -9,6 +9,13 @@ LEGAL_CONFIGURATION = {
     "SUPPORT_EMAIL": "support@example.test",
     "LEGAL_EFFECTIVE_DATE": "2026-07-23",
 }
+
+
+def test_test_bootstrap_does_not_inherit_operator_forecast_flags():
+    settings = get_settings()
+
+    assert settings.FORECAST_168H_ENABLED is False
+    assert settings.FORECAST_30D_ENABLED is False
 
 
 def test_production_rejects_placeholder_secrets():

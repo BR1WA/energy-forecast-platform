@@ -1,11 +1,12 @@
 """training/baselines/__init__.py — Model registry for the training CLI."""
+from importlib.util import find_spec
+
 from .base import ForecastModel
 from .persistence import PersistenceModel
 from .seasonal_naive import SeasonalNaiveModel
 from .linear import LinearModel
 from .ridge import RidgeModel
 from .random_forest import RandomForestModel
-from training.models.patchtst import PatchTSTModel
 
 _REGISTRY = {
     "persistence":    PersistenceModel,
@@ -13,8 +14,15 @@ _REGISTRY = {
     "linear":         LinearModel,
     "ridge":          RidgeModel,
     "random_forest":  RandomForestModel,
-    "patchtst":       PatchTSTModel,
 }
+
+# PatchTST uses the optional Transformers stack. Keep the general training
+# pipeline importable for the CI test profile, which intentionally installs
+# only the CPU Torch stack; the model is registered whenever its dependency is
+# installed through the foundation profile.
+if find_spec("transformers") is not None:
+    from training.models.patchtst import PatchTSTModel
+    _REGISTRY["patchtst"] = PatchTSTModel
 
 # XGBoost is optional — only register if the package is installed
 try:

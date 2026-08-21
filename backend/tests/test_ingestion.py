@@ -10,6 +10,7 @@ from app.main import app
 from app.models import SmartMeterReading, User
 from app.services.auth_service import create_access_token, hash_password
 from app.services.site_service import ensure_default_site, get_default_meter
+from app.services.worker_health_service import record_worker_success
 
 
 engine = create_engine(
@@ -156,6 +157,8 @@ class TestMeterIngestion(unittest.TestCase):
 
     def test_push_and_explicit_simulator_cannot_write_concurrently(self):
         key = self._push_key()
+        record_worker_success(self.db, "simulation")
+        self.db.commit()
         started = client.post("/api/v1/simulation/start", headers=self.headers)
         self.assertEqual(started.status_code, 200)
 
@@ -173,6 +176,11 @@ class TestMeterIngestion(unittest.TestCase):
         self.assertEqual(rotated.status_code, 200)
         status_response = client.get("/api/v1/simulation/status", headers=self.headers)
         self.assertFalse(status_response.json()["is_running"])
+
+    def test_simulator_start_is_unavailable_without_a_recent_worker_heartbeat(self):
+        response = client.post("/api/v1/simulation/start", headers=self.headers)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"]["code"], "simulation_worker_unavailable")
 
     def test_simulator_configuration_is_strict_and_bounded(self):
         excessive_load = client.post(

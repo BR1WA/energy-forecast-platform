@@ -16,6 +16,12 @@ from app.limiter import limiter
 from app.models import Alert, Forecast, Recommendation, Site, SiteSettings, User
 from app.schemas import AnalyticsSummary, ReportForecastItem
 from app.services.auth_service import get_current_user
+from app.services.forecast_window_service import (
+    forecast_freshness_status,
+    forecast_window,
+    format_forecast_timestamp,
+    positive_int,
+)
 from app.services.product_forecast_service import PRODUCT_MODEL_NAMES
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics"])
@@ -42,7 +48,9 @@ def _report_item(forecast: Forecast) -> ReportForecastItem:
         method=snapshot.get("method", "unknown"),
         horizon_hours=forecast.horizon or 24,
         created_at=forecast.created_at,
-        forecast_start=snapshot.get("forecast_origin"),
+        forecast_start=forecast_window(
+            snapshot, fallback_target_count=len(forecast.predictions or [])
+        )[0],
         peak_hourly_kwh=max(values) if values and resolution == "hourly" else None,
         total_kwh=sum(values) if values else None,
     )
@@ -154,7 +162,7 @@ def export_pdf_report(
             else (
                 "7-Day / 168-Hour Energy Forecast Report"
                 if report_horizon == 168
-                else "Next 24 Hours Energy Forecast Report"
+                else "24-Hour Energy Forecast Report"
             )
         )
     story = [Paragraph(report_title, styles["Title"]), Spacer(1, 10)]
@@ -189,14 +197,22 @@ def export_pdf_report(
         )
         values = _forecast_values(forecast)
         horizon_hours = forecast.horizon or len(forecast.predictions or []) or 24
-        target_count = int(
-            snapshot.get("target_count", len(forecast.predictions or []))
+        target_count = positive_int(
+            snapshot.get("target_count"), len(forecast.predictions or [])
         )
-        target_interval_hours = int(snapshot.get("target_interval_hours", 1))
+        target_interval_hours = positive_int(snapshot.get("target_interval_hours"), 1)
         resolution = snapshot.get("resolution", "hourly")
         resolution_label = "daily" if resolution == "daily" else "hourly"
-        origin_text = snapshot.get("forecast_origin")
-        origin = datetime.fromisoformat(origin_text) if origin_text else None
+        presentation_timezone = str(
+            snapshot.get("timezone") or (site.timezone if site else "UTC")
+        )
+        origin, forecast_end = forecast_window(
+            snapshot, fallback_target_count=len(forecast.predictions or [])
+        )
+        timing_status = forecast_freshness_status(
+            snapshot,
+            fallback_target_count=len(forecast.predictions or []),
+        ).replace("_", " ")
         sources = ", ".join(snapshot.get("sources", [])) or "Not recorded"
         story.extend(
             [
@@ -205,11 +221,15 @@ def export_pdf_report(
                     f"Site: {site.name if site else 'Not recorded'}", styles["BodyText"]
                 ),
                 Paragraph(
-                    f"Timezone: {snapshot.get('timezone') or (site.timezone if site else 'Not recorded')}",
+                    f"Timezone: {presentation_timezone}",
                     styles["BodyText"],
                 ),
                 Paragraph(
                     f"Input period: {forecast.input_start.isoformat() if forecast.input_start else 'Not recorded'} to {forecast.input_end.isoformat() if forecast.input_end else 'Not recorded'}",
+                    styles["BodyText"],
+                ),
+                Paragraph(
+                    f"Forecast window: {format_forecast_timestamp(origin, presentation_timezone)} to {format_forecast_timestamp(forecast_end, presentation_timezone)} ({timing_status})",
                     styles["BodyText"],
                 ),
                 Paragraph(f"Data source(s): {sources}", styles["BodyText"]),
@@ -287,7 +307,9 @@ def export_pdf_report(
             )
             rows.append(
                 [
-                    timestamp.isoformat() if timestamp else f"H+{index + 1}",
+                    format_forecast_timestamp(timestamp, presentation_timezone)
+                    if timestamp
+                    else f"H+{index + 1}",
                     (
                         f"{float(row[1]):.3f}"
                         if len(row) > 1 and row[1] is not None

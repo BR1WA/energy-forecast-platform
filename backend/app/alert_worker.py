@@ -7,6 +7,7 @@ import time
 from app.config import get_settings
 from app.database import SessionLocal
 from app.services.alert_service import alert_service
+from app.services.worker_health_service import record_worker_success
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s - %(message)s")
@@ -17,6 +18,7 @@ def run_once() -> int:
     db = SessionLocal()
     try:
         alerts = alert_service.evaluate_missing_push_data(db)
+        record_worker_success(db, "alerts")
         db.commit()
         return len(alerts)
     except Exception:

@@ -9,6 +9,7 @@ from app.database import get_db
 from app.services.product_forecast_service import product_forecast_service
 from app.config import get_settings
 from app.models import EmailOutbox
+from app.services.worker_health_service import worker_statuses
 
 
 router = APIRouter(prefix="/api/v1/system", tags=["System"])
@@ -37,6 +38,18 @@ def build_readiness(db: Session) -> dict:
     if settings.EMAIL_DELIVERY_ENABLED:
         for state in mail_counts:
             mail_counts[state] = db.query(EmailOutbox).filter(EmailOutbox.status == state).count()
+    workers = worker_statuses(db)
+    email_status = (
+        "disabled"
+        if not settings.EMAIL_DELIVERY_ENABLED
+        else (
+            "unavailable"
+            if not workers["email"]["operational"]
+            else "degraded"
+            if mail_counts["dead"]
+            else "ready"
+        )
+    )
     return {
         "status": "ready" if ready else "not_ready",
         "ready": ready,
@@ -56,9 +69,10 @@ def build_readiness(db: Session) -> dict:
         "forecast_artifacts": forecast_artifacts,
         "email": {
             "enabled": settings.EMAIL_DELIVERY_ENABLED,
-            "status": "disabled" if not settings.EMAIL_DELIVERY_ENABLED else ("degraded" if mail_counts["dead"] else "ready"),
+            "status": email_status,
             **mail_counts,
         },
+        "workers": workers,
         "uptime_seconds": int(time.time() - START_TIME),
     }
 
@@ -84,6 +98,7 @@ def get_health(db: Session = Depends(get_db)):
         "database": readiness["database"]["status"],
         "forecast": readiness["forecast"]["status"],
         "email": readiness["email"],
+        "workers": readiness["workers"],
         "ready": readiness["ready"],
         "uptime": readiness["uptime_seconds"],
     }

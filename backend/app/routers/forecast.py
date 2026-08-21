@@ -21,6 +21,7 @@ from app.schemas import (
 from app.services.auth_service import get_current_user
 from app.services.audit_service import record_audit_event
 from app.services.forecast_demo_service import forecast_demo_service
+from app.services.forecast_window_service import forecast_freshness_status, forecast_window, positive_int
 from app.services.product_forecast_service import (
     LOOKBACK_HOURS,
     PRODUCT_MODEL_NAMES,
@@ -41,19 +42,40 @@ def _capability_error(exc: ForecastCapabilityError) -> HTTPException:
     )
 
 
-def _serialize(forecast: Forecast) -> dict:
+def _forecast_window(forecast: Forecast) -> tuple[datetime | None, datetime | None]:
+    return forecast_window(
+        forecast.input_snapshot or {},
+        fallback_target_count=len(forecast.predictions or []),
+    )
+
+
+def _freshness_status(
+    forecast: Forecast, *, now: datetime | None = None
+) -> tuple[str, datetime | None, datetime | None]:
+    start, end = _forecast_window(forecast)
+    return (
+        forecast_freshness_status(
+            forecast.input_snapshot or {},
+            fallback_target_count=len(forecast.predictions or []),
+            now=now,
+        ),
+        start,
+        end,
+    )
+
+
+def _serialize(forecast: Forecast, *, now: datetime | None = None) -> dict:
     snapshot = forecast.input_snapshot or {}
-    origin = snapshot.get("forecast_origin")
+    freshness_status, forecast_start, forecast_end = _freshness_status(forecast, now=now)
     rows = forecast.predictions or []
-    target_interval_hours = int(snapshot.get("target_interval_hours", 1))
+    target_interval_hours = positive_int(snapshot.get("target_interval_hours"), 1)
     resolution = snapshot.get("resolution", "hourly")
     points = []
-    if origin:
-        parsed_origin = datetime.fromisoformat(origin)
+    if forecast_start is not None:
         for index, row in enumerate(rows):
             points.append(
                 {
-                    "timestamp": parsed_origin
+                    "timestamp": forecast_start
                     + timedelta(hours=index * target_interval_hours),
                     "p50_kwh": float(row[0]),
                     "p10_kwh": (
@@ -73,13 +95,14 @@ def _serialize(forecast: Forecast) -> dict:
         "unit": "kWh",
         "timezone": snapshot.get("timezone", "UTC"),
         "horizon_hours": forecast.horizon or 24,
-        "target_count": int(snapshot.get("target_count", len(rows))),
+        "target_count": positive_int(snapshot.get("target_count"), len(rows)),
         "target_interval_hours": target_interval_hours,
         "resolution": resolution,
         "input_start": forecast.input_start,
         "input_end": forecast.input_end,
-        "forecast_start": origin,
-        "forecast_end": snapshot.get("forecast_end"),
+        "forecast_start": forecast_start,
+        "forecast_end": forecast_end,
+        "freshness_status": freshness_status,
         "coverage_percent": snapshot.get("coverage_percent", 0),
         "observed_hours": snapshot.get("observed_hours", 0),
         "maximum_gap_hours": snapshot.get("maximum_gap_hours", 0),
@@ -253,16 +276,18 @@ def get_forecast_history(
             "model_name": forecast.model_name,
             "method": (forecast.input_snapshot or {}).get("method", "unknown"),
             "horizon_hours": forecast.horizon or 24,
-            "target_count": int(
-                (forecast.input_snapshot or {}).get(
-                    "target_count", len(forecast.predictions or [])
-                )
+            "target_count": positive_int(
+                (forecast.input_snapshot or {}).get("target_count"),
+                len(forecast.predictions or []),
             ),
-            "target_interval_hours": int(
-                (forecast.input_snapshot or {}).get("target_interval_hours", 1)
+            "target_interval_hours": positive_int(
+                (forecast.input_snapshot or {}).get("target_interval_hours"), 1
             ),
             "resolution": (forecast.input_snapshot or {}).get("resolution", "hourly"),
-            "forecast_start": (forecast.input_snapshot or {}).get("forecast_origin"),
+            "timezone": (forecast.input_snapshot or {}).get("timezone") or "UTC",
+            "forecast_start": _forecast_window(forecast)[0],
+            "forecast_end": _forecast_window(forecast)[1],
+            "freshness_status": _freshness_status(forecast)[0],
             "created_at": forecast.created_at,
         }
         for forecast in forecasts

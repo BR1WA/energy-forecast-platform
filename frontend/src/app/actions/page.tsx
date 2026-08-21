@@ -31,7 +31,7 @@ type ActionFilter = 'attention' | 'monitoring' | 'completed' | 'all';
 type EmailCapabilityState =
   | { status: 'loading' }
   | { status: 'available' }
-  | { status: 'unavailable'; reason: 'mail_disabled' | 'email_unverified' }
+  | { status: 'unavailable'; reason: 'mail_disabled' | 'email_unverified' | 'email_worker_unavailable' }
   | { status: 'unknown' };
 
 const severityStyles: Record<Alert['severity'], string> = {
@@ -61,7 +61,7 @@ function RecommendationEvidence({ item }: { item: Recommendation }) {
 
 function emailCapabilityFromConfig(config: AlertConfig): EmailCapabilityState {
   if (config.email_delivery_available) return { status: 'available' };
-  if (config.email_delivery_unavailable_reason !== 'mail_disabled' && config.email_delivery_unavailable_reason !== 'email_unverified') {
+  if (config.email_delivery_unavailable_reason !== 'mail_disabled' && config.email_delivery_unavailable_reason !== 'email_unverified' && config.email_delivery_unavailable_reason !== 'email_worker_unavailable') {
     return { status: 'unknown' };
   }
   return {
@@ -80,6 +80,8 @@ export default function ActionsPage() {
     email_enabled: false,
     email_delivery_available: false,
     email_delivery_unavailable_reason: null,
+    missing_data_monitoring_available: false,
+    missing_data_monitoring_last_success_at: null,
   });
   const [emailCapability, setEmailCapability] = useState<EmailCapabilityState>({ status: 'loading' });
   const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
@@ -242,6 +244,8 @@ export default function ActionsPage() {
       : emailCapability.status === 'unavailable'
         ? emailCapability.reason === 'email_unverified'
           ? 'Verify your email to enable email alerts.'
+          : emailCapability.reason === 'email_worker_unavailable'
+            ? 'Email delivery is unavailable because its dedicated worker is not operational.'
           : 'Email delivery is unavailable.'
         : config.email_enabled
           ? 'Enabled for newly created critical incidents.'
@@ -308,7 +312,7 @@ export default function ActionsPage() {
             <CardContent className="space-y-5">
               <div className="space-y-2"><Label htmlFor="threshold">High load threshold (kW)</Label><Input disabled={!hasLoadedConfig} id="threshold" type="number" min="0.1" max="20" step="0.1" value={config.high_consumption_threshold} onChange={(event) => setConfig((value) => ({ ...value, high_consumption_threshold: Number(event.target.value) }))} /></div>
               <div className="space-y-2"><Label htmlFor="cooldown">Repeat cooldown (minutes)</Label><Input disabled={!hasLoadedConfig} id="cooldown" type="number" min="5" max="1440" step="5" value={config.cooldown_minutes} onChange={(event) => setConfig((value) => ({ ...value, cooldown_minutes: Number(event.target.value) }))} /></div>
-              <div className="space-y-2"><Label htmlFor="missing-data">Missing push data after (minutes)</Label><Input disabled={!hasLoadedConfig} id="missing-data" type="number" min="5" max="10080" step="5" value={config.missing_data_minutes} onChange={(event) => setConfig((value) => ({ ...value, missing_data_minutes: Number(event.target.value) }))} /></div>
+              <div className="space-y-2"><Label htmlFor="missing-data">Missing push data after (minutes)</Label><Input disabled={!hasLoadedConfig} id="missing-data" type="number" min="5" max="10080" step="5" value={config.missing_data_minutes} onChange={(event) => setConfig((value) => ({ ...value, missing_data_minutes: Number(event.target.value) }))} />{hasLoadedConfig ? <p className={config.missing_data_monitoring_available ? 'text-xs text-slate-500' : 'text-xs text-amber-300'}>{config.missing_data_monitoring_available ? `Checked by the alert worker${config.missing_data_monitoring_last_success_at ? `; last successful loop ${parseDate(config.missing_data_monitoring_last_success_at).toLocaleString()}.` : '.'}` : 'Missing push-data monitoring is unavailable because the alert worker is not operational.'}</p> : null}</div>
               <div className="space-y-3 border-t border-white/10 pt-4">
                 <div className="flex items-start gap-3">
                   <input aria-describedby="critical-email-status" checked={config.email_enabled} className="mt-1 h-4 w-4 accent-blue-500" disabled={emailCapability.status !== 'available'} id="critical-email-enabled" onChange={(event) => setConfig((value) => ({ ...value, email_enabled: event.target.checked }))} type="checkbox" />

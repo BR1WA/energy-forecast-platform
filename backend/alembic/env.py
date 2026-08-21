@@ -26,7 +26,7 @@ from app.database import Base
 from app.models import (
     User, Forecast, AlertConfig, Alert, SmartMeterReading,
     ModelRegistry, RefreshToken, EnergyBudget, SystemSettings, Site, Meter,
-    SiteSettings, SimulationSession, IngestionBatch, AuditEvent, AccountActionToken, AuthIdentity, OAuthChallenge, EmailOutbox,
+    SiteSettings, SimulationSession, IngestionBatch, AuditEvent, AccountActionToken, AuthIdentity, OAuthChallenge, EmailOutbox, WorkerHeartbeat,
 )
 
 
