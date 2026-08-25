@@ -94,6 +94,9 @@ can be advertised by the API.
 
 - Independently packaged Global TFT models for the next 24 and 168 hourly kWh
   values, plus a Chronos-2 LoRA model for 30 daily kWh values.
+- Capability-driven horizon controls expose **Next 24 hours**, **Next 7 days**,
+  and **Next 30 days** when their corresponding backend artifacts are enabled;
+  the month control produces 30 daily targets rather than 720 hourly values.
 - q10, q50, and q90 predictions with clear uncertainty visualization.
 - Coverage, missing-gap, lookback, artifact-integrity, and runtime-readiness gates.
 - Labelled seasonal-naive fallback if an accepted input cannot complete model
@@ -388,32 +391,33 @@ for any public deployment.
 
 ## Quality evidence
 
-The latest repository-wide local revalidation completed on 16 August 2026. The
-last promoted CI and Azure evidence remains the 15 August 2026 release at commit
-`d25295b`; it is retained separately so local source changes are not presented as
-already deployed. The current source totals are:
+The latest complete application CI run passed on 21 August 2026 at commit
+`4bd8d174f8d33c8ef689642d4d31fb1443f6cd37`. The last verified Azure promotion
+remains the separate 15 August 2026 release at commit `d25295b`; keeping those
+identities distinct prevents newer source from being presented as already
+deployed. The latest application CI results are:
 
 | Gate | Result |
 |---|---|
-| Backend and training suite on SQLite | 142 passed; 4 explicit PostgreSQL-only skips; 82% application coverage |
-| Fresh migrated PostgreSQL suite | 146 passed; 0 skipped; all 18 migrations applied; zero Alembic drift |
-| Hash-locked ML-enabled backend test image | 117 passed; 4 skipped; non-root UID 10001; compiler absent |
-| Frontend lint, type check, production build | Passed; 25 routes generated |
-| Playwright six-project matrix | 204/204 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
+| Fresh migrated PostgreSQL backend and training suite | 168 passed; 0 skipped; 82.59% application coverage; all 18 migrations applied; zero Alembic drift |
+| Hash-locked backend test image | 127 passed; 16 environment-specific skips |
+| Frontend lint, type check, production build | Passed; 24 routes generated |
+| Playwright six-project matrix | 209/209 passed across desktop, 360 px, 390 px iPhone, and 768 px profiles |
 | Production npm dependency audit | 0 known vulnerabilities |
-| Production Python dependency audits | 0 known vulnerabilities in runtime, development, and foundation locks; custom CPU Torch wheel is outside PyPI's audit database |
-| Secret scan | 407 commits scanned; no leaks found |
-| Compose and images | Seven-service configuration valid; non-root backend/frontend images and model prefetch verified locally |
+| Production Python dependency audits | 0 known vulnerabilities in runtime, development, ML, and foundation locks; the custom CPU Torch wheel is outside PyPI's audit database |
+| Secret scan | CI committed-history gate passed; no leaks found |
+| Compose and images | Seven-service configuration built and reached frontend, API liveness, and model-readiness smoke gates |
 | Forecast readiness | Azure reports the 24-hour TFT, 168-hour TFT, and 30-day daily Chronos-2 artifact available, enabled, and warmed |
 | Azure revisions | Web/API/email worker `v4-d25295b`; healthy; web and API receive 100% traffic |
 
-The current source CI definition includes full-history secret scanning, fresh
-PostgreSQL migration/drift checks, hash-enforced Python installation, dependency
+The current source CI definition includes secret scanning with a full-history
+checkout, fresh PostgreSQL migration/drift checks, hash-enforced Python
+installation, dependency
 audits, container tests, and a Docker Compose smoke test. It covers persistent
 simulator history and catch-up, the
 simulator-to-CSV confirmation flow, and permanent account deletion with a full
 one-year synthetic history. See the
-[green GitHub Actions run](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31893388429)
+[green GitHub Actions run](https://github.com/BR1WA/energy-forecast-platform/actions/runs/32512591156)
 and the separate
 [immutable Azure image build](https://github.com/BR1WA/energy-forecast-platform/actions/runs/31894053504).
 
