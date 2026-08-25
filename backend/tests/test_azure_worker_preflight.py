@@ -41,6 +41,8 @@ function Assert-Throws([scriptblock]$Action) {{
 MOCK_APPLY_HARNESS = r"""
 $ErrorActionPreference = 'Stop'
 $global:AzCalls = [System.Collections.Generic.List[object]]::new()
+$global:ArmCalls = [System.Collections.Generic.List[object]]::new()
+$global:AzureEvents = [System.Collections.Generic.List[object]]::new()
 $global:MockRevisionConflict = $false
 $global:MockReadFailure = ''
 $global:MockMutationFailure = ''
@@ -74,7 +76,9 @@ function Test-AzWrite($Call) {
 
 function Assert-NoAzWrites {
     $writes = @($global:AzCalls | Where-Object { Test-AzWrite $_ })
-    if ($writes.Count -ne 0) { throw "Expected zero Azure writes, observed $($writes.Count)." }
+    if ($writes.Count -ne 0 -or $global:ArmCalls.Count -ne 0) {
+        throw "Expected zero Azure writes, observed $($writes.Count) CLI and $($global:ArmCalls.Count) ARM writes."
+    }
 }
 
 function Assert-ScriptFails([scriptblock]$Action, [string]$Pattern) {
@@ -144,9 +148,49 @@ function New-EmailApp {
     }
 }
 
+function global:Invoke-RestMethod {
+    param(
+        [string]$Method,
+        [string]$Uri,
+        [hashtable]$Headers,
+        [string]$ContentType,
+        [string]$Body,
+        [int]$TimeoutSec
+    )
+    if ($Method -ne 'Put') { throw "Unexpected ARM method: $Method" }
+    if ($Uri -notmatch '/containerApps/(?<name>[^?]+)\?api-version=2025-01-01$') {
+        throw "Unexpected ARM URI: $Uri"
+    }
+    $name = $Matches.name
+    $global:ArmCalls.Add([pscustomobject]@{
+        Method = $Method
+        Uri = $Uri
+        Headers = $Headers
+        ContentType = $ContentType
+        Body = $Body
+        Name = $name
+    })
+    $global:AzureEvents.Add([pscustomobject]@{
+        Kind = 'arm'
+        IsWrite = $true
+        Name = $name
+        Operation = 'put'
+    })
+    if ($global:MockMutationFailure -eq "arm put:$name") {
+        throw 'Simulated ARM mutation failure.'
+    }
+    return [pscustomobject]@{ properties = [pscustomobject]@{ provisioningState = 'Succeeded' } }
+}
+
 function global:az {
     $call = @($args | ForEach-Object { [string]$_ })
     $global:AzCalls.Add([object]$call)
+    $global:AzureEvents.Add([pscustomobject]@{
+        Kind = 'az'
+        IsWrite = (Test-AzWrite $call)
+        Name = (Get-CallValue $call '--name')
+        Operation = "$($call[0]) $($call[1])"
+    })
     $global:LASTEXITCODE = 0
     $name = Get-CallValue $call '--name'
     $operation = "$($call[0]) $($call[1])"
@@ -162,6 +206,7 @@ function global:az {
         return
     }
     if ($call[0] -eq 'account' -and $call[1] -eq 'show') { return $subscriptionId }
+    if ($call[0] -eq 'account' -and $call[1] -eq 'get-access-token') { return 'test-arm-token' }
     if ($call[0] -eq 'group' -and $call[1] -eq 'show') { return }
     if ($call[0] -eq 'containerapp' -and $call[1] -eq 'list') {
         return @((New-ApiApp), (New-EmailApp)) | ConvertTo-Json -Depth 15 -Compress
@@ -174,7 +219,7 @@ function global:az {
     }
     if ($call[0] -eq 'containerapp' -and $call[1] -eq 'revision') {
         if ($global:MockRevisionConflict) {
-            return @([pscustomobject]@{ name = "$emailName-review-email" }) | ConvertTo-Json -Compress
+            return @([pscustomobject]@{ name = "$emailName--review-email" }) | ConvertTo-Json -Compress
         }
         return '[]'
     }
@@ -242,7 +287,7 @@ def test_powershell_preflight_rejects_duplicate_targets_and_revision_conflicts()
 Assert-Throws { New-WorkerPlans 'ca-api' 'ca-email' 'ca-worker' 'ca-worker' 'review' }
 $plans = New-WorkerPlans 'ca-api' 'ca-email' 'ca-simulation' 'ca-alert' 'review'
 $revisions = @{
-  'ca-email' = @([pscustomobject]@{ name = 'ca-email-review-email' })
+  'ca-email' = @([pscustomobject]@{ name = 'ca-email--review-email' })
   'ca-simulation' = @()
   'ca-alert' = @()
 }
@@ -278,6 +323,48 @@ $names = @($configuration.Environment | ForEach-Object { $_.name })
 if ($names -contains 'SMTP_USERNAME' -or $names -contains 'SMTP_PASSWORD' -or $names -contains 'GOOGLE_CLIENT_ID') { throw 'Non-email worker received an API-only credential.' }
 if ((($configuration.Environment | Where-Object name -eq 'EMAIL_DELIVERY_ENABLED').value) -ne 'false') { throw 'Non-email worker did not disable email delivery.' }
 if ((($configuration.Environment | Where-Object name -eq 'GOOGLE_AUTH_ENABLED').value) -ne 'false') { throw 'Non-email worker did not disable Google authentication.' }
+"""
+    )
+
+
+def test_worker_command_builder_covers_email_simulation_and_alert():
+    run_powershell(
+        """
+$plans = New-WorkerPlans 'ca-api' 'ca-email' 'ca-simulation' 'ca-alert' 'review'
+foreach ($plan in $plans) {
+    $expectedArguments = @('-m', 'app.cli', $plan.Command)
+    $actualArguments = @(Get-WorkerCommandArguments $plan.Command)
+    if (($actualArguments -join '|') -ne ($expectedArguments -join '|')) {
+        throw "Unexpected startup arguments for $($plan.Command): $($actualArguments -join '|')"
+    }
+    $expectedCommand = @('python') + $expectedArguments
+    $actualCommand = @(Get-WorkerCommand $plan.Command)
+    if (($actualCommand -join '|') -ne ($expectedCommand -join '|')) {
+        throw "Unexpected startup command for $($plan.Command): $($actualCommand -join '|')"
+    }
+}
+$api = [pscustomobject]@{
+    location = 'westeurope'
+    properties = [pscustomobject]@{ managedEnvironmentId = '/subscriptions/test/resourceGroups/test/providers/Microsoft.App/managedEnvironments/test' }
+}
+$registry = [pscustomobject]@{ server = 'example.azurecr.io'; username = 'registry-user' }
+$workerConfiguration = [pscustomobject]@{
+    Environment = @([ordered]@{ name = 'DATABASE_URL'; secretRef = 'database-url' })
+    SecretBindings = @([pscustomobject]@{ Name = 'database-url'; Value = $null })
+}
+foreach ($plan in ($plans | Select-Object -Skip 1)) {
+    $definition = New-WorkerDefinition $plan $api $registry $workerConfiguration
+    $definitionCommand = @($definition.properties.template.containers[0].command)
+    $definitionArguments = @($definition.properties.template.containers[0].args)
+    $expectedCommand = @('python')
+    $expectedArguments = @('-m', 'app.cli', $plan.Command)
+    if (($definitionCommand -join '|') -ne ($expectedCommand -join '|')) {
+        throw "Unexpected structured startup command for $($plan.Command): $($definitionCommand -join '|')"
+    }
+    if (($definitionArguments -join '|') -ne ($expectedArguments -join '|')) {
+        throw "Unexpected structured startup arguments for $($plan.Command): $($definitionArguments -join '|')"
+    }
+}
 """
     )
 
@@ -319,42 +406,50 @@ def test_complete_apply_creates_workers_with_atomic_secrets_and_email_last():
     result = run_apply_powershell(
         r"""
 Invoke-TestApply | Out-Null
-$writes = @($global:AzCalls | Where-Object { Test-AzWrite $_ })
+$writes = @($global:AzureEvents | Where-Object IsWrite)
 if ($writes.Count -ne 3) { throw "Expected three writes, observed $($writes.Count)." }
-$writeSummary = @($writes | ForEach-Object { "$($_[0]) $($_[1]):$(Get-CallValue $_ '--name')" })
+$writeSummary = @($writes | ForEach-Object { "$($_.Kind) $($_.Operation):$($_.Name)" })
 $expectedSummary = @(
-    "containerapp create:$simulationName",
-    "containerapp create:$alertName",
-    "containerapp update:$emailName"
+    "arm put:$simulationName",
+    "arm put:$alertName",
+    "az containerapp update:$emailName"
 )
 if (($writeSummary -join '|') -ne ($expectedSummary -join '|')) {
     throw "Unexpected mutation order: $($writeSummary -join ', ')"
 }
 
-$firstWriteIndex = -1
-for ($index = 0; $index -lt $global:AzCalls.Count; $index++) {
-    if (Test-AzWrite $global:AzCalls[$index]) { $firstWriteIndex = $index; break }
-}
+$firstWriteIndex = [Array]::IndexOf([object[]]$global:AzureEvents, $writes[0])
 if ($firstWriteIndex -lt 1) { throw 'Expected read-only preflight before the first write.' }
-for ($index = 0; $index -lt $firstWriteIndex; $index++) {
-    if (Test-AzWrite $global:AzCalls[$index]) { throw 'A write occurred inside preflight.' }
+$preflight = @($global:AzureEvents | Select-Object -First $firstWriteIndex)
+if (@($preflight | Where-Object IsWrite).Count) { throw 'A write occurred inside preflight.' }
+if (-not @($global:AzCalls | Where-Object { $_[0] -eq 'account' -and $_[1] -eq 'get-access-token' }).Count) {
+    throw 'ARM authentication was not completed during preflight.'
 }
 
 foreach ($worker in @(
     [pscustomobject]@{ Name = $simulationName; Command = 'run-simulation-worker'; Suffix = 'review-simulation' },
     [pscustomobject]@{ Name = $alertName; Command = 'run-alert-worker'; Suffix = 'review-alert' }
 )) {
-    $create = @($writes | Where-Object { $_[1] -eq 'create' -and (Get-CallValue $_ '--name') -eq $worker.Name })[0]
-    if ($null -eq $create) { throw "Missing create call for $($worker.Name)." }
-    if ($create -contains '--yaml') { throw 'New-worker create must not use YAML.' }
-    if ($create -contains '--ingress') { throw 'Worker create introduced ingress.' }
-    if ((Get-CallValue $create '--image') -ne $digestImage) { throw 'Worker did not use the immutable digest.' }
-    if ((Get-CallValue $create '--command') -ne 'python') { throw 'Worker command executable is incorrect.' }
-    if ((Get-CallValue $create '--revision-suffix') -ne $worker.Suffix) { throw 'Worker revision suffix is incorrect.' }
-    $commandArguments = @(Get-CallSection $create '--args' '--env-vars')
-    if (($commandArguments -join '|') -ne ("-m|app.cli|$($worker.Command)")) { throw 'Worker command arguments are incorrect.' }
+    $create = @($global:ArmCalls | Where-Object Name -eq $worker.Name)[0]
+    if ($null -eq $create) { throw "Missing ARM PUT for $($worker.Name)." }
+    $expectedUri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.App/containerApps/$($worker.Name)?api-version=2025-01-01"
+    if ($create.Uri -ne $expectedUri) { throw "Unexpected ARM target URI: $($create.Uri)" }
+    if ($create.Headers.Authorization -ne 'Bearer test-arm-token') { throw 'ARM bearer token was not supplied.' }
+    if ($create.ContentType -ne 'application/json') { throw 'ARM request content type is incorrect.' }
+    if ($create.Body -match '":null') { throw 'ARM worker definition contains a null field.' }
+    $definition = $create.Body | ConvertFrom-Json
+    if ($null -ne $definition.properties.configuration.ingress) { throw 'Worker create introduced ingress.' }
+    $container = @($definition.properties.template.containers)[0]
+    if ($container.image -ne $digestImage) { throw 'Worker did not use the immutable digest.' }
+    if ((@($container.command) -join '|') -ne 'python') { throw 'Worker command executable is incorrect.' }
+    if ((@($container.args) -join '|') -ne ("-m|app.cli|$($worker.Command)")) { throw 'Worker command arguments are incorrect.' }
+    if (@($container.args).Count -ne 3) { throw 'Worker startup arguments were collapsed.' }
+    if ($definition.properties.template.revisionSuffix -ne $worker.Suffix) { throw 'Worker revision suffix is incorrect.' }
+    if ($container.resources.cpu -ne 0.5 -or $container.resources.memory -ne '1Gi') { throw 'Worker resources are not least privileged.' }
 
-    $environment = @(Get-CallSection $create '--env-vars' '--secrets')
+    $environment = @($container.env | ForEach-Object {
+        if ($_.secretRef) { "$($_.name)=secretref:$($_.secretRef)" } else { "$($_.name)=$($_.value)" }
+    })
     foreach ($required in @(
         'DATABASE_URL=secretref:database-url',
         'JWT_SECRET_KEY=secretref:jwt-secret',
@@ -366,15 +461,20 @@ foreach ($worker in @(
     }
     if ($environment -match 'SMTP_|GOOGLE_CLIENT_ID') { throw 'Worker inherited SMTP or Google configuration.' }
 
-    $secrets = @(Get-CallSection $create '--secrets' '--registry-server')
-    foreach ($secretName in @('database-url', 'jwt-secret', 'admin-password')) {
-        if (-not @($secrets | Where-Object { $_ -like "$secretName=*" })) { throw "Missing create-time secret: $secretName" }
+    $secrets = @($definition.properties.configuration.secrets)
+    foreach ($secretName in @('database-url', 'jwt-secret', 'admin-password', 'registry-password')) {
+        if (-not @($secrets | Where-Object name -eq $secretName).Count) { throw "Missing create-time secret: $secretName" }
     }
-    if ($secrets -match 'smtp|google') { throw 'Worker received an unnecessary SMTP or Google secret.' }
-    if (-not (Get-CallValue $create '--registry-password')) { throw 'Registry credential was not supplied during create.' }
+    if (@($secrets | Where-Object { $_.name -match 'smtp|google' }).Count) { throw 'Worker received an unnecessary SMTP or Google secret.' }
+    $registry = @($definition.properties.configuration.registries)[0]
+    if ($registry.passwordSecretRef -ne 'registry-password') { throw 'Registry secret reference is incorrect.' }
 }
 
-$emailUpdate = $writes[2]
+if (@($global:AzCalls | Where-Object { $_[0] -eq 'containerapp' -and $_[1] -eq 'create' }).Count) {
+    throw 'New-worker creation was routed through Azure CLI argument parsing.'
+}
+
+$emailUpdate = @($global:AzCalls | Where-Object { Test-AzWrite $_ })[0]
 if ((Get-CallValue $emailUpdate '--image') -ne $digestImage) { throw 'Email worker did not use the immutable digest.' }
 """
     )
@@ -391,12 +491,12 @@ if ((Get-CallValue $emailUpdate '--image') -ne $digestImage) { throw 'Email work
 def test_complete_apply_surfaces_mutation_failure_without_false_success():
     run_apply_powershell(
         r"""
-$global:MockMutationFailure = "containerapp create:$simulationName"
-Assert-ScriptFails { Invoke-TestApply } "Azure failed to create $simulationName"
-$writes = @($global:AzCalls | Where-Object { Test-AzWrite $_ })
+$global:MockMutationFailure = "arm put:$simulationName"
+Assert-ScriptFails { Invoke-TestApply } "Azure ARM failed to create $simulationName"
+$writes = @($global:AzureEvents | Where-Object IsWrite)
 if ($writes.Count -ne 1) { throw "Expected one attempted mutation, observed $($writes.Count)." }
-if ((Get-CallValue $writes[0] '--name') -ne $simulationName) { throw 'Unexpected mutation was attempted.' }
-if (@($writes | Where-Object { (Get-CallValue $_ '--name') -eq $emailName }).Count) { throw 'Email was mutated after worker creation failed.' }
+if ($writes[0].Name -ne $simulationName) { throw 'Unexpected mutation was attempted.' }
+if (@($writes | Where-Object Name -eq $emailName).Count) { throw 'Email was mutated after worker creation failed.' }
 """
     )
 

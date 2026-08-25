@@ -21,6 +21,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$ContainerAppApiVersion = '2025-01-01'
 $ImmutableAcrImagePattern = '^(?<registry>[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.azurecr\.io)/(?<repository>[a-z0-9](?:[a-z0-9._/-]*[a-z0-9])?)@sha256:(?<digest>[a-fA-F0-9]{64})$'
 $AcrRepositoryPattern = '^(?<registry>[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.azurecr\.io)/(?<repository>[a-z0-9](?:[a-z0-9._/-]*[a-z0-9])?)(?:@sha256:[a-fA-F0-9]{64}|:[^/@\s]+)?$'
 
@@ -83,8 +84,8 @@ function Assert-RevisionName([string]$AppName, [string]$Suffix) {
     if ($Suffix -notmatch '^[a-z](?:[a-z0-9-]*[a-z0-9])?$' -or $Suffix.Contains('--')) {
         throw "Revision suffix '$Suffix' is not valid for Azure Container Apps."
     }
-    $revisionName = "$AppName-$Suffix"
-    if ($revisionName.Length -gt 64 -or $revisionName -notmatch '^[a-z][a-z0-9-]*[a-z0-9]$') {
+    $revisionName = "$AppName--$Suffix"
+    if ($revisionName.Length -gt 64) {
         throw "Generated revision name '$revisionName' is not valid for Azure Container Apps."
     }
 }
@@ -125,6 +126,14 @@ function Get-ContainerCommand($ContainerApp) {
     return @($container.command) + @($container.args)
 }
 
+function Get-WorkerCommandArguments([string]$WorkerCommand) {
+    return [string[]]@('-m', 'app.cli', $WorkerCommand)
+}
+
+function Get-WorkerCommand([string]$WorkerCommand) {
+    return @('python') + @(Get-WorkerCommandArguments $WorkerCommand)
+}
+
 function New-WorkerPlans(
     [string]$ApiName,
     [string]$EmailName,
@@ -148,7 +157,7 @@ function New-WorkerPlans(
 
 function Assert-RevisionAvailability($Plans, [hashtable]$RevisionsByName) {
     foreach ($plan in $Plans) {
-        $revisionName = "$($plan.Name)-$($plan.RevisionSuffix)"
+        $revisionName = "$($plan.Name)--$($plan.RevisionSuffix)"
         foreach ($revision in @($RevisionsByName[$plan.Name])) {
             if ([string]::Equals([string]$revision.name, $revisionName, [System.StringComparison]::OrdinalIgnoreCase)) {
                 throw "Generated revision '$revisionName' already exists for $($plan.Name). Choose a new RevisionSuffix."
@@ -158,7 +167,7 @@ function Assert-RevisionAvailability($Plans, [hashtable]$RevisionsByName) {
 }
 
 function Assert-CompatibleWorkerTarget($Target, $Api, $Plan) {
-    $expected = @('python', '-m', 'app.cli', $Plan.Command)
+    $expected = Get-WorkerCommand $Plan.Command
     if (((Get-ContainerCommand $Target) -join "`0") -ne ($expected -join "`0")) {
         throw "$($Plan.Name) does not have the expected $($Plan.Command) command."
     }
@@ -238,7 +247,7 @@ function New-WorkerDefinition($Plan, $Api, $Registry, $WorkerConfiguration) {
     return [ordered]@{
         location = $Api.location
         properties = [ordered]@{
-            managedEnvironmentId = $Api.properties.managedEnvironmentId
+            environmentId = $Api.properties.managedEnvironmentId
             configuration = [ordered]@{
                 activeRevisionsMode = 'single'
                 registries = @(@{
@@ -252,7 +261,9 @@ function New-WorkerDefinition($Plan, $Api, $Registry, $WorkerConfiguration) {
                 containers = @(@{
                     name = $Plan.Name
                     image = $BackendImage
-                    command = @('python', '-m', 'app.cli', $Plan.Command)
+                    command = @('python')
+                    args = Get-WorkerCommandArguments $Plan.Command
+                    resources = @{ cpu = 0.5; memory = '1Gi' }
                     env = @($WorkerConfiguration.Environment)
                 })
                 scale = @{ minReplicas = 1; maxReplicas = 1 }
@@ -299,29 +310,49 @@ function Update-ExistingWorker($Plan) {
     }
 }
 
-function Create-NewWorker($Plan) {
-    $environmentArguments = New-WorkerEnvironmentArguments $Plan.WorkerConfiguration.Environment
-    $secretArguments = New-SecretArguments $Plan.AppSecretBindings
-    $registryPasswordValue = Get-PlainText $Plan.RegistryBinding.Value
-    & az containerapp create `
-        --subscription $subscriptionId `
-        --resource-group $ResourceGroup `
-        --name $Plan.Name `
-        --environment $Plan.ManagedEnvironmentId `
-        --image $BackendImage `
-        --command python `
-        --args '-m' app.cli $Plan.Command `
-        --env-vars @environmentArguments `
-        --secrets @secretArguments `
-        --registry-server $Plan.Registry.server `
-        --registry-username $Plan.Registry.username `
-        --registry-password $registryPasswordValue `
-        --revision-suffix $Plan.RevisionSuffix `
-        --min-replicas 1 `
-        --max-replicas 1 `
-        --revisions-mode single `
-        --output none
-    if ($LASTEXITCODE -ne 0) { throw "Azure failed to create $($Plan.Name)." }
+function New-WorkerCreationDefinition($Plan) {
+    $secrets = @(
+        foreach ($binding in @($Plan.SecretBindings)) {
+            [ordered]@{ name = $binding.Name; value = Get-PlainText $binding.Value }
+        }
+    )
+    return [ordered]@{
+        location = $Plan.Definition.location
+        properties = [ordered]@{
+            environmentId = $Plan.Definition.properties.environmentId
+            configuration = [ordered]@{
+                activeRevisionsMode = $Plan.Definition.properties.configuration.activeRevisionsMode
+                secrets = $secrets
+                registries = @($Plan.Definition.properties.configuration.registries)
+            }
+            template = $Plan.Definition.properties.template
+        }
+    }
+}
+
+function Get-ArmAccessToken {
+    $token = (& az account get-access-token --resource 'https://management.azure.com/' --query accessToken --output tsv).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($token)) {
+        throw 'Unable to acquire an Azure Resource Manager access token before deployment.'
+    }
+    return $token
+}
+
+function Create-NewWorker($Plan, [string]$AccessToken) {
+    $definition = New-WorkerCreationDefinition $Plan
+    $body = $definition | ConvertTo-Json -Depth 12 -Compress
+    $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.App/containerApps/$($Plan.Name)?api-version=$ContainerAppApiVersion"
+    try {
+        $response = Invoke-RestMethod -Method Put -Uri $uri `
+            -Headers @{ Authorization = "Bearer $AccessToken" } `
+            -ContentType 'application/json' -Body $body -TimeoutSec 120
+    } catch {
+        $statusCode = if ($null -ne $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 'unknown' }
+        throw "Azure ARM failed to create $($Plan.Name) (HTTP $statusCode)."
+    }
+    if ([string]$response.properties.provisioningState -eq 'Failed') {
+        throw "Azure ARM reported failed provisioning for $($Plan.Name)."
+    }
 }
 
 if (-not $Apply) {
@@ -387,7 +418,7 @@ if ($null -eq $registry -or [string]::IsNullOrWhiteSpace($registry.server) -or [
     -not [string]::Equals([string]$registry.server, $backendImageParts.Registry, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw 'The API app does not expose a compatible reusable ACR registry configuration.'
 }
-if (((Get-ContainerCommand $email) -join "`0") -ne (@('python', '-m', 'app.cli', 'run-email-worker') -join "`0")) {
+if (((Get-ContainerCommand $email) -join "`0") -ne ((Get-WorkerCommand 'run-email-worker') -join "`0")) {
     throw "$EmailContainerApp does not have the expected email worker command."
 }
 
@@ -406,12 +437,19 @@ foreach ($plan in $workerPlans | Select-Object -Skip 1) {
     $null = $plan.Definition | ConvertTo-Json -Depth 12
 }
 
+$armAccessToken = $null
+if (@($workerPlans | Where-Object { -not $_.Existing }).Count -gt 0) {
+    # Authentication is part of read-only preflight so a token failure cannot
+    # leave a partially deployed set of workers.
+    $armAccessToken = Get-ArmAccessToken
+}
+
 Write-Host "Preflight passed for subscription $subscriptionId. Applying worker revisions."
 foreach ($plan in $workerPlans | Select-Object -Skip 1) {
     if ($plan.Existing) {
         Update-ExistingWorker $plan
     } else {
-        Create-NewWorker $plan
+        Create-NewWorker $plan $armAccessToken
     }
 }
 & az containerapp update --subscription $subscriptionId --resource-group $ResourceGroup --name $EmailContainerApp --image $BackendImage --revision-suffix $workerPlans[0].RevisionSuffix --min-replicas 1 --max-replicas 1 --output none
