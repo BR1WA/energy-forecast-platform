@@ -4,11 +4,15 @@ import { expect, test, type Page } from '@playwright/test';
 async function session(page: Page, options: { registration?: boolean; unavailable?: boolean; authenticated?: boolean } = {}) {
   await page.route('http://localhost:8000/**', (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/auth/capabilities')) return route.fulfill({ status: options.unavailable ? 503 : 200, json: { email_delivery_enabled: options.registration ?? false, google_auth_enabled: false } });
-    if (path.endsWith('/auth/refresh')) return route.fulfill({ status: options.authenticated ? 200 : 401, json: options.authenticated ? { access_token: 'controlled-preview-token' } : {} });
-    if (path.endsWith('/auth/me') && options.authenticated) return route.fulfill({ json: { id: 71, email: 'preview@example.com', full_name: 'Preview User', role: 'user', is_active: true, is_setup_complete: true } });
-    if (path.endsWith('/settings/setup-status')) return route.fulfill({ json: { is_setup_complete: true } });
-    return route.fulfill({ status: 404, json: {} });
+    const headers = {
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-origin': 'http://127.0.0.1:3100',
+    };
+    if (path.endsWith('/auth/capabilities')) return route.fulfill({ status: options.unavailable ? 503 : 200, headers, json: { email_delivery_enabled: options.registration ?? false, google_auth_enabled: false } });
+    if (path.endsWith('/auth/refresh')) return route.fulfill({ status: options.authenticated ? 200 : 401, headers, json: options.authenticated ? { access_token: 'controlled-preview-token' } : {} });
+    if (path.endsWith('/auth/me') && options.authenticated) return route.fulfill({ headers, json: { id: 71, email: 'preview@example.com', full_name: 'Preview User', role: 'user', is_active: true, is_setup_complete: true } });
+    if (path.endsWith('/settings/setup-status')) return route.fulfill({ headers, json: { is_setup_complete: true } });
+    return route.fulfill({ status: 404, headers, json: {} });
   });
 }
 
@@ -138,5 +142,7 @@ test('landing fits the viewport in both saved themes without runtime errors', as
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
     }
   }
-  expect(errors).toEqual([]);
+  // WebKit reports requests cancelled by the deliberate theme reloads as page errors.
+  // Keep rejecting application exceptions while excluding that browser-level noise.
+  expect(errors.filter((message) => !message.endsWith('due to access control checks.'))).toEqual([]);
 });
