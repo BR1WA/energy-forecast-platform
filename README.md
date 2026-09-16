@@ -11,7 +11,7 @@ forecasts—without hiding missing data, model fallbacks, or deployment limits.
 
 </div>
 
-![EnergyAI dashboard](report/assets/screenshots/dashboard.png)
+![EnergyAI landing page](docs/screenshots/landing-page-hero.png)
 
 > **Release status:** Product V1 is publicly deployed on Microsoft Azure for
 > controlled academic demonstration and supervisor/jury review. The verified
@@ -24,6 +24,7 @@ forecasts—without hiding missing data, model fallbacks, or deployment limits.
 ## Contents
 
 - [Why EnergyAI](#why-energyai)
+- [Landing page](#landing-page)
 - [Product capabilities](#product-capabilities)
 - [Forecasting contract and evidence](#forecasting-contract-and-evidence)
 - [Architecture](#architecture)
@@ -63,6 +64,12 @@ Export owned data and reports
 The platform never exposes a research notebook as a production model selector.
 Only fixed, hash-verified artifacts that pass their manifest and warm-up checks
 can be advertised by the API.
+
+## Landing page
+
+The refreshed landing page centres on an animated CSS 3D connected-site model.
+It responds to pointer and scroll motion to show the meter, solar, battery, and
+forecast flow before a user signs in; decorative motion can also be paused.
 
 ## Product capabilities
 
