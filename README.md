@@ -501,6 +501,4 @@ Master's programme in Data Science and Artificial Intelligence at the Faculty of
 Sciences of Meknès, Université Moulay Ismaïl, under the academic supervision of
 **Pr. Ali Oubelkacem**.
 
-No open-source license is currently included. The repository should not be
-treated as granting redistribution or commercial-use rights until an explicit
-license is added.
+This project is open-source software licensed under the [MIT License](LICENSE).
